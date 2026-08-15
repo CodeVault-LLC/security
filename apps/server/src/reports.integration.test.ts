@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type {
@@ -457,9 +458,15 @@ describeIntegration("audit trail", () => {
       payload: { title: "Audited", profile: "STANDARD" },
     });
 
+    // Scoped to this test's own actor. The table is append-only and shared by
+    // every test in the run, so a global count would race with whatever else is
+    // writing audit events at the same moment.
+    const own = eq(schema.auditEvents.actorId, user.id);
+
     const before = await harness.dbHandle.db
       .select({ id: schema.auditEvents.id })
-      .from(schema.auditEvents);
+      .from(schema.auditEvents)
+      .where(own);
 
     await harness.dbHandle.db.execute(
       "UPDATE audit_events SET action = 'tampered'" as never,
@@ -468,8 +475,10 @@ describeIntegration("audit trail", () => {
 
     const after = await harness.dbHandle.db
       .select({ action: schema.auditEvents.action })
-      .from(schema.auditEvents);
+      .from(schema.auditEvents)
+      .where(own);
 
+    expect(before.length).toBeGreaterThan(0);
     expect(after.length).toBe(before.length);
     expect(after.every((row) => row.action !== "tampered")).toBe(true);
   });

@@ -96,6 +96,7 @@ export const queryKeys = {
   report: (id: string) => ["report", id] as const,
   reportLint: (id: string) => ["report", id, "lint"] as const,
   reportPreview: (id: string) => ["report", id, "preview"] as const,
+  reportExports: (id: string) => ["report", id, "exports"] as const,
   reportTemplates: ["report-templates"] as const,
   disclosure: (caseId: string) => ["disclosure", caseId] as const,
   priorArt: (findingId: string) => ["prior-art", findingId] as const,

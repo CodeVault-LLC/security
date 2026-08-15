@@ -281,8 +281,13 @@ export function lintReport(input: LintInput): LintResult {
         continue;
       }
 
+      // Matched on kind as well as reference: `[evidence:FIND-2026-0001]`
+      // names something that exists, but not an evidence record, and the
+      // renderer would fail on it after the linter had passed the report.
       const item = input.referencedItems.find(
-        (candidate) => candidate.reference === directive.argument,
+        (candidate) =>
+          candidate.reference === directive.argument &&
+          candidate.kind === directive.kind,
       );
 
       if (item === undefined && directive.kind !== "disclosure-timeline") {

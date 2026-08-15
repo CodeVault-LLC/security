@@ -34,6 +34,7 @@ import {
   useApiMutation,
   useApiQuery,
 } from "../lib/api.js";
+import { bridge } from "../lib/bridge.js";
 import { canWrite, useSession } from "../lib/session.js";
 
 /**
@@ -154,7 +155,26 @@ export function ReportDetailRoute({
       method: "POST",
       body: { format: "PDF" },
     }),
-    () => [queryKeys.report(reportId), queryKeys.dashboard],
+    () => [
+      queryKeys.report(reportId),
+      queryKeys.reportExports(reportId),
+      queryKeys.dashboard,
+    ],
+  );
+
+  const exports = useApiQuery<{ items: ReportExport[] }>(
+    queryKeys.reportExports(reportId),
+    `/v1/reports/${reportId}/exports`,
+    {
+      // Rendering runs in the worker, so the list is polled while anything is
+      // still in flight and left alone once every export has settled.
+      refetchInterval: (query) =>
+        (query.state.data?.items ?? []).some(
+          (item) => item.status === "QUEUED" || item.status === "RUNNING",
+        )
+          ? 2_000
+          : false,
+    },
   );
 
   if (report.isLoading) {
@@ -267,6 +287,8 @@ export function ReportDetailRoute({
         </div>
       )}
 
+      <ReportExportStrip items={exports.data?.items ?? []} onError={setError} />
+
       <div className="flex min-h-0 flex-1">
         <aside className="w-56 shrink-0 overflow-y-auto border-r border-border p-2">
           <p className="px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted">
@@ -330,6 +352,84 @@ export function ReportDetailRoute({
       </div>
     </div>
   );
+}
+
+/**
+ * The exports of this report, most recent first.
+ *
+ * An export is rendered by the worker, so the button that starts one cannot
+ * hand back a file. This is where it arrives: the status while it runs, the
+ * reason if it failed, and the digest of what was produced — which is the thing
+ * a researcher quotes when someone asks whether a PDF in circulation is theirs.
+ */
+function ReportExportStrip({
+  items,
+  onError,
+}: {
+  items: readonly ReportExport[];
+  onError: (message: string | null) => void;
+}): React.JSX.Element | null {
+  if (items.length === 0) {
+    return null;
+  }
+
+  const download = (artifactId: string): void => {
+    void bridge()
+      .api.request<{ url: string }>(`/v1/artifacts/${artifactId}`)
+      .then((outcome) => {
+        if (outcome.ok) {
+          void bridge().app.openExternal(outcome.data.url);
+
+          return;
+        }
+
+        onError(outcome.message);
+      });
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface-raised px-4 py-1.5 text-[11px]">
+      <span className="text-text-muted">Exports</span>
+      {items.slice(0, 4).map((item) => (
+        <span
+          key={item.id}
+          className="flex items-center gap-1.5 rounded border border-border bg-surface px-1.5 py-0.5"
+        >
+          <span className="font-medium">{item.format}</span>
+          <span className="text-text-muted">{titleCase(item.status)}</span>
+
+          {item.status === "COMPLETED" && item.artifactId !== null ? (
+            <>
+              {item.sha256 === null ? null : (
+                <Mono className="text-text-muted">
+                  {item.sha256.slice(0, 12)}
+                </Mono>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => download(item.artifactId as string)}
+              >
+                <Download aria-hidden className="size-3" />
+                Download
+              </Button>
+            </>
+          ) : null}
+
+          {item.status === "FAILED" ? (
+            <span className="text-danger">
+              {item.failureReason ?? "Rendering failed."}
+            </span>
+          ) : null}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** `COMPLETED` reads as shouting in a status chip; `Completed` does not. */
+function titleCase(value: string): string {
+  return value.charAt(0) + value.slice(1).toLowerCase();
 }
 
 interface SectionWorkspaceProps {

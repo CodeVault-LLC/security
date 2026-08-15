@@ -19,6 +19,7 @@ export const DIRECTIVE_KINDS = [
   "asset",
   "finding",
   "reference",
+  "poc",
   "score",
   "disclosure-timeline",
 ] as const;
@@ -317,8 +318,23 @@ export function applyResolvedDirectives(
   let output = html;
 
   for (const substitution of substitutions) {
+    // A directive standing alone on its line became its own paragraph during
+    // Markdown rendering. Evidence and score blocks are block-level elements,
+    // and a <div> inside a <p> is closed early by the parser, which leaves a
+    // stray empty paragraph in the page flow. Unwrap that case first.
+    if (isBlockLevel(substitution.html)) {
+      output = output
+        .split(`<p>${substitution.placeholder}</p>`)
+        .join(substitution.html);
+    }
+
     output = output.split(substitution.placeholder).join(substitution.html);
   }
 
   return output;
+}
+
+/** Whether generated directive HTML is a block element rather than a span. */
+function isBlockLevel(html: string): boolean {
+  return html.startsWith("<div") || html.startsWith("<table");
 }

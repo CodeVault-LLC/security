@@ -64,9 +64,18 @@ Markdown is canonical. Structured data enters it through directives:
 [asset:AST-000012]
 [finding:FIND-2026-0012]
 [reference:REF-00042]
+[poc:POC-000007]
 [score:CVSS40]
 [disclosure-timeline]
 ```
+
+A directive resolves only against the kind it names: `[evidence:FIND-2026-0012]`
+is an error, not a finding, because the renderer looks the reference up in the
+table for its kind and the linter has to agree with it exactly.
+
+A `[poc:…]` directive renders the proof of concept's identity and status, never
+its steps — publishing a working exploit is a decision an author makes in prose.
+The linter refuses one that is not approved for the report's audience.
 
 Each resolves through the database at render time and carries the real
 visibility of the record it points at. Three consequences:

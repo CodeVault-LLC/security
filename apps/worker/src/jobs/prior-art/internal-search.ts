@@ -30,6 +30,12 @@ export async function searchInternal(
     .join(" ");
 
   const textQuery = terms.length > 0 ? terms : query.title;
+  // Bound as single array parameters. Interpolating a JS array into the
+  // template expands it to a comma-separated parameter list, which is not an
+  // array literal and is a syntax error when the list is empty — and a finding
+  // with no CVE and no CWE is the ordinary case for new research.
+  const cveIds = sql.param(query.cveIds.map((id) => id.toUpperCase()));
+  const cweIds = sql.param(query.cweIds);
   const retrievedAt = new Date().toISOString();
   const queryDescription =
     `internal: fts(${textQuery}) + trigram(title) + cwe(${query.cweIds.join(",") || "none"})` +
@@ -54,12 +60,12 @@ export async function searchInternal(
                WHEN EXISTS (
                  SELECT 1 FROM finding_identifiers fi
                  WHERE fi.finding_id = f.id
-                   AND upper(fi.value) = ANY(${query.cveIds.map((id) => id.toUpperCase())}::text[])
+                   AND upper(fi.value) = ANY(${cveIds}::text[])
                ) THEN 1.0
                ELSE 0
              END,
              CASE
-               WHEN f.cwe_ids ?| ${query.cweIds}::text[] THEN 0.45
+               WHEN f.cwe_ids ?| ${cweIds}::text[] THEN 0.45
                ELSE 0
              END,
              CASE

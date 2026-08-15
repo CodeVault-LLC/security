@@ -342,6 +342,19 @@ hr {
   border-radius: 2px;
 }
 
+.cv-poc {
+  border: 1px solid #d0d5dd;
+  border-left: 3px solid #b42318;
+  padding: 8px 11px;
+  margin: 0 0 10px 0;
+  break-inside: avoid;
+}
+
+.cv-poc-title {
+  font-weight: 600;
+  font-size: 9.5pt;
+}
+
 .cv-score {
   border: 1px solid #d0d5dd;
   padding: 8px 11px;

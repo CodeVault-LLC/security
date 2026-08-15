@@ -205,8 +205,54 @@ export function createDirectiveResolver(
         };
       }
 
+      if (kind === "poc") {
+        const rows = await db
+          .select({
+            ref: schema.pocs.ref,
+            title: schema.pocs.title,
+            visibility: schema.pocs.visibility,
+            status: schema.pocs.status,
+          })
+          .from(schema.pocs)
+          .innerJoin(
+            schema.findings,
+            eq(schema.findings.id, schema.pocs.findingId),
+          )
+          .where(
+            and(
+              eq(schema.pocs.ref, argument),
+              eq(schema.findings.caseId, caseId),
+            ),
+          )
+          .limit(1);
+
+        const poc = rows[0];
+
+        if (poc === undefined) {
+          return null;
+        }
+
+        // Only the identity of the proof of concept is rendered, never its
+        // steps: publishing a working exploit is a decision an author makes in
+        // prose, not something a one-line directive should do for them.
+        return {
+          kind,
+          argument,
+          visibility: poc.visibility,
+          html:
+            `<div class="cv-poc">` +
+            `<div class="cv-poc-title">${escapeHtml(poc.ref)} — ${escapeHtml(poc.title)}</div>` +
+            `<div class="cv-caption">Proof of concept · ${escapeHtml(poc.status)}</div>` +
+            `</div>`,
+          text: `${poc.ref} — ${poc.title}`,
+        };
+      }
+
       if (kind === "score") {
-        const scheme = argument.toUpperCase();
+        // Matched exactly, like every other directive argument. Accepting a
+        // lowercase spelling here would make the renderer more forgiving than
+        // the linter, and a report that lints clean must render whole.
+        const scheme = argument;
         const rows = await db
           .select({
             vector: schema.findingScores.vector,
@@ -401,6 +447,23 @@ export async function collectReferencedItems(
     )
     .where(eq(schema.caseAssets.caseId, caseId));
 
+  // A score directive is addressed by scheme rather than by reference, and only
+  // an approved score resolves — the same condition the resolver applies, so
+  // the linter cannot pass a report the renderer would leave a hole in.
+  const scoreSchemes = await db
+    .selectDistinct({ scheme: schema.findingScores.scheme })
+    .from(schema.findingScores)
+    .innerJoin(
+      schema.findings,
+      eq(schema.findings.id, schema.findingScores.findingId),
+    )
+    .where(
+      and(
+        eq(schema.findings.caseId, caseId),
+        eq(schema.findingScores.reviewState, "APPROVED"),
+      ),
+    );
+
   return [
     ...evidence.map((row) => ({
       reference: row.ref,
@@ -433,6 +496,13 @@ export async function collectReferencedItems(
     ...assets.map((row) => ({
       reference: row.ref,
       kind: "asset",
+      visibility: "PUBLIC" as ContentVisibility,
+    })),
+    ...scoreSchemes.map((row) => ({
+      reference: row.scheme,
+      kind: "score",
+      // A score that has been approved for publication is public by nature; the
+      // audience rules decide whether the section carrying it appears at all.
       visibility: "PUBLIC" as ContentVisibility,
     })),
   ];

@@ -1,5 +1,5 @@
 import type { AppInstance } from "../../http/app-instance.js";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import {
   ApproveReportRequest,
@@ -58,6 +58,9 @@ import {
 const ReportListResponse = Type.Object({ items: Type.Array(ReportSummary) });
 const TemplateListResponse = Type.Object({
   items: Type.Array(ReportTemplateSummary),
+});
+const ReportExportListResponse = Type.Object({
+  items: Type.Array(ReportExport),
 });
 
 export async function registerReportRoutes(app: AppInstance): Promise<void> {
@@ -561,6 +564,61 @@ export async function registerReportRoutes(app: AppInstance): Promise<void> {
       });
 
       return loadReportDetail(app.db, report.id);
+    },
+  );
+
+  app.get(
+    "/v1/reports/:id/exports",
+    {
+      schema: {
+        params: IdParam,
+        response: { 200: ReportExportListResponse, 404: ErrorResponse },
+      },
+    },
+    async (request) => {
+      const user = actingUser(request);
+      const report = await loadReportDetail(app.db, request.params.id);
+
+      await requireCaseRead(app.db, user, report.caseId);
+
+      // An export runs in the background, so this is how a researcher learns it
+      // finished and finds the artifact to download. Newest first: the one just
+      // requested is the one being waited on.
+      const rows = await app.db
+        .select({
+          export: schema.reportExports,
+          requesterId: schema.users.id,
+          requesterName: schema.users.displayName,
+          requesterEmail: schema.users.email,
+        })
+        .from(schema.reportExports)
+        .innerJoin(
+          schema.users,
+          eq(schema.users.id, schema.reportExports.requestedBy),
+        )
+        .where(eq(schema.reportExports.reportId, report.id))
+        .orderBy(desc(schema.reportExports.createdAt));
+
+      return {
+        items: rows.map((row) => ({
+          id: row.export.id,
+          reportId: row.export.reportId,
+          format: row.export.format,
+          status: row.export.status,
+          artifactId: row.export.artifactId,
+          sha256: row.export.sha256,
+          tlp: row.export.tlp,
+          templateVersion: row.export.templateVersion,
+          failureReason: row.export.failureReason,
+          requestedBy: {
+            id: row.requesterId,
+            displayName: row.requesterName,
+            email: row.requesterEmail,
+          },
+          createdAt: row.export.createdAt,
+          completedAt: row.export.completedAt,
+        })),
+      };
     },
   );
 

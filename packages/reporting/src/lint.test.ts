@@ -105,6 +105,54 @@ describe("visibility violations", () => {
     expect(result.blocking).toBe(true);
   });
 
+  it("blocks a directive whose kind does not match the thing it names", () => {
+    // The renderer looks the reference up in the table for its kind, so this
+    // would leave a hole in the page if the linter matched on reference alone.
+    const result = lintReport(
+      input({
+        sections: [section("[evidence:FIND-2026-0001]")],
+        referencedItems: [
+          {
+            reference: "FIND-2026-0001",
+            kind: "finding",
+            visibility: "PUBLIC",
+          },
+        ],
+      }),
+    );
+
+    expect(
+      result.findings.some(
+        (finding) => finding.ruleId === "unresolved-directive",
+      ),
+    ).toBe(true);
+  });
+
+  it("resolves a score directive against the case's approved schemes", () => {
+    const result = lintReport(
+      input({
+        sections: [section("[score:CVSS40]")],
+        referencedItems: [
+          { reference: "CVSS40", kind: "score", visibility: "PUBLIC" },
+        ],
+        scores: [
+          {
+            scheme: "CVSS40",
+            vector:
+              "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+            score: 9.3,
+          },
+        ],
+      }),
+    );
+
+    expect(
+      result.findings.some(
+        (finding) => finding.ruleId === "unresolved-directive",
+      ),
+    ).toBe(false);
+  });
+
   it("blocks an unknown directive", () => {
     const result = lintReport(
       input({ sections: [section("[exfiltrate:everything]")] }),
@@ -118,7 +166,7 @@ describe("visibility violations", () => {
   it("blocks a proof of concept that is not approved for the audience", () => {
     const result = lintReport(
       input({
-        sections: [section("[evidence:POC-000001]")],
+        sections: [section("[poc:POC-000001]")],
         referencedItems: [
           {
             reference: "POC-000001",
