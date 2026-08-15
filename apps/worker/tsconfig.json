@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "noEmit": true,
+
+    // See packages/db/tsconfig.json: drizzle-orm ships declaration files for
+    // dialects we do not use that fail a full library check.
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}

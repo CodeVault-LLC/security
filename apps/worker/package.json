@@ -1,0 +1,27 @@
+{
+  "name": "@codevault/worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "bun src/index.ts",
+    "build": "bun build src/index.ts --target=node --outdir=dist --format=esm --external playwright --external sharp",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1111.0",
+    "@codevault/ai": "workspace:*",
+    "@codevault/contracts": "workspace:*",
+    "@codevault/core": "workspace:*",
+    "@codevault/db": "workspace:*",
+    "@codevault/reporting": "workspace:*",
+    "@codevault/server": "workspace:*",
+    "@codevault/standards": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "pg-boss": "^12.27.0",
+    "playwright": "^1.62.1",
+    "sharp": "^0.35.3"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node", "electron"],
+
+    // Electron's own declarations are checked upstream; a full library check
+    // here fails on its bundled Chromium typings rather than on our code.
+    "skipLibCheck": true
+  },
+  "include": ["src/main/**/*.ts", "src/preload/**/*.ts"]
+}

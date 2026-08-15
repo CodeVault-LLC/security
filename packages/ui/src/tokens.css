@@ -1,0 +1,234 @@
+/*
+ * CodeVault theme tokens.
+ *
+ * Every colour in the product resolves through a semantic token defined here.
+ * Feature code never writes a hex value or picks a severity colour itself,
+ * which is what makes a theme change a one-file change and keeps severity
+ * rendering consistent across tables, badges, headers and print.
+ *
+ * Values are OKLCH so that lightness steps are perceptually even: the same
+ * numeric step looks like the same step whether the hue is amber or blue.
+ *
+ * Colour is never the only signal. Severity, state and TLP always carry text,
+ * and usually an icon or a shape as well — a screenshot printed in greyscale,
+ * or read by someone with a colour vision deficiency, must still be correct.
+ */
+
+@import "tailwindcss";
+
+@theme {
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", "Liberation Mono",
+    monospace;
+}
+
+:root {
+  /* --- Surfaces --------------------------------------------------------- */
+  --cv-background: oklch(99% 0.002 250);
+  --cv-surface: oklch(100% 0 0);
+  --cv-surface-raised: oklch(97.5% 0.003 250);
+  --cv-surface-hover: oklch(95.5% 0.005 250);
+  --cv-border: oklch(90% 0.005 250);
+  --cv-border-strong: oklch(78% 0.008 250);
+
+  /* --- Text ------------------------------------------------------------- */
+  --cv-text: oklch(22% 0.01 250);
+  --cv-text-muted: oklch(52% 0.012 250);
+
+  /* --- Accent and focus -------------------------------------------------- */
+  --cv-accent: oklch(52% 0.16 255);
+  --cv-accent-contrast: oklch(99% 0 0);
+  --cv-accent-hover: oklch(46% 0.17 255);
+  --cv-focus: oklch(60% 0.18 255);
+
+  /* --- Status ------------------------------------------------------------ */
+  --cv-success: oklch(52% 0.13 155);
+  --cv-warning: oklch(62% 0.14 75);
+  --cv-danger: oklch(53% 0.19 27);
+  --cv-info: oklch(56% 0.13 235);
+
+  /* --- Severity ---------------------------------------------------------- */
+  --cv-severity-critical: oklch(44% 0.21 20);
+  --cv-severity-high: oklch(54% 0.19 32);
+  --cv-severity-medium: oklch(64% 0.15 75);
+  --cv-severity-low: oklch(58% 0.11 205);
+  --cv-severity-info: oklch(58% 0.02 250);
+
+  /* --- TLP --------------------------------------------------------------- */
+  --cv-tlp-red: oklch(50% 0.2 25);
+  --cv-tlp-amber: oklch(60% 0.15 70);
+  --cv-tlp-green: oklch(52% 0.14 150);
+  --cv-tlp-clear: oklch(50% 0.01 250);
+
+  /* --- Geometry ---------------------------------------------------------- */
+  --cv-radius: 4px;
+  --cv-radius-lg: 6px;
+
+  color-scheme: light;
+}
+
+/*
+ * Dark theme.
+ *
+ * Applied by an explicit `data-theme="dark"` and by the system preference when
+ * the user has not chosen. Surfaces stay close together in lightness so the
+ * dense tables this product is made of do not turn into a stack of stripes.
+ */
+:root[data-theme="dark"],
+:root:not([data-theme="light"]) {
+  @media (prefers-color-scheme: dark) {
+    --cv-background: oklch(17% 0.008 255);
+    --cv-surface: oklch(20% 0.009 255);
+    --cv-surface-raised: oklch(23.5% 0.01 255);
+    --cv-surface-hover: oklch(27% 0.012 255);
+    --cv-border: oklch(30% 0.012 255);
+    --cv-border-strong: oklch(42% 0.015 255);
+
+    --cv-text: oklch(94% 0.005 250);
+    --cv-text-muted: oklch(70% 0.012 250);
+
+    --cv-accent: oklch(70% 0.14 250);
+    --cv-accent-contrast: oklch(17% 0.01 255);
+    --cv-accent-hover: oklch(76% 0.14 250);
+    --cv-focus: oklch(72% 0.16 250);
+
+    --cv-success: oklch(70% 0.15 155);
+    --cv-warning: oklch(78% 0.15 78);
+    --cv-danger: oklch(68% 0.19 25);
+    --cv-info: oklch(72% 0.13 235);
+
+    --cv-severity-critical: oklch(64% 0.22 20);
+    --cv-severity-high: oklch(70% 0.18 35);
+    --cv-severity-medium: oklch(80% 0.15 80);
+    --cv-severity-low: oklch(74% 0.11 210);
+    --cv-severity-info: oklch(70% 0.02 250);
+
+    --cv-tlp-red: oklch(66% 0.2 25);
+    --cv-tlp-amber: oklch(78% 0.15 72);
+    --cv-tlp-green: oklch(70% 0.15 152);
+    --cv-tlp-clear: oklch(72% 0.01 250);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --cv-background: oklch(17% 0.008 255);
+  --cv-surface: oklch(20% 0.009 255);
+  --cv-surface-raised: oklch(23.5% 0.01 255);
+  --cv-surface-hover: oklch(27% 0.012 255);
+  --cv-border: oklch(30% 0.012 255);
+  --cv-border-strong: oklch(42% 0.015 255);
+
+  --cv-text: oklch(94% 0.005 250);
+  --cv-text-muted: oklch(70% 0.012 250);
+
+  --cv-accent: oklch(70% 0.14 250);
+  --cv-accent-contrast: oklch(17% 0.01 255);
+  --cv-accent-hover: oklch(76% 0.14 250);
+  --cv-focus: oklch(72% 0.16 250);
+
+  --cv-success: oklch(70% 0.15 155);
+  --cv-warning: oklch(78% 0.15 78);
+  --cv-danger: oklch(68% 0.19 25);
+  --cv-info: oklch(72% 0.13 235);
+
+  --cv-severity-critical: oklch(64% 0.22 20);
+  --cv-severity-high: oklch(70% 0.18 35);
+  --cv-severity-medium: oklch(80% 0.15 80);
+  --cv-severity-low: oklch(74% 0.11 210);
+  --cv-severity-info: oklch(70% 0.02 250);
+
+  --cv-tlp-red: oklch(66% 0.2 25);
+  --cv-tlp-amber: oklch(78% 0.15 72);
+  --cv-tlp-green: oklch(70% 0.15 152);
+  --cv-tlp-clear: oklch(72% 0.01 250);
+
+  color-scheme: dark;
+}
+
+/* Tailwind utility bindings, so `bg-surface` and friends resolve to tokens. */
+@theme inline {
+  --color-background: var(--cv-background);
+  --color-surface: var(--cv-surface);
+  --color-surface-raised: var(--cv-surface-raised);
+  --color-surface-hover: var(--cv-surface-hover);
+  --color-border: var(--cv-border);
+  --color-border-strong: var(--cv-border-strong);
+  --color-text: var(--cv-text);
+  --color-text-muted: var(--cv-text-muted);
+  --color-accent: var(--cv-accent);
+  --color-accent-contrast: var(--cv-accent-contrast);
+  --color-accent-hover: var(--cv-accent-hover);
+  --color-focus: var(--cv-focus);
+  --color-success: var(--cv-success);
+  --color-warning: var(--cv-warning);
+  --color-danger: var(--cv-danger);
+  --color-info: var(--cv-info);
+  --color-severity-critical: var(--cv-severity-critical);
+  --color-severity-high: var(--cv-severity-high);
+  --color-severity-medium: var(--cv-severity-medium);
+  --color-severity-low: var(--cv-severity-low);
+  --color-severity-info: var(--cv-severity-info);
+  --color-tlp-red: var(--cv-tlp-red);
+  --color-tlp-amber: var(--cv-tlp-amber);
+  --color-tlp-green: var(--cv-tlp-green);
+  --color-tlp-clear: var(--cv-tlp-clear);
+  --radius: var(--cv-radius);
+  --radius-lg: var(--cv-radius-lg);
+}
+
+* {
+  border-color: var(--cv-border);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--cv-background);
+  color: var(--cv-text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  /* The desktop shell is a tool, not a document: no rubber-band scrolling and
+     no accidental text selection when dragging across a dense table. */
+  overscroll-behavior: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cv-focus);
+  outline-offset: 1px;
+}
+
+/* Transitions are for state changes the eye needs to follow, nothing else. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--cv-border-strong);
+  border: 3px solid var(--cv-background);
+  border-radius: 6px;
+}

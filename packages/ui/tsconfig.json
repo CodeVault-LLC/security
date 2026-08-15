@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    // `node` is needed because the shared domain packages this UI imports run
+    // in both environments and use node: built-ins at their edges.
+    "types": ["node", "vitest/globals", "@testing-library/jest-dom"],
+
+    // React's type definitions are checked by React's own CI; a full library
+    // check here fails on the transitive @types/* graph rather than on our code.
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

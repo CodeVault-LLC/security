@@ -1,0 +1,177 @@
+import type { ErrorResponse } from "@codevault/contracts";
+
+import type { SessionStore } from "./session-store.js";
+
+/**
+ * API client.
+ *
+ * Lives in the main process because it is the only thing that holds the bearer
+ * token. The renderer asks for an operation; this attaches credentials and
+ * talks to the server. That separation is what keeps a payload rendered inside
+ * a finding from being able to read the session token.
+ */
+
+export class ApiError extends Error {
+  readonly status: number;
+  readonly category: string;
+  readonly requestId: string | null;
+  readonly details: Record<string, unknown> | null;
+
+  constructor(
+    status: number,
+    category: string,
+    message: string,
+    requestId: string | null,
+    details: Record<string, unknown> | null,
+  ) {
+    super(message);
+
+    this.name = "ApiError";
+    this.status = status;
+    this.category = category;
+    this.requestId = requestId;
+    this.details = details;
+  }
+}
+
+export interface ApiClientOptions {
+  sessionStore: SessionStore;
+  /** Overridden in tests. */
+  fetchImpl?: typeof fetch;
+  /** Milliseconds before a request is abandoned. */
+  timeoutMs?: number;
+}
+
+export interface RequestOptions {
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
+  body?: unknown;
+  /** Overrides the stored server URL, used during login. */
+  serverUrl?: string;
+  /** Sends the request without credentials, for login itself. */
+  anonymous?: boolean;
+  signal?: AbortSignal;
+}
+
+export interface ApiClient {
+  request<T>(path: string, options?: RequestOptions): Promise<T>;
+  serverUrl(): string | null;
+}
+
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+export function createApiClient(options: ApiClientOptions): ApiClient {
+  const doFetch = options.fetchImpl ?? fetch;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  return {
+    serverUrl() {
+      return options.sessionStore.current()?.serverUrl ?? null;
+    },
+
+    async request<T>(path: string, request: RequestOptions = {}): Promise<T> {
+      const session = options.sessionStore.current();
+      const baseUrl = request.serverUrl ?? session?.serverUrl;
+
+      if (baseUrl === undefined) {
+        throw new ApiError(
+          0,
+          "PROVIDER_UNAVAILABLE",
+          "No CodeVault server is configured.",
+          null,
+          null,
+        );
+      }
+
+      const headers: Record<string, string> = {
+        accept: "application/json",
+      };
+
+      if (request.body !== undefined) {
+        headers["content-type"] = "application/json";
+      }
+
+      if (request.anonymous !== true && session !== null) {
+        headers.authorization = `Bearer ${session.token}`;
+      }
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+      if (request.signal !== undefined) {
+        request.signal.addEventListener("abort", () => controller.abort(), {
+          once: true,
+        });
+      }
+
+      try {
+        const response = await doFetch(new URL(path, baseUrl).toString(), {
+          method: request.method ?? "GET",
+          headers,
+          body: request.body === undefined ? null : JSON.stringify(request.body),
+          signal: controller.signal,
+        });
+
+        if (response.status === 204) {
+          return undefined as T;
+        }
+
+        const text = await response.text();
+        const payload: unknown =
+          text.length === 0 ? null : (JSON.parse(text) as unknown);
+
+        if (!response.ok) {
+          throw toApiError(response.status, payload);
+        }
+
+        return payload as T;
+      } catch (error: unknown) {
+        if (error instanceof ApiError) {
+          throw error;
+        }
+
+        if (controller.signal.aborted) {
+          throw new ApiError(
+            0,
+            "PROVIDER_UNAVAILABLE",
+            "The request to the CodeVault server timed out.",
+            null,
+            null,
+          );
+        }
+
+        throw new ApiError(
+          0,
+          "PROVIDER_UNAVAILABLE",
+          "The CodeVault server could not be reached.",
+          null,
+          null,
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+  };
+}
+
+function toApiError(status: number, payload: unknown): ApiError {
+  const envelope = payload as Partial<ErrorResponse> | null;
+  const error = envelope?.error;
+
+  if (error === undefined) {
+    return new ApiError(
+      status,
+      status >= 500 ? "SERVER_ERROR" : "VALIDATION",
+      "The server returned an unexpected response.",
+      null,
+      null,
+    );
+  }
+
+  return new ApiError(
+    status,
+    error.category,
+    error.message,
+    error.requestId ?? null,
+    error.details ?? null,
+  );
+}
