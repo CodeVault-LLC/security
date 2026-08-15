@@ -35,7 +35,10 @@ const cancellations = new Map<string, AbortController>();
 let mainWindow: BrowserWindow | null = null;
 
 async function bootstrap(): Promise<void> {
-  applySessionPolicy(session.defaultSession);
+  applySessionPolicy(session.defaultSession, {
+    isDevelopment,
+    devServerUrl,
+  });
 
   if (!isDevelopment) {
     registerAppProtocol(join(app.getAppPath(), "out", "renderer"));
@@ -74,7 +77,7 @@ async function bootstrap(): Promise<void> {
   });
 
   mainWindow = createMainWindow({
-    preloadPath: join(app.getAppPath(), "out", "preload", "index.mjs"),
+    preloadPath: join(app.getAppPath(), "out", "preload", "index.js"),
     isDevelopment,
     devServerUrl,
     onBlockedNavigation: (url) => {

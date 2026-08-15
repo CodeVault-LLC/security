@@ -29,7 +29,12 @@ export default defineConfig({
       outDir: "out/preload",
       rollupOptions: {
         input: { index: resolve("src/preload/index.ts") },
-        output: { format: "es", entryFileNames: "[name].mjs" },
+        // CommonJS, deliberately. A sandboxed renderer loads its preload as a
+        // plain script rather than as a module, so an ESM bundle fails with
+        // "Cannot use import statement outside a module" and the window comes
+        // up with no bridge at all. Sandboxing is not negotiable, so the module
+        // format gives way.
+        output: { format: "cjs", entryFileNames: "[name].js" },
       },
     },
   },

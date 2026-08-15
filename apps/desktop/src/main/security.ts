@@ -48,6 +48,64 @@ export const CONTENT_SECURITY_POLICY = [
 ].join("; ");
 
 /**
+ * Content Security Policy for a development session.
+ *
+ * While developing, the renderer is served by Vite rather than by the
+ * application protocol, and Vite needs three things the packaged policy refuses
+ * on purpose: module scripts from its own origin, the inline preamble React
+ * Fast Refresh injects, and a websocket for hot reload. Each is widened to the
+ * dev server's exact origin, not to `http:` in general.
+ *
+ * This never applies to a packaged build: `isDevelopment` is `!app.isPackaged`,
+ * and there is no dev server URL to widen to.
+ */
+export function developmentContentSecurityPolicy(devServerUrl: string): string {
+  const origin = new URL(devServerUrl).origin;
+  const websocket = origin.replace(/^http/, "ws");
+
+  return [
+    "default-src 'none'",
+    // 'unsafe-inline' covers the Fast Refresh preamble; 'unsafe-eval' covers
+    // the way Vite evaluates transformed modules while serving them.
+    `script-src ${APP_PROTOCOL}: ${origin} 'unsafe-inline' 'unsafe-eval'`,
+    `style-src ${APP_PROTOCOL}: ${origin} 'unsafe-inline'`,
+    `img-src ${APP_PROTOCOL}: ${origin} data: blob:`,
+    `font-src ${APP_PROTOCOL}: ${origin} data:`,
+    `connect-src ${origin} ${websocket}`,
+    "media-src 'none'",
+    "object-src 'none'",
+    "frame-src 'none'",
+    "worker-src 'none'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join("; ");
+}
+
+/**
+ * The policy to send for a session.
+ *
+ * A development URL is only honoured when the application is actually running
+ * in development, so an environment variable cannot loosen the policy of a
+ * packaged build.
+ */
+export function contentSecurityPolicyFor(options: {
+  isDevelopment: boolean;
+  devServerUrl?: string | undefined;
+}): string {
+  if (!options.isDevelopment || options.devServerUrl === undefined) {
+    return CONTENT_SECURITY_POLICY;
+  }
+
+  try {
+    return developmentContentSecurityPolicy(options.devServerUrl);
+  } catch {
+    // An unparseable URL is not a reason to serve a weaker policy.
+    return CONTENT_SECURITY_POLICY;
+  }
+}
+
+/**
  * Permissions the renderer may request.
  *
  * None of them. A research workstation tool has no business asking for a
@@ -192,12 +250,20 @@ export function applyWebContentsPolicy(
 }
 
 /** Applies the CSP and permission policy to a session. */
-export function applySessionPolicy(session: Session): void {
+export function applySessionPolicy(
+  session: Session,
+  options: { isDevelopment?: boolean; devServerUrl?: string | undefined } = {},
+): void {
+  const policy = contentSecurityPolicyFor({
+    isDevelopment: options.isDevelopment ?? false,
+    devServerUrl: options.devServerUrl,
+  });
+
   session.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        "Content-Security-Policy": [CONTENT_SECURITY_POLICY],
+        "Content-Security-Policy": [policy],
         "X-Content-Type-Options": ["nosniff"],
         "Referrer-Policy": ["no-referrer"],
       },
