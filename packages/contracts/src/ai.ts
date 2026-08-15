@@ -3,6 +3,7 @@ import { Type, type Static } from "@sinclair/typebox";
 import {
   ActorSummary,
   ContentVisibilitySchema,
+  enumOf,
   Markdown,
   Sha256,
   Timestamp,
@@ -37,16 +38,16 @@ export const AI_ACTION_IDS = [
 
 export type AiActionId = (typeof AI_ACTION_IDS)[number];
 
-export const AiActionIdSchema = Type.Union(
-  AI_ACTION_IDS.map((id) => Type.Literal(id)),
-);
+export const AiActionIdSchema = enumOf(AI_ACTION_IDS);
 
-export const AiTargetTypeSchema = Type.Union([
-  Type.Literal("FINDING"),
-  Type.Literal("SCORE"),
-  Type.Literal("CLAIM"),
-  Type.Literal("REPORT_SECTION"),
-]);
+export const AI_TARGET_TYPES = [
+  "FINDING",
+  "SCORE",
+  "CLAIM",
+  "REPORT_SECTION",
+] as const;
+
+export const AiTargetTypeSchema = enumOf(AI_TARGET_TYPES);
 
 export type AiTargetType = Static<typeof AiTargetTypeSchema>;
 
@@ -185,9 +186,7 @@ export const SubmitAiRunResultRequest = Type.Object({
   failureReason: Type.Optional(Type.String({ maxLength: 2_000 })),
 });
 
-export type SubmitAiRunResultRequest = Static<
-  typeof SubmitAiRunResultRequest
->;
+export type SubmitAiRunResultRequest = Static<typeof SubmitAiRunResultRequest>;
 
 export const AiProposal = Type.Object({
   id: Uuid,
@@ -226,9 +225,23 @@ export const RejectAiProposalRequest = Type.Object({
 
 export type RejectAiProposalRequest = Static<typeof RejectAiProposalRequest>;
 
-export const AiRunWithProposals = Type.Composite([
-  AiRun,
-  Type.Object({ proposals: Type.Array(AiProposal) }),
-]);
+/**
+ * A prepared run.
+ *
+ * Carries the prompt so the desktop client can execute it locally. Returned
+ * once, at preparation; the stored run keeps only the hash unless policy says
+ * to retain the text.
+ */
+export const PreparedAiRun = Type.Object({
+  ...AiRun.properties,
+  promptText: Type.String(),
+});
+
+export type PreparedAiRun = Static<typeof PreparedAiRun>;
+
+export const AiRunWithProposals = Type.Object({
+  ...AiRun.properties,
+  proposals: Type.Array(AiProposal),
+});
 
 export type AiRunWithProposals = Static<typeof AiRunWithProposals>;

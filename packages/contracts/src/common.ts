@@ -1,4 +1,12 @@
-import { Type, type Static, type TSchema } from "@sinclair/typebox";
+import {
+  Type,
+  type Static,
+  type TLiteral,
+  type TSchema,
+  type TUnion,
+} from "@sinclair/typebox";
+
+import { SEVERITY_RATINGS, TLP_LABELS } from "@codevault/standards";
 
 import {
   AFFECTED_RANGE_KINDS,
@@ -33,12 +41,31 @@ import {
  * exactly one definition of an API shape in the repository.
  */
 
-/** Turns a domain constant tuple into a TypeBox union without losing literals. */
-function enumOf<T extends string>(values: readonly T[]) {
-  return Type.Union(values.map((value) => Type.Literal(value)));
+/**
+ * A union of string literals, one per entry of a constant tuple.
+ *
+ * The explicit return type is what makes the helper work. Inside a generic
+ * function `values.map(...)` produces `TLiteral<A | B | C>[]`, which TypeBox
+ * resolves to a bare `string` — silently disabling type checking on every field
+ * that uses it. Naming the mapped tuple restores the per-index literals.
+ */
+type LiteralUnion<T extends readonly string[]> = TUnion<{
+  -readonly [K in keyof T]: TLiteral<T[K] & string>;
+}>;
+
+function enumOf<const T extends readonly [string, ...string[]]>(
+  values: T,
+): LiteralUnion<T> {
+  return Type.Union(
+    values.map((value) => Type.Literal(value)),
+  ) as LiteralUnion<T>;
 }
 
-export const Uuid = Type.String({ format: "uuid", minLength: 36, maxLength: 36 });
+export const Uuid = Type.String({
+  format: "uuid",
+  minLength: 36,
+  maxLength: 36,
+});
 
 export const Timestamp = Type.String({ format: "date-time" });
 
@@ -73,21 +100,9 @@ export const AffectedRangeKindSchema = enumOf(AFFECTED_RANGE_KINDS);
 export const AffectedStatusSchema = enumOf(AFFECTED_STATUSES);
 export const ErrorCategorySchema = enumOf(ERROR_CATEGORIES);
 
-export const TlpLabelSchema = Type.Union([
-  Type.Literal("TLP:RED"),
-  Type.Literal("TLP:AMBER+STRICT"),
-  Type.Literal("TLP:AMBER"),
-  Type.Literal("TLP:GREEN"),
-  Type.Literal("TLP:CLEAR"),
-]);
+export const TlpLabelSchema = enumOf(TLP_LABELS);
 
-export const SeveritySchema = Type.Union([
-  Type.Literal("NONE"),
-  Type.Literal("LOW"),
-  Type.Literal("MEDIUM"),
-  Type.Literal("HIGH"),
-  Type.Literal("CRITICAL"),
-]);
+export const SeveritySchema = enumOf(SEVERITY_RATINGS);
 
 /**
  * Error envelope.
@@ -120,6 +135,8 @@ export function PaginatedResponse<T extends TSchema>(item: T) {
     nextCursor: Type.Union([Type.String(), Type.Null()]),
   });
 }
+
+export { enumOf };
 
 export const IdParam = Type.Object({ id: Uuid });
 

@@ -2,6 +2,7 @@ import { Type, type Static } from "@sinclair/typebox";
 
 import {
   ActorSummary,
+  enumOf,
   HumanReference,
   PaginationQuery,
   SeveritySchema,
@@ -31,7 +32,7 @@ export const ATTENTION_ITEM_KINDS = [
 export type AttentionItemKind = (typeof ATTENTION_ITEM_KINDS)[number];
 
 export const AttentionItem = Type.Object({
-  kind: Type.Union(ATTENTION_ITEM_KINDS.map((kind) => Type.Literal(kind))),
+  kind: enumOf(ATTENTION_ITEM_KINDS),
   entityType: Type.String({ maxLength: 40 }),
   entityId: Uuid,
   ref: HumanReference,
@@ -56,7 +57,7 @@ export const CHANGE_ITEM_KINDS = [
 ] as const;
 
 export const ChangeItem = Type.Object({
-  kind: Type.Union(CHANGE_ITEM_KINDS.map((kind) => Type.Literal(kind))),
+  kind: enumOf(CHANGE_ITEM_KINDS),
   entityType: Type.String({ maxLength: 40 }),
   entityId: Uuid,
   ref: HumanReference,
@@ -105,15 +106,13 @@ export const AuditEvent = Type.Object({
 
 export type AuditEvent = Static<typeof AuditEvent>;
 
-export const ListAuditQuery = Type.Composite([
-  PaginationQuery,
-  Type.Object({
-    caseId: Type.Optional(Uuid),
-    entityType: Type.Optional(Type.String({ maxLength: 40 })),
-    entityId: Type.Optional(Type.String({ maxLength: 100 })),
-    actorId: Type.Optional(Uuid),
-    action: Type.Optional(Type.String({ maxLength: 80 })),
-  }),
-]);
+export const ListAuditQuery = Type.Object({
+  ...PaginationQuery.properties,
+  caseId: Type.Optional(Uuid),
+  entityType: Type.Optional(Type.String({ maxLength: 40 })),
+  entityId: Type.Optional(Type.String({ maxLength: 100 })),
+  actorId: Type.Optional(Uuid),
+  action: Type.Optional(Type.String({ maxLength: 80 })),
+});
 
 export type ListAuditQuery = Static<typeof ListAuditQuery>;

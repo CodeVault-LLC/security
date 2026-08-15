@@ -71,25 +71,21 @@ export const CaseSummary = Type.Object({
 
 export type CaseSummary = Static<typeof CaseSummary>;
 
-export const CaseDetail = Type.Composite([
-  CaseSummary,
-  Type.Object({
-    members: Type.Array(CaseMember),
-    policyPackIds: Type.Array(Type.String()),
-  }),
-]);
+export const CaseDetail = Type.Object({
+  ...CaseSummary.properties,
+  members: Type.Array(CaseMember),
+  policyPackIds: Type.Array(Type.String()),
+});
 
 export type CaseDetail = Static<typeof CaseDetail>;
 
-export const ListCasesQuery = Type.Composite([
-  PaginationQuery,
-  Type.Object({
-    status: Type.Optional(CaseStatusSchema),
-    profile: Type.Optional(CaseProfileSchema),
-    ownerId: Type.Optional(Uuid),
-    query: Type.Optional(Type.String({ maxLength: 200 })),
-  }),
-]);
+export const ListCasesQuery = Type.Object({
+  ...PaginationQuery.properties,
+  status: Type.Optional(CaseStatusSchema),
+  profile: Type.Optional(CaseProfileSchema),
+  ownerId: Type.Optional(Uuid),
+  query: Type.Optional(Type.String({ maxLength: 200 })),
+});
 
 export type ListCasesQuery = Static<typeof ListCasesQuery>;
 

@@ -101,20 +101,18 @@ export const ReportSummary = Type.Object({
 
 export type ReportSummary = Static<typeof ReportSummary>;
 
-export const ReportDetail = Type.Composite([
-  ReportSummary,
-  Type.Object({
-    sections: Type.Array(ReportSection),
-    approvals: Type.Array(
-      Type.Object({
-        id: Uuid,
-        approvedBy: ActorSummary,
-        approvedAt: Timestamp,
-        note: Type.Union([Type.String(), Type.Null()]),
-      }),
-    ),
-  }),
-]);
+export const ReportDetail = Type.Object({
+  ...ReportSummary.properties,
+  sections: Type.Array(ReportSection),
+  approvals: Type.Array(
+    Type.Object({
+      id: Uuid,
+      approvedBy: ActorSummary,
+      approvedAt: Timestamp,
+      note: Type.Union([Type.String(), Type.Null()]),
+    }),
+  ),
+});
 
 export type ReportDetail = Static<typeof ReportDetail>;
 

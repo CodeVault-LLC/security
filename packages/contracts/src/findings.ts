@@ -167,21 +167,19 @@ export const FindingContent = Type.Object({
 
 export type FindingContent = Static<typeof FindingContent>;
 
-export const FindingDetail = Type.Composite([
-  FindingSummary,
-  FindingContent,
-  Type.Object({
-    owner: ActorSummary,
-    visibility: ContentVisibilitySchema,
-    cweIds: Type.Array(Type.String({ maxLength: 20 })),
-    assets: Type.Array(FindingAsset),
-    affectedRanges: Type.Array(AffectedRange),
-    identifiers: Type.Array(FindingIdentifier),
-    scores: Type.Array(FindingScore),
-    claims: Type.Array(Claim),
-    references: Type.Array(ExternalReference),
-  }),
-]);
+export const FindingDetail = Type.Object({
+  ...FindingSummary.properties,
+  ...FindingContent.properties,
+  owner: ActorSummary,
+  visibility: ContentVisibilitySchema,
+  cweIds: Type.Array(Type.String({ maxLength: 20 })),
+  assets: Type.Array(FindingAsset),
+  affectedRanges: Type.Array(AffectedRange),
+  identifiers: Type.Array(FindingIdentifier),
+  scores: Type.Array(FindingScore),
+  claims: Type.Array(Claim),
+  references: Type.Array(ExternalReference),
+});
 
 export type FindingDetail = Static<typeof FindingDetail>;
 
@@ -197,20 +195,18 @@ export const CreateFindingRequest = Type.Object({
 
 export type CreateFindingRequest = Static<typeof CreateFindingRequest>;
 
-export const UpdateFindingRequest = Type.Composite([
-  Type.Partial(FindingContent),
-  Type.Object({
-    title: Type.Optional(ShortText),
-    validationState: Type.Optional(ValidationStateSchema),
-    remediationState: Type.Optional(RemediationStateSchema),
-    disclosureState: Type.Optional(DisclosureStateSchema),
-    externalIdState: Type.Optional(ExternalIdStateSchema),
-    priorArtState: Type.Optional(PriorArtStateSchema),
-    visibility: Type.Optional(ContentVisibilitySchema),
-    cweIds: Type.Optional(Type.Array(Type.String({ maxLength: 20 }))),
-    expectedRevision: RevisionField,
-  }),
-]);
+export const UpdateFindingRequest = Type.Object({
+  ...Type.Partial(FindingContent).properties,
+  title: Type.Optional(ShortText),
+  validationState: Type.Optional(ValidationStateSchema),
+  remediationState: Type.Optional(RemediationStateSchema),
+  disclosureState: Type.Optional(DisclosureStateSchema),
+  externalIdState: Type.Optional(ExternalIdStateSchema),
+  priorArtState: Type.Optional(PriorArtStateSchema),
+  visibility: Type.Optional(ContentVisibilitySchema),
+  cweIds: Type.Optional(Type.Array(Type.String({ maxLength: 20 }))),
+  expectedRevision: RevisionField,
+});
 
 export type UpdateFindingRequest = Static<typeof UpdateFindingRequest>;
 
@@ -286,18 +282,16 @@ export const CreateReferenceRequest = Type.Object({
 
 export type CreateReferenceRequest = Static<typeof CreateReferenceRequest>;
 
-export const ListFindingsQuery = Type.Composite([
-  PaginationQuery,
-  Type.Object({
-    caseId: Type.Optional(Uuid),
-    assetId: Type.Optional(Uuid),
-    validationState: Type.Optional(ValidationStateSchema),
-    remediationState: Type.Optional(RemediationStateSchema),
-    disclosureState: Type.Optional(DisclosureStateSchema),
-    priorArtState: Type.Optional(PriorArtStateSchema),
-    severity: Type.Optional(SeveritySchema),
-    query: Type.Optional(Type.String({ maxLength: 200 })),
-  }),
-]);
+export const ListFindingsQuery = Type.Object({
+  ...PaginationQuery.properties,
+  caseId: Type.Optional(Uuid),
+  assetId: Type.Optional(Uuid),
+  validationState: Type.Optional(ValidationStateSchema),
+  remediationState: Type.Optional(RemediationStateSchema),
+  disclosureState: Type.Optional(DisclosureStateSchema),
+  priorArtState: Type.Optional(PriorArtStateSchema),
+  severity: Type.Optional(SeveritySchema),
+  query: Type.Optional(Type.String({ maxLength: 200 })),
+});
 
 export type ListFindingsQuery = Static<typeof ListFindingsQuery>;

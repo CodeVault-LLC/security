@@ -1,0 +1,108 @@
+import type { Database } from "@codevault/db";
+import { schema } from "@codevault/db";
+
+/**
+ * Audit writer.
+ *
+ * Audit rows are inserted in the same transaction as the change they describe,
+ * so an audited mutation either happens with its record or not at all. The
+ * table itself rejects UPDATE and DELETE, so history cannot be edited later.
+ */
+
+export interface AuditContext {
+  actorId: string | null;
+  sessionId: string | null;
+  requestId: string | null;
+}
+
+export interface AuditEntry {
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  caseId?: string | null;
+  aiRunId?: string | null;
+  /** Changed fields only. Whole-record snapshots are deliberately avoided. */
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+}
+
+export interface AuditWriter {
+  write(db: Database, context: AuditContext, entry: AuditEntry): Promise<void>;
+}
+
+/**
+ * Fields that must never reach the audit log even as a "changed field".
+ *
+ * A state change is worth recording; the secret that changed is not.
+ */
+const REDACTED_FIELDS = new Set([
+  "password",
+  "passwordHash",
+  "password_hash",
+  "token",
+  "tokenHash",
+  "token_hash",
+  "secret",
+  "secretAccessKey",
+]);
+
+export function redactAuditPayload(
+  payload: Record<string, unknown> | null | undefined,
+): Record<string, unknown> | null {
+  if (payload === null || payload === undefined) {
+    return null;
+  }
+
+  const result: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(payload)) {
+    result[key] = REDACTED_FIELDS.has(key) ? "[redacted]" : value;
+  }
+
+  return result;
+}
+
+export function createAuditWriter(): AuditWriter {
+  return {
+    async write(db, context, entry) {
+      await db.insert(schema.auditEvents).values({
+        action: entry.action,
+        entityType: entry.entityType,
+        entityId: entry.entityId,
+        caseId: entry.caseId ?? null,
+        actorId: context.actorId,
+        sessionId: context.sessionId,
+        requestId: context.requestId,
+        aiRunId: entry.aiRunId ?? null,
+        before: redactAuditPayload(entry.before),
+        after: redactAuditPayload(entry.after),
+      });
+    },
+  };
+}
+
+/** Computes the changed-field pair for an update, ignoring untouched fields. */
+export function diffForAudit<T extends Record<string, unknown>>(
+  before: T,
+  after: Partial<T>,
+): { before: Record<string, unknown>; after: Record<string, unknown> } {
+  const changedBefore: Record<string, unknown> = {};
+  const changedAfter: Record<string, unknown> = {};
+
+  for (const [key, nextValue] of Object.entries(after)) {
+    if (nextValue === undefined) {
+      continue;
+    }
+
+    const previousValue = before[key];
+
+    if (Object.is(previousValue, nextValue)) {
+      continue;
+    }
+
+    changedBefore[key] = previousValue;
+    changedAfter[key] = nextValue;
+  }
+
+  return { before: changedBefore, after: changedAfter };
+}

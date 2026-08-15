@@ -1,0 +1,19 @@
+{
+  "name": "@codevault/ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@codevault/contracts": "workspace:*",
+    "@codevault/core": "workspace:*",
+    "@codevault/standards": "workspace:*",
+    "@sinclair/typebox": "^0.34.52"
+  }
+}

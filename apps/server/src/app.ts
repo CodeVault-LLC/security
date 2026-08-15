@@ -1,0 +1,201 @@
+import cors from "@fastify/cors";
+import rateLimit from "@fastify/rate-limit";
+import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
+import Fastify, { type FastifyInstance } from "fastify";
+
+import { uuidv7 } from "@codevault/core";
+import { createDatabase, type DatabaseHandle } from "@codevault/db";
+
+import { bearerTokenFrom } from "./auth/tokens.js";
+import { resolveSession, touchSession } from "./auth/session.js";
+import type { ServerConfig } from "./config.js";
+import { registerErrorHandler } from "./http/errors.js";
+import { registerRoutes } from "./routes.js";
+import { createAuditWriter, type AuditWriter } from "./services/audit.js";
+import { createEventBroker, type EventBroker } from "./services/events.js";
+import { createJobQueue, type JobQueue } from "./services/jobs.js";
+import { loadCaseAccess } from "./services/case-access.js";
+import { createObjectStorage, type ObjectStorage } from "./services/storage.js";
+import { canReadCase } from "@codevault/core";
+
+import "./plugins/types.js";
+
+/**
+ * Application assembly.
+ *
+ * Dependencies are injected rather than imported as singletons, so a test can
+ * build the whole API against a throwaway database and a fake object store.
+ */
+
+export interface BuildAppOptions {
+  config: ServerConfig;
+  /** Supplied by tests; otherwise a pool is created from the config. */
+  dbHandle?: DatabaseHandle;
+  storage?: ObjectStorage;
+  events?: EventBroker;
+  jobs?: JobQueue;
+  audit?: AuditWriter;
+}
+
+/** Routes reachable without a session. Everything else requires one. */
+const PUBLIC_ROUTES = new Set([
+  "POST:/v1/auth/login",
+  "POST:/v1/invites/accept",
+  "GET:/health",
+]);
+
+export async function buildApp(
+  options: BuildAppOptions,
+): Promise<FastifyInstance> {
+  const { config } = options;
+
+  const app = Fastify({
+    logger: {
+      level: config.server.logLevel,
+      redact: {
+        // Credentials must not reach the log even at trace level.
+        paths: [
+          "req.headers.authorization",
+          "req.headers.cookie",
+          "body.password",
+          "body.token",
+        ],
+        censor: "[redacted]",
+      },
+    },
+    // The desktop client uploads directly to object storage, so no request body
+    // ever needs to be large.
+    bodyLimit: 2 * 1024 * 1024,
+    disableRequestLogging: false,
+    genReqId: () => uuidv7(),
+  }).withTypeProvider<TypeBoxTypeProvider>();
+
+  const dbHandle =
+    options.dbHandle ??
+    createDatabase({
+      connectionString: config.database.connectionString,
+      maxConnections: config.database.maxConnections,
+      ssl: config.database.ssl,
+    });
+
+  const events = options.events ?? createEventBroker();
+  const jobs =
+    options.jobs ??
+    createJobQueue({ connectionString: config.database.connectionString });
+
+  app.decorate("config", config);
+  app.decorate("dbHandle", dbHandle);
+  app.decorate("db", dbHandle.db);
+  app.decorate("storage", options.storage ?? createObjectStorage(config));
+  app.decorate("events", events);
+  app.decorate("jobs", jobs);
+  app.decorate("audit", options.audit ?? createAuditWriter());
+
+  // Event delivery is filtered by the same case rules as the REST API, so a
+  // subscriber is never told that a restricted case changed.
+  events.setVisibilityFilter(async (userId, caseId) => {
+    if (caseId === null) {
+      return true;
+    }
+
+    const record = await loadCaseAccess(dbHandle.db, caseId);
+
+    if (record === null) {
+      return false;
+    }
+
+    const rows = await dbHandle.db.query.users.findFirst({
+      where: (users, { eq }) => eq(users.id, userId),
+      columns: { id: true, role: true, disabled: true },
+    });
+
+    if (rows === undefined) {
+      return false;
+    }
+
+    return canReadCase(
+      { id: rows.id, role: rows.role, disabled: rows.disabled },
+      record.context,
+    );
+  });
+
+  await app.register(cors, {
+    origin:
+      config.server.corsOrigins.length === 0
+        ? false
+        : config.server.corsOrigins,
+    credentials: false,
+  });
+
+  await app.register(rateLimit, {
+    global: false,
+    max: 300,
+    timeWindow: "1 minute",
+  });
+
+  app.addHook("onRequest", async (request) => {
+    request.requestId = String(request.id);
+    request.principal = null;
+  });
+
+  /**
+   * Authentication.
+   *
+   * Runs for every route except the small public set. Resolving the token also
+   * confirms the user is still enabled, so disabling an account takes effect on
+   * that account's very next request.
+   */
+  app.addHook("onRequest", async (request, reply) => {
+    const routeKey = `${request.method}:${request.routeOptions.url ?? request.url}`;
+
+    if (PUBLIC_ROUTES.has(routeKey)) {
+      return;
+    }
+
+    const token = bearerTokenFrom(request.headers.authorization);
+
+    if (token === null) {
+      return reply.status(401).send({
+        error: {
+          category: "PERMISSION_DENIED",
+          message: "Authentication is required.",
+          requestId: request.requestId,
+        },
+      });
+    }
+
+    const principal = await resolveSession(app.db, token);
+
+    if (principal === null) {
+      return reply.status(401).send({
+        error: {
+          category: "PERMISSION_DENIED",
+          message: "Your session has expired. Sign in again.",
+          requestId: request.requestId,
+        },
+      });
+    }
+
+    request.principal = principal;
+
+    return undefined;
+  });
+
+  app.addHook("onResponse", async (request) => {
+    const principal = request.principal;
+
+    if (principal !== null && request.method !== "GET") {
+      // Only write-path requests refresh the timestamp, so a polling client
+      // does not turn every session into a write on every request.
+      await touchSession(app.db, principal.session.id).catch(() => undefined);
+    }
+  });
+
+  registerErrorHandler(app);
+
+  app.get("/health", async () => ({ status: "ok" }));
+
+  await registerRoutes(app);
+
+  return app;
+}

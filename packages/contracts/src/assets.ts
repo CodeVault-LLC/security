@@ -72,17 +72,15 @@ export const AssetSummary = Type.Object({
 
 export type AssetSummary = Static<typeof AssetSummary>;
 
-export const AssetDetail = Type.Composite([
-  AssetSummary,
-  Type.Object({
-    notes: Type.Union([Type.String(), Type.Null()]),
-    /** Target-specific attributes: architecture, endpoint, region, model. */
-    metadata: Type.Record(Type.String(), Type.Unknown()),
-    identifiers: Type.Array(AssetIdentifier),
-    versions: Type.Array(AssetVersion),
-    relationships: Type.Array(AssetRelationshipRecord),
-  }),
-]);
+export const AssetDetail = Type.Object({
+  ...AssetSummary.properties,
+  notes: Type.Union([Type.String(), Type.Null()]),
+  /** Target-specific attributes: architecture, endpoint, region, model. */
+  metadata: Type.Record(Type.String(), Type.Unknown()),
+  identifiers: Type.Array(AssetIdentifier),
+  versions: Type.Array(AssetVersion),
+  relationships: Type.Array(AssetRelationshipRecord),
+});
 
 export type AssetDetail = Static<typeof AssetDetail>;
 
@@ -109,11 +107,15 @@ export type CreateAssetRequest = Static<typeof CreateAssetRequest>;
 export const UpdateAssetRequest = Type.Object({
   name: Type.Optional(ShortText),
   kind: Type.Optional(AssetKindSchema),
-  vendor: Type.Optional(Type.Union([Type.String({ maxLength: 200 }), Type.Null()])),
+  vendor: Type.Optional(
+    Type.Union([Type.String({ maxLength: 200 }), Type.Null()]),
+  ),
   version: Type.Optional(
     Type.Union([Type.String({ maxLength: 120 }), Type.Null()]),
   ),
-  notes: Type.Optional(Type.Union([Type.String({ maxLength: 5_000 }), Type.Null()])),
+  notes: Type.Optional(
+    Type.Union([Type.String({ maxLength: 5_000 }), Type.Null()]),
+  ),
   metadata: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
   expectedRevision: RevisionField,
 });
@@ -148,13 +150,11 @@ export type AddAssetRelationshipRequest = Static<
   typeof AddAssetRelationshipRequest
 >;
 
-export const ListAssetsQuery = Type.Composite([
-  PaginationQuery,
-  Type.Object({
-    kind: Type.Optional(AssetKindSchema),
-    caseId: Type.Optional(Uuid),
-    query: Type.Optional(Type.String({ maxLength: 200 })),
-  }),
-]);
+export const ListAssetsQuery = Type.Object({
+  ...PaginationQuery.properties,
+  kind: Type.Optional(AssetKindSchema),
+  caseId: Type.Optional(Uuid),
+  query: Type.Optional(Type.String({ maxLength: 200 })),
+});
 
 export type ListAssetsQuery = Static<typeof ListAssetsQuery>;

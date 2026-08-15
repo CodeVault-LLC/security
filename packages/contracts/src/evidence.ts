@@ -154,15 +154,13 @@ export const UpdateEvidenceRequest = Type.Object({
 
 export type UpdateEvidenceRequest = Static<typeof UpdateEvidenceRequest>;
 
-export const ListEvidenceQuery = Type.Composite([
-  PaginationQuery,
-  Type.Object({
-    caseId: Type.Optional(Uuid),
-    findingId: Type.Optional(Uuid),
-    visibility: Type.Optional(ContentVisibilitySchema),
-    query: Type.Optional(Type.String({ maxLength: 200 })),
-  }),
-]);
+export const ListEvidenceQuery = Type.Object({
+  ...PaginationQuery.properties,
+  caseId: Type.Optional(Uuid),
+  findingId: Type.Optional(Uuid),
+  visibility: Type.Optional(ContentVisibilitySchema),
+  query: Type.Optional(Type.String({ maxLength: 200 })),
+});
 
 export type ListEvidenceQuery = Static<typeof ListEvidenceQuery>;
 
@@ -230,7 +228,9 @@ export const UpdatePocRequest = Type.Object({
   status: Type.Optional(PocStatusSchema),
   visibility: Type.Optional(ContentVisibilitySchema),
   testedAssetId: Type.Optional(Type.Union([Uuid, Type.Null()])),
-  testedVersion: Type.Optional(Type.Union([Type.String({ maxLength: 120 }), Type.Null()])),
+  testedVersion: Type.Optional(
+    Type.Union([Type.String({ maxLength: 120 }), Type.Null()]),
+  ),
   artifactIds: Type.Optional(Type.Array(Uuid)),
   expectedRevision: RevisionField,
 });

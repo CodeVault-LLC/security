@@ -113,7 +113,9 @@ export const SetEmbargoRequest = Type.Object({
   endsAt: Type.Optional(Type.Union([Timestamp, Type.Null()])),
   plannedDisclosureAt: Type.Optional(Type.Union([Timestamp, Type.Null()])),
   expectedResponseAt: Type.Optional(Type.Union([Timestamp, Type.Null()])),
-  agreementNote: Type.Optional(Type.Union([Type.String({ maxLength: 2_000 }), Type.Null()])),
+  agreementNote: Type.Optional(
+    Type.Union([Type.String({ maxLength: 2_000 }), Type.Null()]),
+  ),
 });
 
 export type SetEmbargoRequest = Static<typeof SetEmbargoRequest>;

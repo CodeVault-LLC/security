@@ -1,0 +1,28 @@
+{
+  "name": "@codevault/reporting",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./templates": "./src/templates/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@codevault/core": "workspace:*",
+    "@codevault/standards": "workspace:*",
+    "hast-util-to-html": "^9.0.5",
+    "pagedjs": "^0.4.3",
+    "playwright": "^1.62.1",
+    "rehype-sanitize": "^6.0.0",
+    "rehype-stringify": "^10.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "remark-rehype": "^11.1.2",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.0.0"
+  }
+}

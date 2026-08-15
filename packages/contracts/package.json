@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@codevault/core": "workspace:*",
+    "@codevault/standards": "workspace:*",
     "@sinclair/typebox": "^0.34.52"
   }
 }

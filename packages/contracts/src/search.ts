@@ -1,6 +1,7 @@
 import { Type, type Static } from "@sinclair/typebox";
 
 import {
+  enumOf,
   HumanReference,
   SeveritySchema,
   Timestamp,
@@ -14,15 +15,25 @@ import {
  * post-processing, and events carry just enough to invalidate a query key.
  */
 
-export const SearchGroupSchema = Type.Union([
-  Type.Literal("CASES"),
-  Type.Literal("FINDINGS"),
-  Type.Literal("ASSETS"),
-  Type.Literal("EVIDENCE"),
-  Type.Literal("REPORTS"),
-]);
+export const SEARCH_GROUPS = [
+  "CASES",
+  "FINDINGS",
+  "ASSETS",
+  "EVIDENCE",
+  "REPORTS",
+] as const;
+
+export const SearchGroupSchema = enumOf(SEARCH_GROUPS);
 
 export type SearchGroup = Static<typeof SearchGroupSchema>;
+
+export const MATCH_KINDS = [
+  "EXACT_REFERENCE",
+  "EXACT_IDENTIFIER",
+  "HASH",
+  "FULL_TEXT",
+  "FUZZY_NAME",
+] as const;
 
 export const SearchHit = Type.Object({
   group: SearchGroupSchema,
@@ -34,13 +45,7 @@ export const SearchHit = Type.Object({
   /** Higher is better; exact identifier matches dominate the ranking. */
   score: Type.Number(),
   /** Why this hit matched, so a hash or CVE hit reads differently to a text hit. */
-  matchKind: Type.Union([
-    Type.Literal("EXACT_REFERENCE"),
-    Type.Literal("EXACT_IDENTIFIER"),
-    Type.Literal("HASH"),
-    Type.Literal("FULL_TEXT"),
-    Type.Literal("FUZZY_NAME"),
-  ]),
+  matchKind: enumOf(MATCH_KINDS),
   caseId: Type.Union([Uuid, Type.Null()]),
   severity: Type.Union([SeveritySchema, Type.Null()]),
   updatedAt: Timestamp,
@@ -82,7 +87,7 @@ export type ServerEventType = (typeof SERVER_EVENT_TYPES)[number];
 
 export const ServerEvent = Type.Object({
   id: Type.String(),
-  type: Type.Union(SERVER_EVENT_TYPES.map((type) => Type.Literal(type))),
+  type: enumOf(SERVER_EVENT_TYPES),
   /** Entity kind such as `finding` or `report`, used to build query keys. */
   entityType: Type.String({ maxLength: 60 }),
   entityId: Type.String({ maxLength: 100 }),
