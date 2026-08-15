@@ -12,7 +12,10 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter './apps/*' dev",
+    "postinstall": "bun run scripts/install-electron.ts",
+    "dev": "bun run scripts/dev.ts",
+    "dev:services": "bun run scripts/dev.ts --only server,worker",
+    "electron:install": "bun run scripts/install-electron.ts",
     "build": "bun run --filter '*' build",
     "test": "vitest --run",
     "test:watch": "vitest",

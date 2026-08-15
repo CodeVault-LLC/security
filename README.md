@@ -41,7 +41,7 @@ packages/
   ui/        Theme tokens and the semantic security components
 infra/       Development stack and container images
 docs/        Threat model, AI security, data model, report model
-scripts/     Administrator bootstrap, development seed, environment check
+scripts/     Dev runner, administrator bootstrap, development seed, env check
 ```
 
 ## Getting started
@@ -49,10 +49,10 @@ scripts/     Administrator bootstrap, development seed, environment check
 Requires Node 24, Bun 1.3 and Docker.
 
 ```bash
-bun install
+cp .env.example .env    # before bun install: the scripts below read it
+bun install             # also downloads the Electron binary (~220 MB)
 docker compose -f infra/docker-compose.yml up -d
 
-cp .env.example .env
 set -a; . ./.env; set +a
 
 bun run db:migrate
@@ -63,13 +63,21 @@ bun run verify:env
 bun run seed:dev
 ```
 
-Then start the pieces you need:
+Then start the stack:
 
 ```bash
-bun run --cwd apps/server dev     # API on :4310
-bun run --cwd apps/worker dev     # background jobs
-bun run --cwd apps/desktop dev    # the desktop client
+bun run dev              # API on :4310, worker, and the desktop client
+bun run dev:services     # API and worker only
 ```
+
+The three read `.env` from the repository root. `bun run dev` starts them as
+peers rather than through `bun run --filter`, which waits for a dependency's
+script to finish — the worker depends on the server package, so it would never
+start behind a server that is meant to keep running.
+
+If the desktop client reports "Electron uninstall", the binary download did not
+complete during install. Run `bun run electron:install` to retry it; nothing
+else in the repository needs it.
 
 There is no registration page. The first administrator is created by the CLI
 above; everyone else arrives through an expiring, single-use invitation.
