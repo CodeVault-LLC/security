@@ -15,7 +15,9 @@
     "@codevault/contracts": "workspace:*",
     "@codevault/core": "workspace:*",
     "@codevault/standards": "workspace:*",
-    "@codevault/ui": "workspace:*"
+    "@codevault/ui": "workspace:*",
+    "cmdk": "^1.1.1",
+    "lucide-react": "^0.545.0"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.9.0",

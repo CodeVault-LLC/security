@@ -2,16 +2,18 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatReference,
-  generateObjectKey,
-  generateOpaqueToken,
   isSha256,
   isUuid,
   isValidCveId,
   isValidCweId,
   looksLikeCveIdentifier,
   parseReference,
-  uuidv7,
 } from "./identifiers.js";
+import {
+  generateObjectKey,
+  generateOpaqueToken,
+  uuidv7,
+} from "./crypto.js";
 
 describe("uuidv7", () => {
   it("produces a well-formed version 7 UUID", () => {

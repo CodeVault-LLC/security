@@ -1,7 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "src/renderer",
+    // The renderer imports the preload contract for its types, so the root
+    // spans both. It never imports preload *code* — only the type surface.
+    "rootDir": "src",
     "noEmit": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",

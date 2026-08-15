@@ -4,6 +4,11 @@
     "rootDir": "src",
     "noEmit": true,
 
+    // Only Node's types are in scope. Without this, TypeScript loads every
+    // @types package in the workspace — including React's, which needs the DOM
+    // library this package deliberately does not have.
+    "types": ["node"],
+
     // The repository default is `skipLibCheck: false`, and every package that
     // can hold to it does. drizzle-orm ships declaration files for its MySQL,
     // SQLite and Gel dialects that do not typecheck on their own and reference

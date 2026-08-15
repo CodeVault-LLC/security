@@ -15,13 +15,8 @@ import {
   UpdateEvidenceRequest,
   UploadInstructions,
 } from "@codevault/contracts";
-import {
-  DomainError,
-  generateObjectKey,
-  isSha256,
-  notFound,
-  validationError,
-} from "@codevault/core";
+import { DomainError, isSha256, notFound, validationError } from "@codevault/core";
+import { generateObjectKey } from "@codevault/core/crypto";
 import { allocateReference, schema } from "@codevault/db";
 
 import { assertRevision } from "../../http/concurrency.js";

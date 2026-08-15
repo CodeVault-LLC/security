@@ -2,7 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "noEmit": true
+    "noEmit": true,
+
+    // Only Node's types are in scope. Without this, TypeScript loads every
+    // @types package in the workspace — including React's, which needs the DOM
+    // library this package deliberately does not have.
+    "types": ["node"]
   },
   "include": ["src/**/*.ts"]
 }

@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { customType, integer, jsonb, timestamp, uuid } from "drizzle-orm/pg-core";
 
-import { uuidv7 } from "@codevault/core";
+import { uuidv7 } from "@codevault/core/crypto";
 
 /**
  * Column helpers shared by every table.

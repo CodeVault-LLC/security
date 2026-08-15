@@ -1,6 +1,6 @@
 import { eq, sql } from "drizzle-orm";
 
-import { generateObjectKey, uuidv7 } from "@codevault/core";
+import { generateObjectKey, uuidv7 } from "@codevault/core/crypto";
 import { schema } from "@codevault/db";
 import { renderPdf } from "@codevault/reporting";
 

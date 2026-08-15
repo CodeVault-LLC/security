@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { uuidv7 } from "@codevault/core";
+import { uuidv7 } from "@codevault/core/crypto";
 
 import { createDatabase, type DatabaseHandle } from "./client.js";
 import { allocateReference } from "./references.js";

@@ -3,7 +3,7 @@ import rateLimit from "@fastify/rate-limit";
 import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import Fastify, { type FastifyInstance } from "fastify";
 
-import { uuidv7 } from "@codevault/core";
+import { uuidv7 } from "@codevault/core/crypto";
 import { createDatabase, type DatabaseHandle } from "@codevault/db";
 
 import { bearerTokenFrom } from "./auth/tokens.js";

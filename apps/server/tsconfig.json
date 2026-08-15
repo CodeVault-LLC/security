@@ -4,6 +4,11 @@
     "rootDir": "src",
     "noEmit": true,
 
+    // Only Node's types are in scope. Without this, TypeScript loads every
+    // @types package in the workspace — including React's, which needs the DOM
+    // library this package deliberately does not have.
+    "types": ["node"],
+
     // See packages/db/tsconfig.json: drizzle-orm ships declaration files for
     // dialects we do not use that fail a full library check.
     "skipLibCheck": true

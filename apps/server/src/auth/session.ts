@@ -1,6 +1,7 @@
 import { and, eq, gt, isNull, sql } from "drizzle-orm";
 
-import { generateOpaqueToken, type UserRole } from "@codevault/core";
+import { type UserRole } from "@codevault/core";
+import { generateOpaqueToken } from "@codevault/core/crypto";
 import type { Database } from "@codevault/db";
 import { schema } from "@codevault/db";
 

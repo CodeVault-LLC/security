@@ -1,6 +1,6 @@
 import type { AppInstance } from "../../http/app-instance.js";
 
-import { uuidv7 } from "@codevault/core";
+import { uuidv7 } from "@codevault/core/crypto";
 
 import { principalOf } from "../../http/guards.js";
 import { formatSseFrame } from "../../services/events.js";

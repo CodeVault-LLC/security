@@ -11,12 +11,8 @@ import {
   UpdateUserRequest,
   UserSummary,
 } from "@codevault/contracts";
-import {
-  DomainError,
-  generateOpaqueToken,
-  notFound,
-  validationError,
-} from "@codevault/core";
+import { DomainError, notFound, validationError } from "@codevault/core";
+import { generateOpaqueToken } from "@codevault/core/crypto";
 import { schema } from "@codevault/db";
 import { Type } from "@sinclair/typebox";
 

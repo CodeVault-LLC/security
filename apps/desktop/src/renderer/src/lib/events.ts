@@ -1,0 +1,108 @@
+import type { QueryClient } from "@tanstack/react-query";
+
+import type { ServerEvent } from "@codevault/contracts";
+
+import { bridge } from "./bridge.js";
+import { queryKeys } from "./api.js";
+
+/**
+ * Event-driven cache invalidation.
+ *
+ * A server event names what changed; this maps that onto the query keys that
+ * are now stale and lets TanStack Query refetch them through the ordinary
+ * authorised route. The event payload itself is never written into the cache —
+ * doing so would be a second, unaudited path for data to reach the screen.
+ */
+
+export function invalidateForEvent(
+  queryClient: QueryClient,
+  event: ServerEvent,
+): void {
+  const invalidate = (key: readonly unknown[]): void => {
+    void queryClient.invalidateQueries({ queryKey: key });
+  };
+
+  if (event.caseId !== null) {
+    invalidate(queryKeys.case(event.caseId));
+    invalidate(queryKeys.reports(event.caseId));
+    invalidate(queryKeys.disclosure(event.caseId));
+    invalidate(queryKeys.caseReadiness(event.caseId));
+  }
+
+  switch (event.entityType) {
+    case "finding": {
+      invalidate(queryKeys.finding(event.entityId));
+      invalidate(["findings"]);
+      break;
+    }
+
+    case "case": {
+      invalidate(["cases"]);
+      break;
+    }
+
+    case "asset": {
+      invalidate(queryKeys.asset(event.entityId));
+      invalidate(["assets"]);
+      break;
+    }
+
+    case "evidence":
+    case "artifact": {
+      invalidate(["evidence"]);
+      break;
+    }
+
+    case "report":
+    case "report_section":
+    case "report_export": {
+      invalidate(["report"]);
+      invalidate(["reports"]);
+      break;
+    }
+
+    case "prior_art_check": {
+      invalidate(["prior-art"]);
+      invalidate(["findings"]);
+      break;
+    }
+
+    case "disclosure": {
+      invalidate(["disclosure"]);
+      break;
+    }
+
+    default: {
+      // An unknown entity type still means something moved, so the operational
+      // views refresh rather than silently drifting.
+      break;
+    }
+  }
+
+  invalidate(queryKeys.dashboard);
+  invalidate(["activity"]);
+}
+
+export interface EventSubscription {
+  stop(): void;
+}
+
+export function subscribeToServerEvents(
+  queryClient: QueryClient,
+  onConnectionChange: (connected: boolean) => void,
+): EventSubscription {
+  const api = bridge();
+  const unsubscribeEvents = api.events.subscribe((event) => {
+    invalidateForEvent(queryClient, event);
+  });
+  const unsubscribeConnection = api.events.onConnectionChange(
+    onConnectionChange,
+  );
+
+  return {
+    stop() {
+      unsubscribeEvents();
+      unsubscribeConnection();
+    },
+  };
+}

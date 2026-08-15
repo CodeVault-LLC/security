@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./prior-art": "./src/prior-art/index.ts"
+    "./prior-art": "./src/prior-art/index.ts",
+    "./crypto": "./src/crypto.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

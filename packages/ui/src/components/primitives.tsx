@@ -5,6 +5,7 @@ import {
   type ButtonHTMLAttributes,
   type HTMLAttributes,
   type InputHTMLAttributes,
+  type LabelHTMLAttributes,
   type TextareaHTMLAttributes,
 } from "react";
 
@@ -169,7 +170,7 @@ export function Mono({
 export function Label({
   className,
   ...props
-}: HTMLAttributes<HTMLLabelElement>): React.JSX.Element {
+}: LabelHTMLAttributes<HTMLLabelElement>): React.JSX.Element {
   return (
     <label
       className={cn(

@@ -1,4 +1,4 @@
-import { uuidv7 } from "@codevault/core";
+import { uuidv7 } from "@codevault/core/crypto";
 import type { ServerEvent, ServerEventType } from "@codevault/contracts";
 
 /**
