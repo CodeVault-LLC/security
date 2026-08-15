@@ -1,0 +1,9 @@
+node_modules
+dist
+out
+coverage
+.vite
+bun.lock
+bun.lockb
+packages/db/drizzle
+*.md
