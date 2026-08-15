@@ -1,0 +1,17 @@
+{
+  "name": "@codevault/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@codevault/core": "workspace:*",
+    "@sinclair/typebox": "^0.34.52"
+  }
+}

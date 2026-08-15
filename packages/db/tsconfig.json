@@ -2,7 +2,15 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "rootDir": "src",
-    "noEmit": true
+    "noEmit": true,
+
+    // The repository default is `skipLibCheck: false`, and every package that
+    // can hold to it does. drizzle-orm ships declaration files for its MySQL,
+    // SQLite and Gel dialects that do not typecheck on their own and reference
+    // optional peer packages we do not install. None of it is reachable from
+    // the PostgreSQL dialect we use, and our own sources are still checked in
+    // full, so the exception is scoped to the packages that import drizzle.
+    "skipLibCheck": true
   },
   "include": ["src/**/*.ts"]
 }
