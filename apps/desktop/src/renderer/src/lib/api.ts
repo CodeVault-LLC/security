@@ -72,7 +72,9 @@ export const queryKeys = {
   users: ["users"] as const,
   invites: ["invites"] as const,
   cases: (filters?: Record<string, unknown>) =>
-    filters === undefined ? (["cases"] as const) : (["cases", filters] as const),
+    filters === undefined
+      ? (["cases"] as const)
+      : (["cases", filters] as const),
   case: (id: string) => ["case", id] as const,
   caseReadiness: (id: string) => ["case", id, "readiness"] as const,
   caseNotes: (id: string) => ["case", id, "notes"] as const,
@@ -82,7 +84,9 @@ export const queryKeys = {
       : (["findings", filters] as const),
   finding: (id: string) => ["finding", id] as const,
   assets: (filters?: Record<string, unknown>) =>
-    filters === undefined ? (["assets"] as const) : (["assets", filters] as const),
+    filters === undefined
+      ? (["assets"] as const)
+      : (["assets", filters] as const),
   asset: (id: string) => ["asset", id] as const,
   evidence: (filters?: Record<string, unknown>) =>
     filters === undefined

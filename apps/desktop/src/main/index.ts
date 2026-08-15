@@ -131,7 +131,10 @@ if (!app.requestSingleInstanceLock()) {
  * "just this once" is how a researcher's session token ends up on someone
  * else's machine.
  */
-app.on("certificate-error", (event, _webContents, _url, _error, _cert, callback) => {
-  event.preventDefault();
-  callback(false);
-});
+app.on(
+  "certificate-error",
+  (event, _webContents, _url, _error, _cert, callback) => {
+    event.preventDefault();
+    callback(false);
+  },
+);

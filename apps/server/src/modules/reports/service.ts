@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import type { LintResult, ReportDetail } from "@codevault/contracts";
 import { notFound, type ReportAudience } from "@codevault/core";

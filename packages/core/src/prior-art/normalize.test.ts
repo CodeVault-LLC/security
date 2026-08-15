@@ -42,7 +42,9 @@ describe("parsePurl", () => {
   });
 
   it("ignores qualifiers", () => {
-    expect(parsePurl("pkg:deb/debian/curl@7.50.3?arch=i386")?.name).toBe("curl");
+    expect(parsePurl("pkg:deb/debian/curl@7.50.3?arch=i386")?.name).toBe(
+      "curl",
+    );
   });
 
   it("rejects non-PURL input", () => {
@@ -108,8 +110,9 @@ describe("normalizeIdentity", () => {
 
 describe("titleSimilarity", () => {
   it("scores identical titles as 1", () => {
-    expect(titleSimilarity("SQL injection in login", "SQL injection in login"))
-      .toBe(1);
+    expect(
+      titleSimilarity("SQL injection in login", "SQL injection in login"),
+    ).toBe(1);
   });
 
   it("scores unrelated titles at zero", () => {

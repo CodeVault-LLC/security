@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Command } from "cmdk";
 import {
@@ -10,12 +11,12 @@ import {
   ShieldQuestion,
   Upload,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { SearchResponse } from "@codevault/contracts";
 import { Mono, SeverityBadge } from "@codevault/ui";
 
-import { apiRequest } from "../lib/api.js";
+import { apiRequest, queryKeys } from "../lib/api.js";
 import { useDebouncedValue } from "../hooks/use-debounced-value.js";
 
 /**
@@ -44,7 +45,13 @@ const GROUP_ROUTES: Record<string, (id: string) => string> = {
   REPORTS: (id) => `/reports/${id}`,
 };
 
-export function CommandPalette({
+export function CommandPalette(props: CommandPaletteProps): React.JSX.Element {
+  // Remounting on open resets the query and the highlighted row without an
+  // effect that writes state back on every close.
+  return <PaletteContents key={props.open ? "open" : "closed"} {...props} />;
+}
+
+function PaletteContents({
   open,
   onOpenChange,
   onCreateCase,
@@ -55,50 +62,22 @@ export function CommandPalette({
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 180);
-  const [results, setResults] = useState<SearchResponse | null>(null);
-  const [searching, setSearching] = useState(false);
+  const term = debouncedQuery.trim();
 
-  useEffect(() => {
-    if (debouncedQuery.trim().length < 2) {
-      setResults(null);
+  const search = useQuery<SearchResponse>({
+    queryKey: queryKeys.search(term),
+    queryFn: () =>
+      apiRequest<SearchResponse>(
+        `/v1/search?q=${encodeURIComponent(term)}&limit=8`,
+      ),
+    enabled: open && term.length >= 2,
+    // Search results age quickly and the palette is opened constantly, so a
+    // short window keeps repeat lookups instant without showing stale hits.
+    staleTime: 10_000,
+  });
 
-      return;
-    }
-
-    let cancelled = false;
-
-    setSearching(true);
-
-    void apiRequest<SearchResponse>(
-      `/v1/search?q=${encodeURIComponent(debouncedQuery.trim())}&limit=8`,
-    )
-      .then((response) => {
-        if (!cancelled) {
-          setResults(response);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setResults(null);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setSearching(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedQuery]);
-
-  useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setResults(null);
-    }
-  }, [open]);
+  const results = search.data ?? null;
+  const searching = search.isFetching;
 
   const run = (action: () => void): void => {
     onOpenChange(false);

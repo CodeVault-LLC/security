@@ -96,7 +96,10 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
         onCheckPriorArt={goToFindings}
       />
 
-      <CreateCaseDialog open={createCaseOpen} onOpenChange={setCreateCaseOpen} />
+      <CreateCaseDialog
+        open={createCaseOpen}
+        onOpenChange={setCreateCaseOpen}
+      />
       <CreateFindingDialog
         open={createFindingOpen}
         onOpenChange={setCreateFindingOpen}

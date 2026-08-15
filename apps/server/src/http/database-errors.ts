@@ -1,4 +1,4 @@
-import { conflict, DomainError, validationError } from "@codevault/core";
+import { conflict, validationError, type DomainError } from "@codevault/core";
 
 /**
  * PostgreSQL error translation.
@@ -39,9 +39,9 @@ const CONSTRAINT_MESSAGES: Readonly<Record<string, string>> = {
   finding_assets_primary_key: "This finding already has a primary asset.",
   asset_relationships_not_self: "An asset cannot relate to itself.",
   asset_relationships_unique: "That relationship already exists.",
-  asset_identifiers_unique: "That identifier is already recorded on this asset.",
-  asset_identifiers_primary_key:
-    "This asset already has a primary identifier.",
+  asset_identifiers_unique:
+    "That identifier is already recorded on this asset.",
+  asset_identifiers_primary_key: "This asset already has a primary identifier.",
   asset_versions_unique: "That version is already recorded.",
   users_email_key: "An account already exists for that address.",
   reports_case_audience_key:

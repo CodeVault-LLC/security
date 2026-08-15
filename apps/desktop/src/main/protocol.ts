@@ -83,7 +83,9 @@ export function registerAppProtocol(rendererRoot: string): void {
     }
 
     const requested =
-      url.pathname === "/" || url.pathname === "" ? "/index.html" : url.pathname;
+      url.pathname === "/" || url.pathname === ""
+        ? "/index.html"
+        : url.pathname;
     const filePath = resolveBundlePath(rendererRoot, requested);
 
     if (filePath === null) {
@@ -98,7 +100,8 @@ export function registerAppProtocol(rendererRoot: string): void {
       }
 
       const contentType =
-        MIME_TYPES[extname(filePath).toLowerCase()] ?? "application/octet-stream";
+        MIME_TYPES[extname(filePath).toLowerCase()] ??
+        "application/octet-stream";
       const stream = Readable.toWeb(
         createReadStream(filePath),
       ) as ReadableStream<Uint8Array>;

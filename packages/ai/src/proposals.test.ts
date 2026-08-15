@@ -30,9 +30,9 @@ describe("extractJson", () => {
   });
 
   it("parses JSON after a sentence of preamble", () => {
-    expect(
-      extractJson('Here is the result:\n{"markdown":"hello"}'),
-    ).toEqual({ markdown: "hello" });
+    expect(extractJson('Here is the result:\n{"markdown":"hello"}')).toEqual({
+      markdown: "hello",
+    });
   });
 
   it("rejects prose", () => {

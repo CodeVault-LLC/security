@@ -92,7 +92,8 @@ const AI_ACTIONS = [
   {
     id: "AFFECTED_VERSION_REVIEW" as const,
     label: "Review versions",
-    description: "Highlight version conclusions that were inferred, not tested.",
+    description:
+      "Highlight version conclusions that were inferred, not tested.",
   },
 ];
 
@@ -131,7 +132,9 @@ export function FindingDetailRoute({
 
   const onAiCompleted = (run: AiRunWithProposals): void => {
     setProposals((current) => [...run.proposals, ...current]);
-    void queryClient.invalidateQueries({ queryKey: queryKeys.finding(findingId) });
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.finding(findingId),
+    });
   };
 
   return (
@@ -213,8 +216,13 @@ export function FindingDetailRoute({
                   ) : (
                     <ul className="space-y-1">
                       {data.assets.map((asset) => (
-                        <li key={asset.assetId} className="flex items-center gap-2">
-                          <Mono className="text-text-muted">{asset.assetRef}</Mono>
+                        <li
+                          key={asset.assetId}
+                          className="flex items-center gap-2"
+                        >
+                          <Mono className="text-text-muted">
+                            {asset.assetRef}
+                          </Mono>
                           <Link
                             to={`/assets/${asset.assetId}`}
                             className="min-w-0 flex-1 truncate hover:underline"
@@ -285,7 +293,11 @@ export function FindingDetailRoute({
         </TabsContent>
 
         <TabsContent value="technical" className="p-4">
-          <FindingContentEditor finding={data} canEdit={canEdit} technicalOnly />
+          <FindingContentEditor
+            finding={data}
+            canEdit={canEdit}
+            technicalOnly
+          />
         </TabsContent>
 
         <TabsContent value="evidence">
@@ -429,7 +441,10 @@ function FindingContentEditor({
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [savedField, setSavedField] = useState<string | null>(null);
 
-  const update = useApiMutation<FindingDetail, { field: string; value: string }>(
+  const update = useApiMutation<
+    FindingDetail,
+    { field: string; value: string }
+  >(
     ({ field, value }) => ({
       path: `/v1/findings/${finding.id}`,
       method: "PATCH",
@@ -496,7 +511,9 @@ function FindingContentEditor({
                   }))
                 }
                 placeholder={
-                  canEdit ? "Markdown. Empty until you or AI drafts it." : "Empty."
+                  canEdit
+                    ? "Markdown. Empty until you or AI drafts it."
+                    : "Empty."
                 }
                 className="font-mono text-[12px]"
               />
@@ -538,7 +555,9 @@ function ProposalReview({
   const currentValues: Record<string, unknown> = {};
 
   for (const field of Object.keys(proposal.patch)) {
-    currentValues[field] = (finding as unknown as Record<string, unknown>)[field];
+    currentValues[field] = (finding as unknown as Record<string, unknown>)[
+      field
+    ];
   }
 
   return (
@@ -560,7 +579,11 @@ function ProposalReview({
   );
 }
 
-function FindingHistory({ findingId }: { findingId: string }): React.JSX.Element {
+function FindingHistory({
+  findingId,
+}: {
+  findingId: string;
+}): React.JSX.Element {
   const activity = useApiQuery<{
     items: Array<{
       id: string;
@@ -591,8 +614,12 @@ function FindingHistory({ findingId }: { findingId: string }): React.JSX.Element
       {items.map((event) => (
         <li key={event.id} className="px-3 py-2 text-[12px]">
           <div className="flex items-center gap-2">
-            <Mono className="w-56 shrink-0 text-text-muted">{event.action}</Mono>
-            <span className="flex-1">{event.actor?.displayName ?? "system"}</span>
+            <Mono className="w-56 shrink-0 text-text-muted">
+              {event.action}
+            </Mono>
+            <span className="flex-1">
+              {event.actor?.displayName ?? "system"}
+            </span>
             <span className="text-text-muted">
               {formatDateTime(event.occurredAt)}
             </span>

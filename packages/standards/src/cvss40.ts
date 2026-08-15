@@ -87,7 +87,10 @@ export function parseCvss40Vector(vector: string): Cvss40Metrics {
     }
 
     if (metrics.has(code)) {
-      throw new CvssVectorError(`Metric "${code}" appears more than once.`, code);
+      throw new CvssVectorError(
+        `Metric "${code}" appears more than once.`,
+        code,
+      );
     }
 
     const isKnownValue = definition.values.some(
@@ -171,8 +174,7 @@ export function macroVector(metrics: Cvss40Metrics): string {
       return "0";
     }
 
-    const anyOpen =
-      get("AV") === "N" || get("PR") === "N" || get("UI") === "N";
+    const anyOpen = get("AV") === "N" || get("PR") === "N" || get("UI") === "N";
 
     if (anyOpen && get("AV") !== "P") {
       return "1";
@@ -318,7 +320,9 @@ function maxVectorsFor(
   key: EquivalenceClassKey,
   index: string,
 ): readonly string[] {
-  const group = MAX_COMPOSED[key] as Readonly<Record<string, readonly string[]>>;
+  const group = MAX_COMPOSED[key] as Readonly<
+    Record<string, readonly string[]>
+  >;
   const vectors = group[index];
 
   if (vectors === undefined) {
@@ -433,8 +437,7 @@ function severityDistances(
     return {
       eq1: at("AV") + at("PR") + at("UI"),
       eq2: at("AC") + at("AT"),
-      eq3eq6:
-        at("VC") + at("VI") + at("VA") + at("CR") + at("IR") + at("AR"),
+      eq3eq6: at("VC") + at("VI") + at("VA") + at("CR") + at("IR") + at("AR"),
       eq4: at("SC") + at("SI") + at("SA"),
     };
   }
@@ -455,8 +458,7 @@ function nextLowerMacroScores(macro: string): {
   const digits = macro.split("").map((digit) => Number(digit));
   const [eq1 = 0, eq2 = 0, eq3 = 0, eq4 = 0, eq5 = 0, eq6 = 0] = digits;
   const compose = (values: number[]): string => values.join("");
-  const scoreOf = (key: string): number | undefined =>
-    MACRO_VECTOR_LOOKUP[key];
+  const scoreOf = (key: string): number | undefined => MACRO_VECTOR_LOOKUP[key];
 
   const eq3eq6Score = ((): number | undefined => {
     if (eq3 === 0 && eq6 === 0) {

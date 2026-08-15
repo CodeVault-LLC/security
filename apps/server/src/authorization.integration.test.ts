@@ -2,7 +2,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { CaseDetail, FindingDetail } from "@codevault/contracts";
 
-import { createHarness, type TestHarness, type TestUser } from "./testing/harness.js";
+import {
+  createHarness,
+  type TestHarness,
+  type TestUser,
+} from "./testing/harness.js";
 
 /**
  * Authorization.
@@ -193,7 +197,9 @@ describeIntegration("case access", () => {
       headers: stranger.headers,
     });
 
-    const ids = list.json<{ items: FindingDetail[] }>().items.map((it) => it.id);
+    const ids = list
+      .json<{ items: FindingDetail[] }>()
+      .items.map((it) => it.id);
 
     expect(ids).not.toContain(finding.id);
   });
@@ -219,7 +225,9 @@ describeIntegration("case access", () => {
       groups: Array<{ hits: Array<{ title: string }> }>;
     }>().groups;
 
-    const titles = groups.flatMap((group) => group.hits.map((hit) => hit.title));
+    const titles = groups.flatMap((group) =>
+      group.hits.map((hit) => hit.title),
+    );
 
     expect(titles.join(" ")).not.toContain(marker);
   });
@@ -304,9 +312,9 @@ describeIntegration("optimistic concurrency", () => {
     });
 
     expect(stale.statusCode).toBe(409);
-    expect(stale.json<{ error: { message: string } }>().error.message).toContain(
-      "changed since you loaded it",
-    );
+    expect(
+      stale.json<{ error: { message: string } }>().error.message,
+    ).toContain("changed since you loaded it");
   });
 });
 

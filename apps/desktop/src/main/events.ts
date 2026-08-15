@@ -115,7 +115,9 @@ export function createEventBridge(options: EventBridgeOptions): EventBridge {
           }
 
           try {
-            options.onEvent(JSON.parse(dataLine.slice(5).trim()) as ServerEvent);
+            options.onEvent(
+              JSON.parse(dataLine.slice(5).trim()) as ServerEvent,
+            );
           } catch {
             // A malformed frame is dropped. The client refetches on the next
             // event or navigation, so nothing is lost but a moment of freshness.

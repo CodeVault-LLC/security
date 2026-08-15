@@ -38,9 +38,7 @@ describe("sanitisation", () => {
   });
 
   it("drops inline SVG, which is a document format with scripting", async () => {
-    const html = await renderMarkdown(
-      '<svg><script>alert(1)</script></svg>',
-    );
+    const html = await renderMarkdown("<svg><script>alert(1)</script></svg>");
 
     expect(html).not.toContain("<svg");
     expect(html).not.toContain("<script");
@@ -73,7 +71,9 @@ describe("sanitisation", () => {
   });
 
   it("does not fetch a remote image", async () => {
-    const html = await renderMarkdown("![shot](https://evil.example/track.png)");
+    const html = await renderMarkdown(
+      "![shot](https://evil.example/track.png)",
+    );
 
     expect(html).not.toContain("evil.example");
   });
@@ -101,9 +101,7 @@ describe("ordinary Markdown", () => {
   });
 
   it("escapes payload text inside a code block", async () => {
-    const html = await renderMarkdown(
-      "```\n<script>alert(1)</script>\n```",
-    );
+    const html = await renderMarkdown("```\n<script>alert(1)</script>\n```");
 
     expect(html).toContain("&#x3C;script>");
     expect(html).not.toContain("<script>alert");
@@ -130,7 +128,9 @@ describe("escapeHtml", () => {
 describe("markdownToPlainText", () => {
   it("strips syntax for PDF metadata and search snippets", () => {
     expect(
-      markdownToPlainText("## Impact\n\nAn **unauthenticated** [attacker](https://x) can."),
+      markdownToPlainText(
+        "## Impact\n\nAn **unauthenticated** [attacker](https://x) can.",
+      ),
     ).toBe("Impact An unauthenticated attacker can.");
   });
 

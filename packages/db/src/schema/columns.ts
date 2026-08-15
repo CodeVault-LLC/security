@@ -1,5 +1,11 @@
 import { sql } from "drizzle-orm";
-import { customType, integer, jsonb, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  customType,
+  integer,
+  jsonb,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 import { uuidv7 } from "@codevault/core/crypto";
 

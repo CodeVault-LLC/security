@@ -34,7 +34,11 @@ export const CVSS40_METRICS: readonly CvssMetricDefinition[] = [
     optional: false,
     values: [
       value("N", "Network", "Remotely exploitable across a network."),
-      value("A", "Adjacent", "Limited to a shared logical or physical network."),
+      value(
+        "A",
+        "Adjacent",
+        "Limited to a shared logical or physical network.",
+      ),
       value("L", "Local", "Requires local access or a local account."),
       value("P", "Physical", "Requires physical access to the component."),
     ],
@@ -56,7 +60,11 @@ export const CVSS40_METRICS: readonly CvssMetricDefinition[] = [
     optional: false,
     values: [
       value("N", "None", "No deployment or execution conditions required."),
-      value("P", "Present", "A specific deployment or race condition is needed."),
+      value(
+        "P",
+        "Present",
+        "A specific deployment or race condition is needed.",
+      ),
     ],
   },
   {
@@ -78,7 +86,11 @@ export const CVSS40_METRICS: readonly CvssMetricDefinition[] = [
     values: [
       value("N", "None", "No human other than the attacker is involved."),
       value("P", "Passive", "Limited, unwitting user interaction is required."),
-      value("A", "Active", "The user must perform a specific, conscious action."),
+      value(
+        "A",
+        "Active",
+        "The user must perform a specific, conscious action.",
+      ),
     ],
   },
   {
@@ -209,20 +221,18 @@ export const CVSS40_METRICS: readonly CvssMetricDefinition[] = [
       ["MSI", "Modified Subsequent System Integrity", ["S", "H", "L", "N"]],
       ["MSA", "Modified Subsequent System Availability", ["S", "H", "L", "N"]],
     ] as const
-  ).map(
-    ([code, name, codes]): CvssMetricDefinition => ({
-      code,
-      name,
-      group: "Environmental",
-      optional: true,
-      values: [
-        value("X", "Not Defined", "Falls back to the corresponding base metric."),
-        ...codes.map((it) =>
-          value(it, it, `Overrides the base metric with ${it}.`),
-        ),
-      ],
-    }),
-  ),
+  ).map(([code, name, codes]): CvssMetricDefinition => ({
+    code,
+    name,
+    group: "Environmental",
+    optional: true,
+    values: [
+      value("X", "Not Defined", "Falls back to the corresponding base metric."),
+      ...codes.map((it) =>
+        value(it, it, `Overrides the base metric with ${it}.`),
+      ),
+    ],
+  })),
   ...(
     [
       ["S", "Safety", ["X", "N", "P"]],
@@ -232,26 +242,25 @@ export const CVSS40_METRICS: readonly CvssMetricDefinition[] = [
       ["RE", "Vulnerability Response Effort", ["X", "L", "M", "H"]],
       ["U", "Provider Urgency", ["X", "Clear", "Green", "Amber", "Red"]],
     ] as const
-  ).map(
-    ([code, name, codes]): CvssMetricDefinition => ({
-      code,
-      name,
-      group: "Supplemental",
-      optional: true,
-      values: codes.map((it) =>
-        value(it, it === "X" ? "Not Defined" : it, `${name}: ${it}.`),
-      ),
-    }),
-  ),
+  ).map(([code, name, codes]): CvssMetricDefinition => ({
+    code,
+    name,
+    group: "Supplemental",
+    optional: true,
+    values: codes.map((it) =>
+      value(it, it === "X" ? "Not Defined" : it, `${name}: ${it}.`),
+    ),
+  })),
 ];
 
 export const CVSS40_METRICS_BY_CODE: ReadonlyMap<string, CvssMetricDefinition> =
   new Map(CVSS40_METRICS.map((metric) => [metric.code, metric]));
 
 /** Metrics that must be present in every CVSS v4.0 vector string. */
-export const CVSS40_MANDATORY_METRICS: readonly string[] = CVSS40_METRICS.filter(
-  (metric) => !metric.optional,
-).map((metric) => metric.code);
+export const CVSS40_MANDATORY_METRICS: readonly string[] =
+  CVSS40_METRICS.filter((metric) => !metric.optional).map(
+    (metric) => metric.code,
+  );
 
 /** Canonical vector ordering, as required by the specification. */
 export const CVSS40_METRIC_ORDER: readonly string[] = CVSS40_METRICS.map(

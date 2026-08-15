@@ -168,7 +168,10 @@ export function mergeRequirements(
         ]),
       ],
       requiredReports: [
-        ...new Set([...merged.requiredReports, ...requirements.requiredReports]),
+        ...new Set([
+          ...merged.requiredReports,
+          ...requirements.requiredReports,
+        ]),
       ],
       requiredSections: sections,
       requireDistinctApprover:

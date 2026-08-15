@@ -93,9 +93,7 @@ export function ScoringPanel({
 
     try {
       const result =
-        scheme === "CVSS40"
-          ? calculateCvss40(vector)
-          : calculateCvss31(vector);
+        scheme === "CVSS40" ? calculateCvss40(vector) : calculateCvss31(vector);
 
       return {
         vector: result.vector,
@@ -190,7 +188,10 @@ export function ScoringPanel({
                 aria-label={metric.name}
                 value={metrics[metric.code]}
                 onValueChange={(value) =>
-                  setMetrics((current) => ({ ...current, [metric.code]: value }))
+                  setMetrics((current) => ({
+                    ...current,
+                    [metric.code]: value,
+                  }))
                 }
                 disabled={!canEdit}
                 options={metric.values
@@ -215,8 +216,8 @@ export function ScoringPanel({
               </Mono>
             </div>
             <p className="mt-1 text-[11px] text-text-muted">
-              Shown as a preview. The stored score is computed by the server from
-              this vector, so the number can never be entered by hand.
+              Shown as a preview. The stored score is computed by the server
+              from this vector, so the number can never be entered by hand.
             </p>
             {proposed.error === null ? null : (
               <p className="mt-1 text-[11px] text-danger">{proposed.error}</p>

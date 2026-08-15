@@ -98,7 +98,9 @@ describe("visibility violations", () => {
     );
 
     expect(
-      result.findings.some((finding) => finding.ruleId === "unresolved-directive"),
+      result.findings.some(
+        (finding) => finding.ruleId === "unresolved-directive",
+      ),
     ).toBe(true);
     expect(result.blocking).toBe(true);
   });
@@ -140,7 +142,10 @@ describe("credential detection", () => {
     ["a GitHub token", "export TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789"],
     ["a Slack token", "xoxb-1234567890-abcdefghijkl"],
     ["a private key", "-----BEGIN RSA PRIVATE KEY-----"],
-    ["a bearer token", "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"],
+    [
+      "a bearer token",
+      "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
+    ],
     ["an inline password", "password=hunter2hunter2"],
   ];
 
@@ -148,7 +153,9 @@ describe("credential detection", () => {
     const result = lintReport(input({ sections: [section(content)] }));
 
     expect(
-      result.findings.some((finding) => finding.ruleId.startsWith("credential:")),
+      result.findings.some((finding) =>
+        finding.ruleId.startsWith("credential:"),
+      ),
     ).toBe(true);
     expect(result.blocking).toBe(true);
   });
@@ -268,9 +275,7 @@ describe("structure and review state", () => {
   it("blocks an unreviewed AI draft in a public report", () => {
     const result = lintReport(
       input({
-        sections: [
-          section("Drafted by a model.", { reviewState: "AI_DRAFT" }),
-        ],
+        sections: [section("Drafted by a model.", { reviewState: "AI_DRAFT" })],
       }),
     );
 
@@ -325,7 +330,9 @@ describe("consistency checks", () => {
     );
 
     expect(
-      result.findings.some((finding) => finding.ruleId === "score-without-vector"),
+      result.findings.some(
+        (finding) => finding.ruleId === "score-without-vector",
+      ),
     ).toBe(true);
   });
 
@@ -337,7 +344,9 @@ describe("consistency checks", () => {
     );
 
     expect(
-      result.findings.some((finding) => finding.ruleId === "vector-without-score"),
+      result.findings.some(
+        (finding) => finding.ruleId === "vector-without-score",
+      ),
     ).toBe(true);
   });
 
@@ -356,7 +365,9 @@ describe("consistency checks", () => {
 
   it("notes a vendor statement so it is not read as verified fact", () => {
     const result = lintReport(
-      input({ sections: [section("The vendor confirms the fix is complete.")] }),
+      input({
+        sections: [section("The vendor confirms the fix is complete.")],
+      }),
     );
 
     const finding = result.findings.find(
@@ -384,7 +395,8 @@ describe("a clean report", () => {
         scores: [
           {
             scheme: "CVSS40",
-            vector: "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+            vector:
+              "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
             score: 9.3,
           },
         ],

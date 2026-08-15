@@ -79,25 +79,27 @@ export async function searchInternal(
     LIMIT ${query.limit}
   `);
 
-  return rows.rows
-    // Below this the "match" is noise, and a prior-art tab full of noise is
-    // one a researcher stops reading.
-    .filter((row) => Number(row.rank) > 0.1)
-    .map((row) => ({
-      provider: "CODEVAULT",
-      findingId: row.id,
-      externalId: row.ref,
-      title: row.title,
-      url: `codevault://findings/${row.id}`,
-      publisher: `CodeVault ${row.case_ref}`,
-      publishedAt: row.created_at,
-      affectedIdentity: query.identity.product,
-      summary: row.summary ?? "",
-      query: queryDescription,
-      retrievedAt,
-      localSimilarity: Math.max(
-        Number(row.rank),
-        titleSimilarity(query.title, row.title),
-      ),
-    }));
+  return (
+    rows.rows
+      // Below this the "match" is noise, and a prior-art tab full of noise is
+      // one a researcher stops reading.
+      .filter((row) => Number(row.rank) > 0.1)
+      .map((row) => ({
+        provider: "CODEVAULT",
+        findingId: row.id,
+        externalId: row.ref,
+        title: row.title,
+        url: `codevault://findings/${row.id}`,
+        publisher: `CodeVault ${row.case_ref}`,
+        publishedAt: row.created_at,
+        affectedIdentity: query.identity.product,
+        summary: row.summary ?? "",
+        query: queryDescription,
+        retrievedAt,
+        localSimilarity: Math.max(
+          Number(row.rank),
+          titleSimilarity(query.title, row.title),
+        ),
+      }))
+  );
 }

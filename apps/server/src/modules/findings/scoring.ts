@@ -81,7 +81,10 @@ export function computeScore(
       };
     }
   } catch (error: unknown) {
-    if (error instanceof CvssVectorError || error instanceof Cvss31VectorError) {
+    if (
+      error instanceof CvssVectorError ||
+      error instanceof Cvss31VectorError
+    ) {
       throw validationError(error.message, {
         ...(error.metric === undefined ? {} : { metric: error.metric }),
       });

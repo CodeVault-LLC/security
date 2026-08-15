@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./templates": "./src/templates/index.ts"
+    "./templates": "./src/templates/index.ts",
+    "./pdf": "./src/pdf.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",
@@ -24,5 +25,8 @@
     "remark-rehype": "^11.1.2",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.0.0"
+  },
+  "devDependencies": {
+    "pdfjs-dist": "^6.2.108"
   }
 }

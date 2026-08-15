@@ -2,7 +2,7 @@ import { eq, sql } from "drizzle-orm";
 
 import { generateObjectKey, uuidv7 } from "@codevault/core/crypto";
 import { schema } from "@codevault/db";
-import { renderPdf } from "@codevault/reporting";
+import { renderPdf } from "@codevault/reporting/pdf";
 
 import { lintReportById, renderReportHtml } from "@codevault/server/reports";
 import type { WorkerContext } from "../context.js";

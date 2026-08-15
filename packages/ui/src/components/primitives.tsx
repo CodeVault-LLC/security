@@ -31,7 +31,8 @@ const buttonVariants = cva(
           "bg-accent text-accent-contrast hover:bg-accent-hover border border-transparent",
         secondary:
           "bg-surface text-text border border-border-strong hover:bg-surface-hover",
-        ghost: "bg-transparent text-text-muted hover:bg-surface-hover hover:text-text",
+        ghost:
+          "bg-transparent text-text-muted hover:bg-surface-hover hover:text-text",
         danger:
           "bg-transparent text-danger border border-danger/40 hover:bg-danger/10",
       },
@@ -47,14 +48,18 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends ButtonHTMLAttributes<HTMLButtonElement>,
+  extends
+    ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   /** Renders the child element instead of a button, for links styled as buttons. */
   asChild?: boolean;
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  function Button({ className, variant, size, asChild = false, ...props }, ref) {
+  function Button(
+    { className, variant, size, asChild = false, ...props },
+    ref,
+  ) {
     const Component = asChild ? Slot : "button";
 
     return (

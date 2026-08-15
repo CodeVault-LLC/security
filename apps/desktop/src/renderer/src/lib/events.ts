@@ -95,9 +95,8 @@ export function subscribeToServerEvents(
   const unsubscribeEvents = api.events.subscribe((event) => {
     invalidateForEvent(queryClient, event);
   });
-  const unsubscribeConnection = api.events.onConnectionChange(
-    onConnectionChange,
-  );
+  const unsubscribeConnection =
+    api.events.onConnectionChange(onConnectionChange);
 
   return {
     stop() {

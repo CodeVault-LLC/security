@@ -1,7 +1,4 @@
-import type {
-  PriorArtProvider,
-  PriorArtProviderResult,
-} from "@codevault/core";
+import type { PriorArtProvider, PriorArtProviderResult } from "@codevault/core";
 import { titleSimilarity } from "@codevault/core";
 
 /**
@@ -73,10 +70,7 @@ export function createNvdProvider(config: ProviderConfig): PriorArtProvider {
     },
 
     async search(query) {
-      const terms = [
-        query.identity.vendor,
-        query.identity.product,
-      ]
+      const terms = [query.identity.vendor, query.identity.product]
         .filter((term) => term.length > 0)
         .join(" ");
 
@@ -94,7 +88,11 @@ export function createNvdProvider(config: ProviderConfig): PriorArtProvider {
         headers.apiKey = config.nvdApiKey;
       }
 
-      const payload = await fetchJson(url.toString(), headers, config.timeoutMs);
+      const payload = await fetchJson(
+        url.toString(),
+        headers,
+        config.timeoutMs,
+      );
       const retrievedAt = new Date().toISOString();
       const vulnerabilities = extractArray(payload, "vulnerabilities");
       const results: PriorArtProviderResult[] = [];
@@ -111,7 +109,8 @@ export function createNvdProvider(config: ProviderConfig): PriorArtProvider {
         const english = descriptions.find(
           (item) => readString(item, "lang") === "en",
         );
-        const summary = english === undefined ? "" : (readString(english, "value") ?? "");
+        const summary =
+          english === undefined ? "" : (readString(english, "value") ?? "");
 
         results.push({
           provider: "NVD",
@@ -225,8 +224,7 @@ export function createGithubAdvisoryProvider(
 
     supports(query) {
       return (
-        config.githubAdvisoryToken !== null &&
-        query.identity.product.length > 0
+        config.githubAdvisoryToken !== null && query.identity.product.length > 0
       );
     },
 
@@ -270,10 +268,13 @@ export function createGithubAdvisoryProvider(
           provider: "GHSA",
           externalId: id,
           title: truncate(summary, 160),
-          url: readString(entry, "html_url") ?? `https://github.com/advisories/${id}`,
+          url:
+            readString(entry, "html_url") ??
+            `https://github.com/advisories/${id}`,
           publisher: "GitHub",
           publishedAt: readString(entry, "published_at"),
-          affectedIdentity: query.identity.packageName ?? query.identity.product,
+          affectedIdentity:
+            query.identity.packageName ?? query.identity.product,
           summary: truncate(readString(entry, "description") ?? summary),
           query: url.toString(),
           retrievedAt,

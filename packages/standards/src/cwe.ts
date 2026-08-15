@@ -43,7 +43,8 @@ export const CWE_CATALOG: readonly CweEntry[] = [
   {
     id: "CWE-22",
     name: "Path Traversal",
-    summary: "A pathname is built from input without restricting it to a directory.",
+    summary:
+      "A pathname is built from input without restricting it to a directory.",
     category: "INPUT_VALIDATION",
   },
   {
@@ -97,7 +98,8 @@ export const CWE_CATALOG: readonly CweEntry[] = [
   {
     id: "CWE-190",
     name: "Integer Overflow or Wraparound",
-    summary: "Arithmetic wraps, producing an unexpected small or negative value.",
+    summary:
+      "Arithmetic wraps, producing an unexpected small or negative value.",
     category: "MEMORY_SAFETY",
   },
   {

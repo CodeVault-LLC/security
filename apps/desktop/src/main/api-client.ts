@@ -107,7 +107,8 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         const response = await doFetch(new URL(path, baseUrl).toString(), {
           method: request.method ?? "GET",
           headers,
-          body: request.body === undefined ? null : JSON.stringify(request.body),
+          body:
+            request.body === undefined ? null : JSON.stringify(request.body),
           signal: controller.signal,
         });
 

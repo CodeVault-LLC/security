@@ -88,9 +88,7 @@ export function parseDirectives(markdown: string): ParsedDirective[] {
       continue;
     }
 
-    const insideLink = links.some(
-      ([from, to]) => start >= from && start < to,
-    );
+    const insideLink = links.some(([from, to]) => start >= from && start < to);
 
     if (insideLink) {
       continue;
@@ -131,10 +129,7 @@ export interface DirectiveError {
   argument: string;
   line: number;
   reason:
-    | "UNKNOWN_DIRECTIVE"
-    | "NOT_FOUND"
-    | "VISIBILITY_DENIED"
-    | "RESOLVER_FAILED";
+    "UNKNOWN_DIRECTIVE" | "NOT_FOUND" | "VISIBILITY_DENIED" | "RESOLVER_FAILED";
   message: string;
 }
 
@@ -247,7 +242,11 @@ export async function resolveDirectives(
     try {
       item = await resolver.resolve(directive.kind, directive.argument);
     } catch {
-      fail(directive, "RESOLVER_FAILED", `Could not resolve "${directive.raw}".`);
+      fail(
+        directive,
+        "RESOLVER_FAILED",
+        `Could not resolve "${directive.raw}".`,
+      );
       continue;
     }
 

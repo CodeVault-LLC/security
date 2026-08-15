@@ -127,10 +127,7 @@ export const reportSections = pgTable(
      * `finding:<id>` or `score:<id>`. Used to invalidate approval when a
      * source fact changes.
      */
-    sourceRefs: jsonb("source_refs")
-      .$type<string[]>()
-      .notNull()
-      .default([]),
+    sourceRefs: jsonb("source_refs").$type<string[]>().notNull().default([]),
     approvedBy: uuid("approved_by").references(() => users.id),
     approvedAt: timestampColumn("approved_at"),
     approvedRevision: integer("approved_revision"),

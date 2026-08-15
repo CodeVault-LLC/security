@@ -55,7 +55,6 @@ export function uuidv7(now: number = Date.now()): string {
  * mistaken for an assigned CVE in a screenshot or an email thread.
  */
 
-
 export function uuidv4Fallback(): string {
   return randomUUID();
 }

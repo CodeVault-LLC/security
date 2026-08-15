@@ -142,23 +142,41 @@ export async function renderPdf(
   }
 }
 
-/** Extracts plain text from a PDF, used by the export validation test. */
+/**
+ * Extracts the text of a PDF.
+ *
+ * Used to validate an export: that the title, the reference and the TLP marking
+ * really are on the page, and that nothing filtered out of the source reappears
+ * in the output. Chromium compresses content streams and subsets fonts, so this
+ * goes through a real PDF reader rather than scanning for parenthesised
+ * strings, which returns binary noise.
+ *
+ * `pdfjs-dist` is a development dependency: this function exists for
+ * verification, and a deployment that never calls it never loads it.
+ */
 export async function extractPdfText(bytes: Uint8Array): Promise<string> {
-  // Uncompressed text objects are enough to assert that a title, TLP marking
-  // and footer are present, without adding a PDF parsing dependency.
-  const raw = Buffer.from(bytes).toString("latin1");
-  const chunks: string[] = [];
+  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
-  for (const match of raw.matchAll(/\((?:\\.|[^\\)])*\)/g)) {
-    chunks.push(
-      match[0]
-        .slice(1, -1)
-        .replace(/\\([()\\])/g, "$1")
-        .replace(/\\(\d{1,3})/g, (_, code: string) =>
-          String.fromCharCode(Number.parseInt(code, 8)),
-        ),
+  const document = await pdfjs.getDocument({
+    data: bytes,
+    // A report is self-contained by construction, and the extractor must not
+    // reach the network any more than the renderer does.
+    disableFontFace: true,
+    useSystemFonts: false,
+  }).promise;
+
+  const pages: string[] = [];
+
+  for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+    const page = await document.getPage(pageNumber);
+    const content = await page.getTextContent();
+
+    pages.push(
+      content.items.map((item) => ("str" in item ? item.str : "")).join(" "),
     );
   }
 
-  return chunks.join("");
+  await document.cleanup();
+
+  return pages.join("\n");
 }

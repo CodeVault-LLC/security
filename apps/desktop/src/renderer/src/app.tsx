@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 
 import { LoginScreen } from "./features/auth/login-screen.js";
 import { createQueryClient } from "./lib/api.js";
@@ -16,25 +16,37 @@ import { useSession } from "./lib/session.js";
  * screen can render before there is a session to render it with.
  */
 
+/**
+ * Whether the preload bridge is present.
+ *
+ * Read once at module scope rather than in an effect: it is a property of how
+ * the window was created and cannot change while the application is running.
+ */
+const BRIDGE_PRESENT = hasBridge();
+
 export function App(): React.JSX.Element {
   const queryClient = useMemo(() => createQueryClient(), []);
   const router = useMemo(() => createAppRouter(), []);
   const status = useSession((state) => state.status);
   const signIn = useSession((state) => state.signIn);
   const setStatus = useSession((state) => state.setStatus);
-  const [bridgeMissing, setBridgeMissing] = useState(false);
 
   useEffect(() => {
-    if (!hasBridge()) {
-      setBridgeMissing(true);
+    if (!BRIDGE_PRESENT) {
       setStatus("SIGNED_OUT");
 
       return;
     }
 
+    let cancelled = false;
+
     void bridge()
       .auth.restore()
       .then((outcome) => {
+        if (cancelled) {
+          return;
+        }
+
         if (outcome !== null && outcome.ok) {
           signIn(outcome.data.user, outcome.data.storageWarning);
 
@@ -43,10 +55,18 @@ export function App(): React.JSX.Element {
 
         setStatus("SIGNED_OUT");
       })
-      .catch(() => setStatus("SIGNED_OUT"));
+      .catch(() => {
+        if (!cancelled) {
+          setStatus("SIGNED_OUT");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [signIn, setStatus]);
 
-  if (bridgeMissing) {
+  if (!BRIDGE_PRESENT) {
     return (
       <div className="flex h-full items-center justify-center p-6 text-center">
         <div className="max-w-md">

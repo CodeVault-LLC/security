@@ -6,7 +6,6 @@ import {
   AiContextPreview,
   AiProposal,
   AiProviderPolicy,
-  AiRun,
   AiRunWithProposals,
   CreateAiRunRequest,
   ErrorResponse,
@@ -38,6 +37,7 @@ import {
 } from "@codevault/core";
 import { schema } from "@codevault/db";
 import { Type } from "@sinclair/typebox";
+import type { AiRun } from "@codevault/contracts";
 
 import {
   actingUser,

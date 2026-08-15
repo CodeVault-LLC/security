@@ -86,7 +86,9 @@ export function AssetsRoute(): React.JSX.Element {
         <Select
           aria-label="Asset kind"
           value={kindFilter.length === 0 ? undefined : kindFilter}
-          onValueChange={(value) => setKindFilter(value === "__all" ? "" : value)}
+          onValueChange={(value) =>
+            setKindFilter(value === "__all" ? "" : value)
+          }
           placeholder="All kinds"
           className="w-56"
           options={[
@@ -275,7 +277,9 @@ export function AssetDetailRoute({
                       {relationship.toAssetName}
                     </Link>
                     {relationship.note === null ? null : (
-                      <span className="text-text-muted">{relationship.note}</span>
+                      <span className="text-text-muted">
+                        {relationship.note}
+                      </span>
                     )}
                   </li>
                 ))}

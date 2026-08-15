@@ -39,7 +39,12 @@ export function MarkdownEditor({
   const viewRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
 
-  onChangeRef.current = onChange;
+  // Kept in a ref so the editor is not torn down and rebuilt whenever the
+  // parent re-renders with a new closure. Assigned in an effect rather than
+  // during render, which would be a write to a ref while React is rendering.
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   useEffect(() => {
     if (hostRef.current === null) {

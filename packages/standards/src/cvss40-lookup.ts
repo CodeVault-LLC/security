@@ -285,114 +285,78 @@ export const MACRO_VECTOR_LOOKUP: Readonly<Record<string, number>> = {
 
 /** Highest-severity vectors composing each equivalence class. */
 export const MAX_COMPOSED = {
-  "eq1": {
-    "0": [
-      "AV:N/PR:N/UI:N/"
-    ],
-    "1": [
-      "AV:A/PR:N/UI:N/",
-      "AV:N/PR:L/UI:N/",
-      "AV:N/PR:N/UI:P/"
-    ],
-    "2": [
-      "AV:P/PR:N/UI:N/",
-      "AV:A/PR:L/UI:P/"
-    ]
+  eq1: {
+    "0": ["AV:N/PR:N/UI:N/"],
+    "1": ["AV:A/PR:N/UI:N/", "AV:N/PR:L/UI:N/", "AV:N/PR:N/UI:P/"],
+    "2": ["AV:P/PR:N/UI:N/", "AV:A/PR:L/UI:P/"],
   },
-  "eq2": {
-    "0": [
-      "AC:L/AT:N/"
-    ],
-    "1": [
-      "AC:H/AT:N/",
-      "AC:L/AT:P/"
-    ]
+  eq2: {
+    "0": ["AC:L/AT:N/"],
+    "1": ["AC:H/AT:N/", "AC:L/AT:P/"],
   },
-  "eq3": {
+  eq3: {
     "0": {
-      "0": [
-        "VC:H/VI:H/VA:H/CR:H/IR:H/AR:H/"
-      ],
-      "1": [
-        "VC:H/VI:H/VA:L/CR:M/IR:M/AR:H/",
-        "VC:H/VI:H/VA:H/CR:M/IR:M/AR:M/"
-      ]
+      "0": ["VC:H/VI:H/VA:H/CR:H/IR:H/AR:H/"],
+      "1": ["VC:H/VI:H/VA:L/CR:M/IR:M/AR:H/", "VC:H/VI:H/VA:H/CR:M/IR:M/AR:M/"],
     },
     "1": {
-      "0": [
-        "VC:L/VI:H/VA:H/CR:H/IR:H/AR:H/",
-        "VC:H/VI:L/VA:H/CR:H/IR:H/AR:H/"
-      ],
+      "0": ["VC:L/VI:H/VA:H/CR:H/IR:H/AR:H/", "VC:H/VI:L/VA:H/CR:H/IR:H/AR:H/"],
       "1": [
         "VC:L/VI:H/VA:L/CR:H/IR:M/AR:H/",
         "VC:L/VI:H/VA:H/CR:H/IR:M/AR:M/",
         "VC:H/VI:L/VA:H/CR:M/IR:H/AR:M/",
         "VC:H/VI:L/VA:L/CR:M/IR:H/AR:H/",
-        "VC:L/VI:L/VA:H/CR:H/IR:H/AR:M/"
-      ]
+        "VC:L/VI:L/VA:H/CR:H/IR:H/AR:M/",
+      ],
     },
     "2": {
-      "1": [
-        "VC:L/VI:L/VA:L/CR:H/IR:H/AR:H/"
-      ]
-    }
+      "1": ["VC:L/VI:L/VA:L/CR:H/IR:H/AR:H/"],
+    },
   },
-  "eq4": {
-    "0": [
-      "SC:H/SI:S/SA:S/"
-    ],
-    "1": [
-      "SC:H/SI:H/SA:H/"
-    ],
-    "2": [
-      "SC:L/SI:L/SA:L/"
-    ]
+  eq4: {
+    "0": ["SC:H/SI:S/SA:S/"],
+    "1": ["SC:H/SI:H/SA:H/"],
+    "2": ["SC:L/SI:L/SA:L/"],
   },
-  "eq5": {
-    "0": [
-      "E:A/"
-    ],
-    "1": [
-      "E:P/"
-    ],
-    "2": [
-      "E:U/"
-    ]
-  }
+  eq5: {
+    "0": ["E:A/"],
+    "1": ["E:P/"],
+    "2": ["E:U/"],
+  },
 } as const;
 
 /** Maximal severity distance per equivalence class, in 0.1 steps. */
 export const MAX_SEVERITY = {
-  "eq1": {
+  eq1: {
     "0": 1,
     "1": 4,
-    "2": 5
+    "2": 5,
   },
-  "eq2": {
+  eq2: {
     "0": 1,
-    "1": 2
+    "1": 2,
   },
-  "eq3eq6": {
+  eq3eq6: {
     "0": {
       "0": 7,
-      "1": 6
+      "1": 6,
     },
     "1": {
       "0": 8,
-      "1": 8
+      "1": 8,
     },
     "2": {
-      "1": 10
-    }
+      "1": 10,
+    },
   },
-  "eq4": {
+  eq4: {
     "0": 6,
     "1": 5,
-    "2": 4
+    "2": 4,
   },
-  "eq5": {
+  eq5: {
     "0": 1,
     "1": 1,
-    "2": 1
-  }
+    "2": 1,
+  },
 } as const;

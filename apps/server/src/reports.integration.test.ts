@@ -10,7 +10,11 @@ import type {
 import { generateObjectKey, uuidv7 } from "@codevault/core/crypto";
 import { schema } from "@codevault/db";
 
-import { createHarness, type TestHarness, type TestUser } from "./testing/harness.js";
+import {
+  createHarness,
+  type TestHarness,
+  type TestUser,
+} from "./testing/harness.js";
 
 /**
  * Report approval and export.
@@ -197,7 +201,9 @@ describeIntegration("report export", () => {
 
     expect(result.blocking).toBe(true);
     expect(
-      result.findings.some((finding) => finding.ruleId === "visibility-violation"),
+      result.findings.some(
+        (finding) => finding.ruleId === "visibility-violation",
+      ),
     ).toBe(true);
 
     const exported = await harness.app.inject({
@@ -219,7 +225,9 @@ describeIntegration("report export", () => {
     });
 
     const summary = reports
-      .json<{ items: Array<{ id: string; audience: string; revision: number }> }>()
+      .json<{
+        items: Array<{ id: string; audience: string; revision: number }>;
+      }>()
       .items.find((item) => item.audience === "PUBLIC");
 
     const response = await harness.app.inject({
@@ -315,7 +323,9 @@ describeIntegration("report export", () => {
     });
 
     const summary = reports
-      .json<{ items: Array<{ id: string; audience: string; revision: number }> }>()
+      .json<{
+        items: Array<{ id: string; audience: string; revision: number }>;
+      }>()
       .items.find((item) => item.audience === "PUBLIC");
 
     const response = await harness.app.inject({

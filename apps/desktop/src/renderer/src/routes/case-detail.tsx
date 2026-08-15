@@ -315,7 +315,10 @@ function ReportsPanel({
 }): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
 
-  const create = useApiMutation<ReportSummary, "INTERNAL" | "VENDOR" | "PUBLIC">(
+  const create = useApiMutation<
+    ReportSummary,
+    "INTERNAL" | "VENDOR" | "PUBLIC"
+  >(
     (audience) => ({
       path: "/v1/reports",
       method: "POST",
@@ -343,7 +346,8 @@ function ReportsPanel({
                   <>
                     <p className="text-text-muted">
                       Not created. Each report is a projection of this case for
-                      one audience, and sees only the data that audience may see.
+                      one audience, and sees only the data that audience may
+                      see.
                     </p>
                     {canEdit ? (
                       <Button

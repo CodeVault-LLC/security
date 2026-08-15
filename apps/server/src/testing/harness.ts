@@ -76,7 +76,11 @@ export function createFakeStorage(): FakeStorage {
     objects,
     reportedSizeOverride: null,
 
-    async createUpload(objectKey, _contentType, sizeBytes): Promise<PresignedUpload> {
+    async createUpload(
+      objectKey,
+      _contentType,
+      sizeBytes,
+    ): Promise<PresignedUpload> {
       return {
         strategy: "SINGLE",
         url: `memory://${objectKey}`,

@@ -80,10 +80,7 @@ export const disclosureEvents = pgTable(
       onDelete: "set null",
     }),
     /** Correspondence attached as proof of this step. */
-    artifactIds: jsonb("artifact_ids")
-      .$type<string[]>()
-      .notNull()
-      .default([]),
+    artifactIds: jsonb("artifact_ids").$type<string[]>().notNull().default([]),
     visibility: text("visibility")
       .$type<ContentVisibility>()
       .notNull()

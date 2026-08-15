@@ -215,7 +215,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
   AFFECTED_VERSION_REVIEW: {
     id: "AFFECTED_VERSION_REVIEW",
     label: "Review affected versions",
-    description: "Highlights version conclusions that were inferred rather than tested.",
+    description:
+      "Highlights version conclusions that were inferred rather than tested.",
     targetType: "FINDING",
     outputSchema: AffectedVersionReviewOutput,
     contextAudience: "INTERNAL",

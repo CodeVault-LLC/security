@@ -81,7 +81,10 @@ export function PriorArtPanel({
     () => [queryKeys.priorArt(finding.id), queryKeys.finding(finding.id)],
   );
 
-  const conclude = useApiMutation<PriorArtCheck, { checkId: string; state: PriorArtState }>(
+  const conclude = useApiMutation<
+    PriorArtCheck,
+    { checkId: string; state: PriorArtState }
+  >(
     ({ checkId, state }) => ({
       path: `/v1/prior-art-checks/${checkId}/conclude`,
       method: "POST",
@@ -104,7 +107,7 @@ export function PriorArtPanel({
   const newSinceLastCheck = new Set(
     previous === undefined
       ? []
-      : latest?.matches
+      : (latest?.matches
           .filter(
             (match) =>
               !previous.matches.some(
@@ -113,7 +116,7 @@ export function PriorArtPanel({
                   old.externalId === match.externalId,
               ),
           )
-          .map((match) => match.id) ?? [],
+          .map((match) => match.id) ?? []),
   );
 
   return (
@@ -217,7 +220,9 @@ export function PriorArtPanel({
                 </h3>
                 <p className="text-[12px]">
                   <span className="font-medium">
-                    {latest.analysis.conclusion.replace(/_/g, " ").toLowerCase()}
+                    {latest.analysis.conclusion
+                      .replace(/_/g, " ")
+                      .toLowerCase()}
                   </span>{" "}
                   <span className="text-text-muted">
                     (confidence {latest.analysis.confidence.toLowerCase()})

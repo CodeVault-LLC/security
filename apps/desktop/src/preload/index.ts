@@ -42,7 +42,8 @@ function subscribe<T>(
 
 const api: CodeVaultDesktopApi = {
   app: {
-    version: () => ipcRenderer.invoke(IPC_CHANNELS.appVersion) as Promise<string>,
+    version: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.appVersion) as Promise<string>,
     platform: () =>
       ipcRenderer.invoke(IPC_CHANNELS.appPlatform) as Promise<
         "darwin" | "win32" | "linux"
@@ -96,10 +97,9 @@ const api: CodeVaultDesktopApi = {
         CodeVaultDesktopApi["ai"]["providers"]
       >,
     previewContext: (request) =>
-      ipcRenderer.invoke(
-        IPC_CHANNELS.aiPreviewContext,
-        request,
-      ) as ReturnType<CodeVaultDesktopApi["ai"]["previewContext"]>,
+      ipcRenderer.invoke(IPC_CHANNELS.aiPreviewContext, request) as ReturnType<
+        CodeVaultDesktopApi["ai"]["previewContext"]
+      >,
     run: (request) =>
       ipcRenderer.invoke(IPC_CHANNELS.aiRun, request) as ReturnType<
         CodeVaultDesktopApi["ai"]["run"]

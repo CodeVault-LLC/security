@@ -81,7 +81,11 @@ export function EvidencePanel({
           {items.length} evidence record{items.length === 1 ? "" : "s"}
         </p>
         {canEdit ? (
-          <Button variant="primary" size="sm" onClick={() => setUploadOpen(true)}>
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => setUploadOpen(true)}
+          >
             <Upload aria-hidden className="size-3" />
             Add evidence
           </Button>
@@ -255,7 +259,8 @@ function UploadDialog({
                     </span>
                     {update === undefined ? null : (
                       <span className="w-20 shrink-0 text-right text-text-muted">
-                        {update.phase === "UPLOADING" && update.progress !== null
+                        {update.phase === "UPLOADING" &&
+                        update.progress !== null
                           ? `${Math.round(update.progress * 100)}%`
                           : update.phase.toLowerCase()}
                       </span>

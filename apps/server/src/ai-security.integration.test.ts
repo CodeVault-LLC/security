@@ -13,7 +13,11 @@ import type {
 import { generateObjectKey, uuidv7 } from "@codevault/core/crypto";
 import { schema } from "@codevault/db";
 
-import { createHarness, type TestHarness, type TestUser } from "./testing/harness.js";
+import {
+  createHarness,
+  type TestHarness,
+  type TestUser,
+} from "./testing/harness.js";
 
 /**
  * AI security.
@@ -40,21 +44,24 @@ describeIntegration("AI context filtering", () => {
 
     // The provider is enabled with the widest possible policy, so anything the
     // tests catch is the audience rule doing the work rather than the policy.
-    await harness.dbHandle.db.insert(schema.aiProviderPolicies).values({
-      providerId: "claude-code",
-      enabled: true,
-      allowedVisibility: ["INTERNAL", "VENDOR", "PUBLIC"],
-      allowRestrictedCases: true,
-      retainFullPrompts: true,
-    }).onConflictDoUpdate({
-      target: schema.aiProviderPolicies.providerId,
-      set: {
+    await harness.dbHandle.db
+      .insert(schema.aiProviderPolicies)
+      .values({
+        providerId: "claude-code",
         enabled: true,
         allowedVisibility: ["INTERNAL", "VENDOR", "PUBLIC"],
         allowRestrictedCases: true,
         retainFullPrompts: true,
-      },
-    });
+      })
+      .onConflictDoUpdate({
+        target: schema.aiProviderPolicies.providerId,
+        set: {
+          enabled: true,
+          allowedVisibility: ["INTERNAL", "VENDOR", "PUBLIC"],
+          allowRestrictedCases: true,
+          retainFullPrompts: true,
+        },
+      });
 
     const created = await harness.app.inject({
       method: "POST",
@@ -527,9 +534,9 @@ describeIntegration("AI proposals", () => {
     });
 
     expect(accepted.statusCode).toBe(409);
-    expect(accepted.json<{ error: { message: string } }>().error.message).toContain(
-      "changed since the AI proposal was created",
-    );
+    expect(
+      accepted.json<{ error: { message: string } }>().error.message,
+    ).toContain("changed since the AI proposal was created");
 
     const after = await harness.app.inject({
       method: "GET",

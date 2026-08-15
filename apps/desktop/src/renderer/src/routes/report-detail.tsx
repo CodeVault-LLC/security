@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, Download, FileWarning } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import type {
   AiProposal,
@@ -77,7 +77,6 @@ export function ReportDetailRoute({
   const canEdit = canWrite(user);
 
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<string>("");
   const [proposals, setProposals] = useState<AiProposal[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(true);
@@ -110,12 +109,6 @@ export function ReportDetailRoute({
       null,
     [sections, activeSectionId],
   );
-
-  useEffect(() => {
-    if (activeSection !== null) {
-      setDraft(activeSection.contentMarkdown);
-    }
-  }, [activeSection?.id, activeSection?.revision]);
 
   const saveSection = useApiMutation<
     ReportDetail,
@@ -172,7 +165,9 @@ export function ReportDetailRoute({
     return (
       <EmptyState
         title={errorHeading(report.error)}
-        description={report.error?.message ?? "That report could not be loaded."}
+        description={
+          report.error?.message ?? "That report could not be loaded."
+        }
       />
     );
   }
@@ -181,9 +176,6 @@ export function ReportDetailRoute({
   const blocking = lint.data?.findings.filter(
     (finding) => finding.severity === "BLOCKING",
   );
-  const dirty =
-    activeSection !== null && draft !== activeSection.contentMarkdown;
-
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
@@ -297,125 +289,191 @@ export function ReportDetailRoute({
           {activeSection === null ? (
             <EmptyState title="This report has no sections" />
           ) : (
-            <>
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
-                <div className="min-w-0">
-                  <h2 className="truncate text-[13px] font-medium">
-                    {activeSection.title}
-                  </h2>
-                  {activeSection.promptPurpose === null ? null : (
-                    <p className="truncate text-[11px] text-text-muted">
-                      {activeSection.promptPurpose}
-                    </p>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <ApprovalState
-                    state={activeSection.reviewState}
-                    approvedBy={activeSection.approvedBy?.displayName ?? null}
-                    approvedAt={activeSection.approvedAt}
-                  />
-                  {canEdit ? (
-                    <>
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={!dirty || saveSection.isPending}
-                        onClick={() =>
-                          saveSection.mutate(
-                            { section: activeSection, content: draft },
-                            {
-                              onError: (mutationError) =>
-                                setError(mutationError.message),
-                            },
-                          )
-                        }
-                      >
-                        Save
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="primary"
-                        disabled={dirty || approveSection.isPending}
-                        title={
-                          dirty
-                            ? "Save your changes before approving."
-                            : "Approve this section's current text."
-                        }
-                        onClick={() =>
-                          approveSection.mutate(activeSection, {
-                            onError: (mutationError) =>
-                              setError(mutationError.message),
-                          })
-                        }
-                      >
-                        Approve section
-                      </Button>
-                    </>
-                  ) : null}
-                </div>
-              </div>
-
-              {canEdit ? (
-                <div className="border-b border-border px-3 py-2">
-                  <AiToolbar
-                    targetType="REPORT_SECTION"
-                    targetId={activeSection.id}
-                    actions={SECTION_AI_ACTIONS}
-                    onCompleted={(run: AiRunWithProposals) => {
-                      setProposals(run.proposals);
-                      void queryClient.invalidateQueries({
-                        queryKey: queryKeys.report(reportId),
-                      });
-                    }}
-                  />
-                </div>
-              ) : null}
-
-              {proposals.length === 0 ? null : (
-                <div className="space-y-2 border-b border-border p-3">
-                  {proposals.map((proposal) => (
-                    <SectionProposal
-                      key={proposal.id}
-                      proposal={proposal}
-                      section={activeSection}
-                      reportId={reportId}
-                      onResolved={() =>
-                        setProposals((current) =>
-                          current.filter((item) => item.id !== proposal.id),
-                        )
-                      }
-                    />
-                  ))}
-                </div>
-              )}
-
-              <div className="flex min-h-0 flex-1">
-                <div className="min-w-0 flex-1 overflow-hidden border-r border-border">
-                  <MarkdownEditor
-                    value={draft}
-                    onChange={setDraft}
-                    readOnly={!canEdit || activeSection.reviewState === "LOCKED"}
-                    className="h-full"
-                  />
-                </div>
-
-                {showPreview ? (
-                  <div className="min-w-0 flex-1 overflow-y-auto">
-                    <PreviewPane
-                      html={preview.data?.html ?? null}
-                      lint={lint.data ?? null}
-                      sectionId={activeSection.id}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            </>
+            <SectionWorkspace
+              // Keyed by section and revision so the draft starts from the
+              // stored text whenever either changes — including after an AI
+              // proposal is accepted — without an effect writing state back.
+              key={`${activeSection.id}:${activeSection.revision}`}
+              reportId={reportId}
+              section={activeSection}
+              canEdit={canEdit}
+              showPreview={showPreview}
+              previewHtml={preview.data?.html ?? null}
+              lint={lint.data ?? null}
+              proposals={proposals}
+              onProposals={setProposals}
+              onError={setError}
+              onSave={(content) =>
+                saveSection.mutate(
+                  { section: activeSection, content },
+                  {
+                    onError: (mutationError) => setError(mutationError.message),
+                  },
+                )
+              }
+              saving={saveSection.isPending}
+              onApprove={() =>
+                approveSection.mutate(activeSection, {
+                  onError: (mutationError) => setError(mutationError.message),
+                })
+              }
+              approving={approveSection.isPending}
+              onAiCompleted={(run: AiRunWithProposals) => {
+                setProposals(run.proposals);
+                void queryClient.invalidateQueries({
+                  queryKey: queryKeys.report(reportId),
+                });
+              }}
+            />
           )}
         </div>
       </div>
     </div>
+  );
+}
+
+interface SectionWorkspaceProps {
+  reportId: string;
+  section: ReportSection;
+  canEdit: boolean;
+  showPreview: boolean;
+  previewHtml: string | null;
+  lint: LintResult | null;
+  proposals: AiProposal[];
+  onProposals: (update: (current: AiProposal[]) => AiProposal[]) => void;
+  onError: (message: string | null) => void;
+  onSave: (content: string) => void;
+  saving: boolean;
+  onApprove: () => void;
+  approving: boolean;
+  onAiCompleted: (run: AiRunWithProposals) => void;
+}
+
+/**
+ * One section: its header, its AI actions, its editor and its preview.
+ *
+ * The draft lives here rather than in the route so that editing one section
+ * does not re-render the section tree, the lint panel and the preview on every
+ * keystroke.
+ */
+function SectionWorkspace({
+  reportId,
+  section,
+  canEdit,
+  showPreview,
+  previewHtml,
+  lint,
+  proposals,
+  onProposals,
+  onError,
+  onSave,
+  saving,
+  onApprove,
+  approving,
+  onAiCompleted,
+}: SectionWorkspaceProps): React.JSX.Element {
+  const [draft, setDraft] = useState(section.contentMarkdown);
+  const dirty = draft !== section.contentMarkdown;
+
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+        <div className="min-w-0">
+          <h2 className="truncate text-[13px] font-medium">{section.title}</h2>
+          {section.promptPurpose === null ? null : (
+            <p className="truncate text-[11px] text-text-muted">
+              {section.promptPurpose}
+            </p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <ApprovalState
+            state={section.reviewState}
+            approvedBy={section.approvedBy?.displayName ?? null}
+            approvedAt={section.approvedAt}
+          />
+          {canEdit ? (
+            <>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={!dirty || saving}
+                onClick={() => onSave(draft)}
+              >
+                Save
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={dirty || approving}
+                title={
+                  dirty
+                    ? "Save your changes before approving."
+                    : "Approve this section's current text."
+                }
+                onClick={onApprove}
+              >
+                Approve section
+              </Button>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      {canEdit ? (
+        <div className="border-b border-border px-3 py-2">
+          <AiToolbar
+            targetType="REPORT_SECTION"
+            targetId={section.id}
+            actions={SECTION_AI_ACTIONS}
+            onCompleted={onAiCompleted}
+          />
+        </div>
+      ) : null}
+
+      {proposals.length === 0 ? null : (
+        <div className="space-y-2 border-b border-border p-3">
+          {proposals.map((proposal) => (
+            <SectionProposal
+              key={proposal.id}
+              proposal={proposal}
+              section={section}
+              reportId={reportId}
+              onResolved={() =>
+                onProposals((current) =>
+                  current.filter((item) => item.id !== proposal.id),
+                )
+              }
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="flex min-h-0 flex-1">
+        <div className="min-w-0 flex-1 overflow-hidden border-r border-border">
+          <MarkdownEditor
+            value={draft}
+            onChange={(next) => {
+              onError(null);
+              setDraft(next);
+            }}
+            readOnly={!canEdit || section.reviewState === "LOCKED"}
+            className="h-full"
+          />
+        </div>
+
+        {showPreview ? (
+          <div className="min-w-0 flex-1 overflow-y-auto">
+            <PreviewPane
+              html={previewHtml}
+              lint={lint}
+              sectionId={section.id}
+            />
+          </div>
+        ) : null}
+      </div>
+    </>
   );
 }
 

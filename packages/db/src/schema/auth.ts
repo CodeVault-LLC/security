@@ -10,12 +10,7 @@ import {
 
 import type { UserRole } from "@codevault/core";
 
-import {
-  createdAt,
-  primaryId,
-  timestampColumn,
-  updatedAt,
-} from "./columns.js";
+import { createdAt, primaryId, timestampColumn, updatedAt } from "./columns.js";
 
 /**
  * Authentication tables.

@@ -38,7 +38,8 @@ export const TLP_DEFINITIONS: Readonly<Record<TlpLabel, TlpDefinition>> = {
   "TLP:AMBER+STRICT": {
     label: "TLP:AMBER+STRICT",
     shortName: "AMBER+STRICT",
-    sharingRule: "Limited disclosure, restricted to the recipient organisation.",
+    sharingRule:
+      "Limited disclosure, restricted to the recipient organisation.",
     colorToken: "tlp-amber",
   },
   "TLP:AMBER": {

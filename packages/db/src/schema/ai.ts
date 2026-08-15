@@ -13,12 +13,7 @@ import type { ContentVisibility } from "@codevault/core";
 
 import { users } from "./auth.js";
 import { cases } from "./cases.js";
-import {
-  createdAt,
-  primaryId,
-  timestampColumn,
-  updatedAt,
-} from "./columns.js";
+import { createdAt, primaryId, timestampColumn, updatedAt } from "./columns.js";
 
 /**
  * AI tables.
@@ -99,9 +94,7 @@ export const aiProposals = pgTable(
       .$type<"FINDING" | "SCORE" | "CLAIM" | "REPORT_SECTION">()
       .notNull(),
     targetId: uuid("target_id").notNull(),
-    patch: jsonb("patch")
-      .$type<Record<string, unknown>>()
-      .notNull(),
+    patch: jsonb("patch").$type<Record<string, unknown>>().notNull(),
     rationaleMarkdown: text("rationale_markdown").notNull(),
     status: text("status")
       .$type<"PENDING" | "ACCEPTED" | "REJECTED">()

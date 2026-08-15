@@ -15,7 +15,12 @@ import {
   UpdateEvidenceRequest,
   UploadInstructions,
 } from "@codevault/contracts";
-import { DomainError, isSha256, notFound, validationError } from "@codevault/core";
+import {
+  DomainError,
+  isSha256,
+  notFound,
+  validationError,
+} from "@codevault/core";
 import { generateObjectKey } from "@codevault/core/crypto";
 import { allocateReference, schema } from "@codevault/db";
 

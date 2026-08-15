@@ -154,4 +154,3 @@ const SHA256_PATTERN = /^[0-9a-f]{64}$/i;
 export function isSha256(value: string): boolean {
   return SHA256_PATTERN.test(value.trim());
 }
-

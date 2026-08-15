@@ -1,0 +1,85 @@
+# CodeVault desktop packaging.
+#
+# Signing credentials come from the environment on the CI runner and are never
+# committed. Each platform is built on its own runner: one operating system
+# cannot properly sign and notarise for the others.
+
+appId: dev.codevault.desktop
+productName: CodeVault
+copyright: Copyright © 2026 CodeVault
+
+directories:
+  output: release
+  buildResources: build
+
+files:
+  - out/**/*
+  - package.json
+  - "!**/*.map"
+  - "!**/*.ts"
+
+# ASAR integrity makes a modified application bundle fail to start, which is
+# what stops an attacker with filesystem access from editing the renderer of an
+# installed client.
+asar: true
+asarUnpack:
+  - "**/*.node"
+
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+  grantFileProtocolExtraPrivileges: false
+
+mac:
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Notarisation runs when APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD and
+  # APPLE_TEAM_ID are present in the environment.
+  notarize: true
+
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # Signing runs when WINDOWS_CERTIFICATE_FILE and WINDOWS_CERTIFICATE_PASSWORD
+  # are present in the environment.
+  signingHashAlgorithms: [sha256]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+
+linux:
+  target:
+    - target: rpm
+      arch: [x64]
+    - target: AppImage
+      arch: [x64]
+  category: Development
+  synopsis: Security research and coordinated disclosure
+  description: >
+    CodeVault is a security research, finding-management, evidence and
+    coordinated-disclosure platform. AI drafts; humans own truth.
+
+rpm:
+  # Fedora's Electron packages need these at runtime.
+  depends:
+    - libXScrnSaver
+    - libnotify
+    - nss
+
+publish: null

@@ -115,7 +115,9 @@ export function DashboardRoute(): React.JSX.Element {
                       <span className="block truncate">{item.title}</span>
                       <span className="text-text-muted">
                         {item.detail}
-                        {item.actor === null ? "" : ` · ${item.actor.displayName}`}
+                        {item.actor === null
+                          ? ""
+                          : ` · ${item.actor.displayName}`}
                       </span>
                     </span>
                     <span className="shrink-0 text-text-muted">

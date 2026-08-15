@@ -1,6 +1,9 @@
 import { PgBoss } from "pg-boss";
 
-import { JOB_QUEUES, type JobPayloadMap } from "@codevault/server/services/jobs";
+import {
+  JOB_QUEUES,
+  type JobPayloadMap,
+} from "@codevault/server/services/jobs";
 
 import type { WorkerContext } from "./context.js";
 import { generateArtifactPreview } from "./jobs/artifact-preview.js";
@@ -94,10 +97,7 @@ export async function startQueue(
 
           // A throw marks the job failed and lets pg-boss retry it with the
           // backoff configured where the job was sent.
-          await handler.run(
-            context,
-            data as never,
-          );
+          await handler.run(context, data as never);
 
           context.log(`${handler.queue} finished (${job.id})`);
         }

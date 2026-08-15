@@ -47,7 +47,9 @@ describe("temporal scoring", () => {
   });
 
   it("leaves the score untouched when no temporal metric is set", () => {
-    const result = calculateCvss31("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H");
+    const result = calculateCvss31(
+      "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
+    );
 
     expect(result.temporalScore).toBe(result.baseScore);
     expect(result.score).toBe(result.baseScore);

@@ -62,7 +62,8 @@ export async function runPriorArtCheck(
 
     sources.push({
       provider: "CODEVAULT",
-      queries: internal.length > 0 ? [internal[0]?.query ?? ""] : ["internal search"],
+      queries:
+        internal.length > 0 ? [internal[0]?.query ?? ""] : ["internal search"],
       resultCount: internal.length,
       error: null,
       retrievedAt: new Date().toISOString(),
@@ -159,23 +160,21 @@ async function runProvider(
     const results = await provider.search(query);
 
     for (const result of results) {
-      await context.db
-        .insert(schema.priorArtMatches)
-        .values({
-          checkId,
-          origin: "EXTERNAL",
-          provider: result.provider,
-          externalId: result.externalId,
-          title: result.title,
-          url: result.url,
-          publisher: result.publisher,
-          publishedAt: result.publishedAt,
-          affectedIdentity: result.affectedIdentity,
-          summary: result.summary,
-          query: result.query,
-          retrievedAt: result.retrievedAt,
-          similarity: result.localSimilarity,
-        });
+      await context.db.insert(schema.priorArtMatches).values({
+        checkId,
+        origin: "EXTERNAL",
+        provider: result.provider,
+        externalId: result.externalId,
+        title: result.title,
+        url: result.url,
+        publisher: result.publisher,
+        publishedAt: result.publishedAt,
+        affectedIdentity: result.affectedIdentity,
+        summary: result.summary,
+        query: result.query,
+        retrievedAt: result.retrievedAt,
+        similarity: result.localSimilarity,
+      });
     }
 
     sources.push({
@@ -229,7 +228,10 @@ async function buildQuery(
       primary: schema.findingAssets.primary,
     })
     .from(schema.findingAssets)
-    .innerJoin(schema.assets, eq(schema.assets.id, schema.findingAssets.assetId))
+    .innerJoin(
+      schema.assets,
+      eq(schema.assets.id, schema.findingAssets.assetId),
+    )
     .where(eq(schema.findingAssets.findingId, data.findingId));
 
   const primary = assets.find((asset) => asset.primary) ?? assets[0];

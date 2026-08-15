@@ -108,7 +108,9 @@ function CaseReports({
               to={`/reports/${report.id}`}
               className="flex items-center gap-2 px-3 py-1.5 text-[12px] hover:bg-surface-hover"
             >
-              <Mono className="w-24 shrink-0 text-text-muted">{report.ref}</Mono>
+              <Mono className="w-24 shrink-0 text-text-muted">
+                {report.ref}
+              </Mono>
               <span className="w-20 shrink-0 text-text-muted">
                 {report.audience}
               </span>
@@ -348,7 +350,9 @@ export function SettingsRoute(): React.JSX.Element {
                     className="rounded-[--radius] border border-border p-2"
                   >
                     <div className="flex items-center gap-2">
-                      <span className="font-medium">{provider.displayName}</span>
+                      <span className="font-medium">
+                        {provider.displayName}
+                      </span>
                       <span
                         className={
                           provider.available
@@ -363,7 +367,9 @@ export function SettingsRoute(): React.JSX.Element {
                     </div>
 
                     {provider.detail === null ? null : (
-                      <p className="mt-0.5 text-text-muted">{provider.detail}</p>
+                      <p className="mt-0.5 text-text-muted">
+                        {provider.detail}
+                      </p>
                     )}
 
                     {!provider.available ? (
@@ -562,9 +568,7 @@ export function SettingsRoute(): React.JSX.Element {
                 </div>
               )}
 
-              {error === null ? null : (
-                <p className="text-danger">{error}</p>
-              )}
+              {error === null ? null : <p className="text-danger">{error}</p>}
             </CardBody>
           </Card>
         ) : null}

@@ -199,7 +199,12 @@ describeIntegration("authentication", () => {
   });
 
   it("rejects a malformed authorization header", async () => {
-    for (const header of ["Bearer", "Basic abcdef", "Bearer short", "nonsense"]) {
+    for (const header of [
+      "Bearer",
+      "Basic abcdef",
+      "Bearer short",
+      "nonsense",
+    ]) {
       const response = await harness.app.inject({
         method: "GET",
         url: "/v1/cases",
@@ -351,9 +356,9 @@ describeIntegration("invitations", () => {
     });
 
     expect(response.statusCode).toBe(400);
-    expect(response.json<{ error: { message: string } }>().error.message).toContain(
-      "expired",
-    );
+    expect(
+      response.json<{ error: { message: string } }>().error.message,
+    ).toContain("expired");
   });
 
   it("refuses a revoked invitation", async () => {

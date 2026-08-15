@@ -106,7 +106,10 @@ export interface CodeVaultDesktopApi {
    * token. The renderer never sees the token, and never chooses a host.
    */
   api: {
-    request<T>(path: string, options?: ApiRequestOptions): Promise<ApiOutcome<T>>;
+    request<T>(
+      path: string,
+      options?: ApiRequestOptions,
+    ): Promise<ApiOutcome<T>>;
   };
 
   uploads: {

@@ -22,9 +22,9 @@ describe("FIRST reference conformance", () => {
     expect(referenceVectors.some((entry) => entry.vector.includes("/E:"))).toBe(
       true,
     );
-    expect(referenceVectors.some((entry) => entry.vector.includes("/CR:"))).toBe(
-      true,
-    );
+    expect(
+      referenceVectors.some((entry) => entry.vector.includes("/CR:")),
+    ).toBe(true);
   });
 
   it.each(referenceVectors)("scores $vector as $score", ({ vector, score }) => {

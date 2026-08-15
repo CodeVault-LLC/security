@@ -33,9 +33,9 @@ describe("validation transitions", () => {
 describe("disclosure transitions", () => {
   it("follows the coordinated-disclosure path", () => {
     expect(canTransitionDisclosure("PRIVATE", "CONTACT_PREPARED")).toBe(true);
-    expect(canTransitionDisclosure("CONTACT_PREPARED", "VENDOR_CONTACTED")).toBe(
-      true,
-    );
+    expect(
+      canTransitionDisclosure("CONTACT_PREPARED", "VENDOR_CONTACTED"),
+    ).toBe(true);
     expect(canTransitionDisclosure("VENDOR_CONTACTED", "ACKNOWLEDGED")).toBe(
       true,
     );

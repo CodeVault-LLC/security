@@ -72,7 +72,9 @@ export interface AppSidebarProps {
 export function AppSidebar({
   onOpenCommandPalette,
 }: AppSidebarProps): React.JSX.Element {
-  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
   const user = useSession((state) => state.user);
   const eventsConnected = useSession((state) => state.eventsConnected);
 

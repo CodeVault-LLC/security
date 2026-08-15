@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!--
+      Electron needs these two under the hardened runtime. Nothing else is
+      requested: no camera, no microphone, no Apple Events, no debugging.
+    -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <!-- The client talks to one CodeVault server over TLS. -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+
+    <!-- Reading files the researcher chooses in the native picker. -->
+    <key>com.apple.security.files.user-selected.read-only</key>
+    <true/>
+  </dict>
+</plist>

@@ -74,9 +74,7 @@ export function defaultVisibilityForAudience(
  * Report templates carry this as their "visibility ceiling", which the linter
  * uses to explain *why* an item was rejected rather than only that it was.
  */
-export function visibilityCeiling(
-  audience: ReportAudience,
-): ContentVisibility {
+export function visibilityCeiling(audience: ReportAudience): ContentVisibility {
   return audience;
 }
 

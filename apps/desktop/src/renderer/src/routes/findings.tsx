@@ -78,7 +78,13 @@ export function FindingsRoute(): React.JSX.Element {
     }
 
     return params.toString();
-  }, [debouncedSearch, validationState, disclosureState, priorArtState, severity]);
+  }, [
+    debouncedSearch,
+    validationState,
+    disclosureState,
+    priorArtState,
+    severity,
+  ]);
 
   const findings = useApiQuery<Paginated<FindingSummary>>(
     queryKeys.findings({ query }),

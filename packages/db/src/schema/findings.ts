@@ -93,10 +93,7 @@ export const findings = pgTable(
       .$type<ContentVisibility>()
       .notNull()
       .default("INTERNAL"),
-    cweIds: jsonb("cwe_ids")
-      .$type<string[]>()
-      .notNull()
-      .default([]),
+    cweIds: jsonb("cwe_ids").$type<string[]>().notNull().default([]),
 
     /**
      * Denormalised headline severity, derived from the approved score.

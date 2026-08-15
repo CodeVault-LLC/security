@@ -21,7 +21,11 @@ import type {
   ReviewState,
   ValidationState,
 } from "@codevault/core";
-import { TLP_DEFINITIONS, type SeverityRating, type TlpLabel } from "@codevault/standards";
+import {
+  TLP_DEFINITIONS,
+  type SeverityRating,
+  type TlpLabel,
+} from "@codevault/standards";
 
 import { cn } from "../lib/cn.js";
 
@@ -38,9 +42,11 @@ const badgeBase =
   "text-[11px] font-medium leading-4 whitespace-nowrap";
 
 const severityStyles: Record<SeverityRating, string> = {
-  CRITICAL: "border-severity-critical/50 bg-severity-critical/12 text-severity-critical",
+  CRITICAL:
+    "border-severity-critical/50 bg-severity-critical/12 text-severity-critical",
   HIGH: "border-severity-high/50 bg-severity-high/12 text-severity-high",
-  MEDIUM: "border-severity-medium/50 bg-severity-medium/12 text-severity-medium",
+  MEDIUM:
+    "border-severity-medium/50 bg-severity-medium/12 text-severity-medium",
   LOW: "border-severity-low/50 bg-severity-low/12 text-severity-low",
   NONE: "border-severity-info/50 bg-severity-info/12 text-severity-info",
 };
@@ -203,11 +209,7 @@ const REVIEW_TONES: Record<ReviewState, StateTone> = {
 };
 
 export type StateKind =
-  | "validation"
-  | "remediation"
-  | "disclosure"
-  | "priorArt"
-  | "review";
+  "validation" | "remediation" | "disclosure" | "priorArt" | "review";
 
 const TONE_LOOKUP: Record<StateKind, Record<string, StateTone>> = {
   validation: VALIDATION_TONES,

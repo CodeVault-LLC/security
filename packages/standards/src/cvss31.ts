@@ -54,7 +54,11 @@ export const CVSS31_METRICS: readonly Cvss31MetricDefinition[] = [
     optional: false,
     values: [
       value("L", "Low", "Repeatable success against the vulnerable component."),
-      value("H", "High", "Success depends on conditions outside attacker control."),
+      value(
+        "H",
+        "High",
+        "Success depends on conditions outside attacker control.",
+      ),
     ],
   },
   {
@@ -84,7 +88,11 @@ export const CVSS31_METRICS: readonly Cvss31MetricDefinition[] = [
     group: "Base",
     optional: false,
     values: [
-      value("U", "Unchanged", "Impact is confined to the vulnerable component."),
+      value(
+        "U",
+        "Unchanged",
+        "Impact is confined to the vulnerable component.",
+      ),
       value("C", "Changed", "Impact reaches beyond the security authority."),
     ],
   },
@@ -206,20 +214,18 @@ export const CVSS31_METRICS: readonly Cvss31MetricDefinition[] = [
       ["MI", "Modified Integrity", ["H", "L", "N"]],
       ["MA", "Modified Availability", ["H", "L", "N"]],
     ] as const
-  ).map(
-    ([code, name, codes]): Cvss31MetricDefinition => ({
-      code,
-      name,
-      group: "Environmental",
-      optional: true,
-      values: [
-        value("X", "Not Defined", "Falls back to the corresponding base metric."),
-        ...codes.map((it) =>
-          value(it, it, `Overrides the base metric with ${it}.`),
-        ),
-      ],
-    }),
-  ),
+  ).map(([code, name, codes]): Cvss31MetricDefinition => ({
+    code,
+    name,
+    group: "Environmental",
+    optional: true,
+    values: [
+      value("X", "Not Defined", "Falls back to the corresponding base metric."),
+      ...codes.map((it) =>
+        value(it, it, `Overrides the base metric with ${it}.`),
+      ),
+    ],
+  })),
 ];
 
 export const CVSS31_METRICS_BY_CODE: ReadonlyMap<
@@ -516,16 +522,11 @@ function impactSubScore(
   }
 
   return (
-    7.52 * (combined - 0.029) -
-    3.25 * Math.pow(combined * 0.9731 - 0.02, 13)
+    7.52 * (combined - 0.029) - 3.25 * Math.pow(combined * 0.9731 - 0.02, 13)
   );
 }
 
-function composeScore(
-  impact: number,
-  exploit: number,
-  scope: string,
-): number {
+function composeScore(impact: number, exploit: number, scope: string): number {
   if (impact <= 0) {
     return 0;
   }

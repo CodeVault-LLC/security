@@ -275,7 +275,9 @@ async function uploadMultipart(
       const etag = response.headers.get("etag");
 
       if (etag === null) {
-        throw new Error(`Object storage did not return an ETag for part ${index + 1}.`);
+        throw new Error(
+          `Object storage did not return an ETag for part ${index + 1}.`,
+        );
       }
 
       parts.push({ partNumber: index + 1, etag });

@@ -64,10 +64,7 @@ export function isAppUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
 
-    return (
-      parsed.protocol === `${APP_PROTOCOL}:` &&
-      parsed.host === "app"
-    );
+    return parsed.protocol === `${APP_PROTOCOL}:` && parsed.host === "app";
   } catch {
     return false;
   }
@@ -80,7 +77,10 @@ export function isAppUrl(url: string): boolean {
  * at all, and a navigation would replace the researcher's workspace with an
  * attacker's page inside a window that has a preload bridge attached.
  */
-export function isNavigationAllowed(url: string, isDevelopment = false): boolean {
+export function isNavigationAllowed(
+  url: string,
+  isDevelopment = false,
+): boolean {
   if (isAppUrl(url)) {
     return true;
   }

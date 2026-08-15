@@ -10,11 +10,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import type {
-  CaseAccess,
-  CaseProfile,
-  CaseStatus,
-} from "@codevault/core";
+import type { CaseAccess, CaseProfile, CaseStatus } from "@codevault/core";
 
 import { users } from "./auth.js";
 import {

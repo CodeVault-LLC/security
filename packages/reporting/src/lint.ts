@@ -6,10 +6,7 @@ import {
 } from "@codevault/core";
 import { isTlpAllowedForAudience, type TlpLabel } from "@codevault/standards";
 
-import {
-  isKnownDirectiveKind,
-  parseDirectives,
-} from "./directives.js";
+import { isKnownDirectiveKind, parseDirectives } from "./directives.js";
 
 /**
  * Report linter.
@@ -104,7 +101,10 @@ function scan(markdown: string, pattern: RegExp): SectionMatch[] {
   for (const [index, line] of lines.entries()) {
     // Each line is tested independently, so a global regex would carry its
     // lastIndex between lines and skip matches.
-    const linePattern = new RegExp(pattern.source, pattern.flags.replace("g", ""));
+    const linePattern = new RegExp(
+      pattern.source,
+      pattern.flags.replace("g", ""),
+    );
     const match = linePattern.exec(line);
 
     if (match !== null) {
@@ -132,39 +132,42 @@ const INTERNAL_HOSTNAME_PATTERN =
  * Tuned for the tokens that actually turn up pasted into a reproduction step:
  * cloud keys, personal access tokens, private-key headers and `password=`.
  */
-const CREDENTIAL_PATTERNS: Array<{ id: string; pattern: RegExp; label: string }> =
-  [
-    {
-      id: "aws-access-key",
-      pattern: /\bAKIA[0-9A-Z]{16}\b/,
-      label: "an AWS access key ID",
-    },
-    {
-      id: "github-token",
-      pattern: /\bgh[pousr]_[A-Za-z0-9]{36,}\b/,
-      label: "a GitHub token",
-    },
-    {
-      id: "slack-token",
-      pattern: /\bxox[abposr]-[A-Za-z0-9-]{10,}\b/,
-      label: "a Slack token",
-    },
-    {
-      id: "private-key",
-      pattern: /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/,
-      label: "a private key block",
-    },
-    {
-      id: "bearer-token",
-      pattern: /\bBearer\s+[A-Za-z0-9._~+/-]{20,}=*/,
-      label: "a bearer token",
-    },
-    {
-      id: "inline-password",
-      pattern: /\b(?:password|passwd|secret|api[_-]?key)\s*[=:]\s*\S{6,}/i,
-      label: "an inline credential",
-    },
-  ];
+const CREDENTIAL_PATTERNS: Array<{
+  id: string;
+  pattern: RegExp;
+  label: string;
+}> = [
+  {
+    id: "aws-access-key",
+    pattern: /\bAKIA[0-9A-Z]{16}\b/,
+    label: "an AWS access key ID",
+  },
+  {
+    id: "github-token",
+    pattern: /\bgh[pousr]_[A-Za-z0-9]{36,}\b/,
+    label: "a GitHub token",
+  },
+  {
+    id: "slack-token",
+    pattern: /\bxox[abposr]-[A-Za-z0-9-]{10,}\b/,
+    label: "a Slack token",
+  },
+  {
+    id: "private-key",
+    pattern: /-----BEGIN (?:RSA |EC |OPENSSH |PGP )?PRIVATE KEY-----/,
+    label: "a private key block",
+  },
+  {
+    id: "bearer-token",
+    pattern: /\bBearer\s+[A-Za-z0-9._~+/-]{20,}=*/,
+    label: "a bearer token",
+  },
+  {
+    id: "inline-password",
+    pattern: /\b(?:password|passwd|secret|api[_-]?key)\s*[=:]\s*\S{6,}/i,
+    label: "an inline credential",
+  },
+];
 
 /** Filenames that only make sense inside CodeVault's own workspace. */
 const INTERNAL_FILENAME_PATTERN =
@@ -264,7 +267,10 @@ export function lintReport(input: LintInput): LintResult {
         continue;
       }
 
-      if (directive.argument.length === 0 && directive.kind !== "disclosure-timeline") {
+      if (
+        directive.argument.length === 0 &&
+        directive.kind !== "disclosure-timeline"
+      ) {
         inSection({
           ruleId: "directive-missing-argument",
           severity: "BLOCKING",
@@ -367,7 +373,8 @@ export function lintReport(input: LintInput): LintResult {
         inSection({
           ruleId: "internal-filename-in-public",
           severity: "WARNING",
-          message: "A filename marked internal or confidential appears in a public report.",
+          message:
+            "A filename marked internal or confidential appears in a public report.",
           line: match.line,
           excerpt: match.excerpt,
         });

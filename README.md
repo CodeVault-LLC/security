@@ -1,0 +1,117 @@
+# CodeVault
+
+A security research, evidence and coordinated-disclosure platform for people who
+find vulnerabilities in real things: software components, applications, APIs,
+devices, firmware, hardware, services, hosts and cloud resources.
+
+It is deliberately not a vulnerability-management suite. There is no scanner
+ingestion, no questionnaire engine, no workflow designer and no severity
+pie chart on the front page. The work it is built around is the work of
+discovering something, proving it, deciding what it means, and disclosing it
+responsibly.
+
+## The two rules
+
+**AI drafts; humans own truth.** A model may propose text, a classification,
+CVSS metrics or a rewrite. It cannot record that a finding is novel, confirmed,
+fixed, approved or published. Every AI result arrives as a proposal with Accept,
+Edit and Reject, and the researcher can see the exact context — item by item,
+with digests — before anything leaves their machine.
+
+**One source of truth, three publication views.** The internal report, the vendor
+report and the public advisory are projections of the same case. Internal
+evidence cannot reach a public advisory: the rule is enforced when the AI context
+is built, when a directive is resolved, before approval, and again in the worker
+immediately before the PDF is rendered.
+
+## Layout
+
+```
+apps/
+  desktop/   Electron client: hardened main process, narrow preload bridge, React renderer
+  server/    Fastify API: auth, cases, findings, evidence, reports, AI, search, audit
+  worker/    Background jobs: prior art, artifact previews, EPSS/KEV, PDF export
+packages/
+  core/      Domain rules: permissions, visibility, states, policy packs, identifiers
+  standards/ CVSS 4.0 and 3.1, CWE, TLP, external identifier schemes
+  contracts/ TypeBox schemas shared by the server and the client
+  db/        Drizzle schema and hand-written SQL migrations
+  reporting/ Directives, sanitised Markdown, the report linter, print CSS, PDF
+  ai/        Action registry, output schemas, context filtering, proposal mapping
+  ui/        Theme tokens and the semantic security components
+infra/       Development stack and container images
+docs/        Threat model, AI security, data model, report model
+scripts/     Administrator bootstrap, development seed, environment check
+```
+
+## Getting started
+
+Requires Node 24, Bun 1.3 and Docker.
+
+```bash
+bun install
+docker compose -f infra/docker-compose.yml up -d
+
+cp .env.example .env
+set -a; . ./.env; set +a
+
+bun run db:migrate
+bun run admin:create --email you@example.com --name "Your Name"
+bun run verify:env
+
+# Optional: three realistic cases to look at
+bun run seed:dev
+```
+
+Then start the pieces you need:
+
+```bash
+bun run --cwd apps/server dev     # API on :4310
+bun run --cwd apps/worker dev     # background jobs
+bun run --cwd apps/desktop dev    # the desktop client
+```
+
+There is no registration page. The first administrator is created by the CLI
+above; everyone else arrives through an expiring, single-use invitation.
+
+## Checks
+
+```bash
+bun run lint
+bun run format:check
+bun run typecheck
+bunx vitest --run --project node --project dom   # unit tests
+bunx vitest --run --project node-integration     # needs DATABASE_URL
+bun run build
+```
+
+The integration tests run against a real PostgreSQL on purpose. Case access is
+partly SQL, and a security test against a mocked database proves very little.
+
+## Packaging
+
+```bash
+bun run --cwd apps/desktop package
+```
+
+macOS produces a DMG and a ZIP for arm64 and x64, Windows an NSIS installer,
+Linux an RPM for Fedora and an AppImage. Each platform is built and signed on
+its own CI runner; signing credentials come from the environment and are never
+committed.
+
+## Where to read next
+
+- [`docs/architecture/threat-model.md`](docs/architecture/threat-model.md) —
+  what is being protected, from whom, and which code and test enforce each
+  boundary.
+- [`docs/architecture/ai-security.md`](docs/architecture/ai-security.md) — the
+  four gates every AI interaction passes through, and the list of fields a model
+  can never write.
+- [`docs/architecture/data-model.md`](docs/architecture/data-model.md) — why a
+  finding has five independent states and why asset kinds are ecosystem-neutral.
+- [`docs/architecture/report-model.md`](docs/architecture/report-model.md) — how
+  directives, the linter and the export gate keep the three reports honest.
+
+## Licence
+
+Not yet chosen. Treat this repository as all rights reserved until it is.

@@ -2,10 +2,7 @@ import { AlertTriangle, Plus } from "lucide-react";
 import { useState } from "react";
 
 import type { DisclosureOverview } from "@codevault/contracts";
-import {
-  CONTENT_VISIBILITIES,
-  DISCLOSURE_EVENT_TYPES,
-} from "@codevault/core";
+import { CONTENT_VISIBILITIES, DISCLOSURE_EVENT_TYPES } from "@codevault/core";
 import {
   Button,
   Card,
@@ -24,7 +21,11 @@ import {
   Textarea,
 } from "@codevault/ui";
 
-import { formatDate, formatDateTime, toDateInputValue } from "../../lib/dates.js";
+import {
+  formatDate,
+  formatDateTime,
+  toDateInputValue,
+} from "../../lib/dates.js";
 import { humanise } from "../../lib/format.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../../lib/api.js";
 
@@ -56,7 +57,10 @@ export function DisclosurePanel({
     `/v1/cases/${caseId}/disclosure`,
   );
 
-  const setEmbargo = useApiMutation<DisclosureOverview, Record<string, string | null>>(
+  const setEmbargo = useApiMutation<
+    DisclosureOverview,
+    Record<string, string | null>
+  >(
     (body) => ({
       path: `/v1/cases/${caseId}/embargo`,
       method: "POST",
@@ -77,7 +81,10 @@ export function DisclosurePanel({
                 key={warning.code}
                 className="flex items-start gap-2 text-[12px] text-warning"
               >
-                <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+                <AlertTriangle
+                  aria-hidden
+                  className="mt-0.5 size-3.5 shrink-0"
+                />
                 <span>
                   {warning.message}
                   {warning.dueAt === null
@@ -95,7 +102,11 @@ export function DisclosurePanel({
           <CardHeader>
             <CardTitle>Timeline</CardTitle>
             {canEdit ? (
-              <Button size="sm" variant="secondary" onClick={() => setEventOpen(true)}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setEventOpen(true)}
+              >
                 <Plus aria-hidden className="size-3" />
                 Record event
               </Button>
@@ -103,7 +114,9 @@ export function DisclosurePanel({
           </CardHeader>
 
           {data === undefined ? (
-            <CardBody className="text-[12px] text-text-muted">Loading…</CardBody>
+            <CardBody className="text-[12px] text-text-muted">
+              Loading…
+            </CardBody>
           ) : data.events.length === 0 ? (
             <EmptyState
               title="No disclosure events recorded"
@@ -168,7 +181,9 @@ export function DisclosurePanel({
                       {humanise(stakeholder.role)}
                     </p>
                     {stakeholder.email === null ? null : (
-                      <Mono className="text-text-muted">{stakeholder.email}</Mono>
+                      <Mono className="text-text-muted">
+                        {stakeholder.email}
+                      </Mono>
                     )}
                     {stakeholder.secureChannel === null ? null : (
                       <Mono className="block truncate text-[10.5px] text-text-muted">
@@ -299,8 +314,8 @@ function RecordEventDialog({
 }): React.JSX.Element {
   const [type, setType] = useState<string>("VENDOR_CONTACTED");
   const [label, setLabel] = useState("");
-  const [occurredAt, setOccurredAt] = useState(
-    () => new Date().toISOString().slice(0, 10),
+  const [occurredAt, setOccurredAt] = useState(() =>
+    new Date().toISOString().slice(0, 10),
   );
   const [detail, setDetail] = useState("");
   const [stakeholderId, setStakeholderId] = useState("");

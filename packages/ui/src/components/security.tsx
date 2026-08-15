@@ -164,7 +164,9 @@ export function ReferenceLink({
           {title}
         </span>
         <span className="block truncate text-[11px] text-text-muted">
-          {publisher === null || publisher === undefined ? url : `${publisher} · ${url}`}
+          {publisher === null || publisher === undefined
+            ? url
+            : `${publisher} · ${url}`}
         </span>
       </span>
     </button>
@@ -311,7 +313,9 @@ export function ReportSectionStatus({
       onClick={onSelect}
       className={cn(
         "flex w-full items-center justify-between gap-2 rounded-[--radius] px-2 py-1 text-left text-[12px]",
-        active ? "bg-surface-hover text-text" : "text-text-muted hover:bg-surface-hover",
+        active
+          ? "bg-surface-hover text-text"
+          : "text-text-muted hover:bg-surface-hover",
       )}
     >
       <span className="flex min-w-0 items-center gap-1.5">
@@ -419,7 +423,12 @@ export function AiProposalPanel({
           Reject
         </Button>
         {onEdit === undefined ? null : (
-          <Button variant="secondary" size="sm" onClick={onEdit} disabled={busy}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onEdit}
+            disabled={busy}
+          >
             Edit proposal
           </Button>
         )}

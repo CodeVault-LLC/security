@@ -5,7 +5,10 @@ import { sql } from "drizzle-orm";
 
 import { createDatabase, schema } from "@codevault/db";
 
-import { hashPassword, WeakPasswordError } from "../apps/server/src/auth/password.js";
+import {
+  hashPassword,
+  WeakPasswordError,
+} from "../apps/server/src/auth/password.js";
 
 /**
  * Administrator bootstrap.
@@ -138,8 +141,7 @@ async function main(): Promise<void> {
   }
 
   const password =
-    process.env.CODEVAULT_ADMIN_PASSWORD ??
-    (await promptHidden("Password: "));
+    process.env.CODEVAULT_ADMIN_PASSWORD ?? (await promptHidden("Password: "));
 
   if (process.env.CODEVAULT_ADMIN_PASSWORD === undefined) {
     const confirmation = await promptHidden("Confirm password: ");

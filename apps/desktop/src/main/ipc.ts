@@ -155,12 +155,15 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
 
     try {
-      const response = await apiClient.request<LoginResponse>("/v1/auth/login", {
-        method: "POST",
-        body: { email: request.email, password: request.password },
-        serverUrl: request.serverUrl,
-        anonymous: true,
-      });
+      const response = await apiClient.request<LoginResponse>(
+        "/v1/auth/login",
+        {
+          method: "POST",
+          body: { email: request.email, password: request.password },
+          serverUrl: request.serverUrl,
+          anonymous: true,
+        },
+      );
 
       const status = await sessionStore.save({
         token: response.token,
@@ -174,7 +177,9 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
         persistent: status.persistent,
         storageWarning: status.persistent
           ? null
-          : ("reason" in status ? status.reason : null),
+          : "reason" in status
+            ? status.reason
+            : null,
       };
 
       return { ok: true as const, data: result };
@@ -224,7 +229,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
   handle(IPC_CHANNELS.authStorageWarning, async () => {
     const status = sessionStore.status();
 
-    return status.persistent ? null : ("reason" in status ? status.reason : null);
+    return status.persistent ? null : "reason" in status ? status.reason : null;
   });
 
   handle(IPC_CHANNELS.apiRequest, async (payload) => {
@@ -327,7 +332,9 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     };
 
     const providerId =
-      typeof request.providerId === "string" ? request.providerId : "claude-code";
+      typeof request.providerId === "string"
+        ? request.providerId
+        : "claude-code";
     const provider = providers.get(providerId);
 
     if (provider === null) {
