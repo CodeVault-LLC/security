@@ -66,7 +66,6 @@ export async function buildApp(
     // The desktop client uploads directly to object storage, so no request body
     // ever needs to be large.
     bodyLimit: 2 * 1024 * 1024,
-    disableRequestLogging: false,
     genReqId: () => uuidv7(),
   }).withTypeProvider<TypeBoxTypeProvider>();
 

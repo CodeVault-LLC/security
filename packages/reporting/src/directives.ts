@@ -151,11 +151,19 @@ export interface DirectiveResolver {
   ): Promise<ResolvedDirective | null>;
 }
 
+/** A placeholder and the HTML it stands for, resolved or failed. */
+export interface DirectiveSubstitution {
+  placeholder: string;
+  html: string;
+}
+
 export interface DirectiveResolutionResult {
-  /** Markdown with every resolvable directive replaced by an HTML placeholder. */
+  /** Markdown with every directive replaced by an opaque placeholder. */
   markdown: string;
   resolved: ResolvedDirective[];
   errors: DirectiveError[];
+  /** Every placeholder in the Markdown, including the error markers. */
+  substitutions: DirectiveSubstitution[];
 }
 
 /**
@@ -186,17 +194,51 @@ export async function resolveDirectives(
   const directives = parseDirectives(markdown);
   const resolved: ResolvedDirective[] = [];
   const errors: DirectiveError[] = [];
+  const substitutions: DirectiveSubstitution[] = [];
   const replacements: Array<{ start: number; end: number; text: string }> = [];
+
+  let placeholderIndex = 0;
+
+  /**
+   * Replaces a failed directive with a visible error marker.
+   *
+   * Never with the original text and never with nothing: a reader has to be
+   * able to see that something was meant to be here and is not.
+   */
+  const fail = (
+    directive: ParsedDirective,
+    reason: DirectiveError["reason"],
+    message: string,
+  ): void => {
+    errors.push({
+      kind: directive.kind,
+      argument: directive.argument,
+      line: directive.line,
+      reason,
+      message,
+    });
+
+    const placeholder = placeholderFor(placeholderIndex);
+
+    placeholderIndex += 1;
+    substitutions.push({
+      placeholder,
+      html: `<span class="cv-directive-error">${escapeForError(message)}</span>`,
+    });
+    replacements.push({
+      start: directive.start,
+      end: directive.end,
+      text: placeholder,
+    });
+  };
 
   for (const directive of directives) {
     if (!isKnownDirectiveKind(directive.kind)) {
-      errors.push({
-        kind: directive.kind,
-        argument: directive.argument,
-        line: directive.line,
-        reason: "UNKNOWN_DIRECTIVE",
-        message: `Unknown directive "${directive.raw}".`,
-      });
+      fail(
+        directive,
+        "UNKNOWN_DIRECTIVE",
+        `Unknown directive "${directive.raw}".`,
+      );
       continue;
     }
 
@@ -205,44 +247,39 @@ export async function resolveDirectives(
     try {
       item = await resolver.resolve(directive.kind, directive.argument);
     } catch {
-      errors.push({
-        kind: directive.kind,
-        argument: directive.argument,
-        line: directive.line,
-        reason: "RESOLVER_FAILED",
-        message: `Could not resolve "${directive.raw}".`,
-      });
+      fail(directive, "RESOLVER_FAILED", `Could not resolve "${directive.raw}".`);
       continue;
     }
 
     if (item === null) {
-      errors.push({
-        kind: directive.kind,
-        argument: directive.argument,
-        line: directive.line,
-        reason: "NOT_FOUND",
-        message: `"${directive.raw}" does not refer to anything in this case.`,
-      });
+      fail(
+        directive,
+        "NOT_FOUND",
+        `"${directive.raw}" does not refer to anything in this case.`,
+      );
       continue;
     }
 
     if (!canInclude(item.visibility, audience)) {
-      errors.push({
-        kind: directive.kind,
-        argument: directive.argument,
-        line: directive.line,
-        reason: "VISIBILITY_DENIED",
-        message:
-          `"${directive.raw}" is ${item.visibility} content and cannot appear ` +
-          `in a ${audience} report.`,
-      });
+      // The message deliberately omits the reference itself: a public preview
+      // should not print the identifier of internal evidence.
+      fail(
+        directive,
+        "VISIBILITY_DENIED",
+        `A referenced ${directive.kind} is ${item.visibility} content and ` +
+          `cannot appear in a ${audience} report.`,
+      );
       continue;
     }
 
+    const placeholder = placeholderFor(placeholderIndex);
+
+    placeholderIndex += 1;
+    substitutions.push({ placeholder, html: item.html });
     replacements.push({
       start: directive.start,
       end: directive.end,
-      text: placeholderFor(resolved.length),
+      text: placeholder,
     });
     resolved.push(item);
   }
@@ -257,18 +294,31 @@ export async function resolveDirectives(
 
   output += markdown.slice(cursor);
 
-  return { markdown: output, resolved, errors };
+  return { markdown: output, resolved, errors, substitutions };
 }
 
-/** Substitutes resolved HTML back in after sanitisation. */
+/** Minimal escaping for text placed inside a generated error span. */
+function escapeForError(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+/**
+ * Substitutes generated HTML back in after sanitisation.
+ *
+ * Covers both resolved directives and the error markers that replaced the ones
+ * which failed, so no placeholder can survive into the rendered output.
+ */
 export function applyResolvedDirectives(
   html: string,
-  resolved: readonly ResolvedDirective[],
+  substitutions: readonly DirectiveSubstitution[],
 ): string {
   let output = html;
 
-  for (const [index, directive] of resolved.entries()) {
-    output = output.split(placeholderFor(index)).join(directive.html);
+  for (const substitution of substitutions) {
+    output = output.split(substitution.placeholder).join(substitution.html);
   }
 
   return output;

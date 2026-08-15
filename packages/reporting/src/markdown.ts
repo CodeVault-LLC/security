@@ -116,7 +116,7 @@ export async function renderSection(
 ): Promise<RenderResult> {
   const resolution = await resolveDirectives(markdown, audience, resolver);
   const sanitised = await renderMarkdown(resolution.markdown);
-  const html = applyResolvedDirectives(sanitised, resolution.resolved);
+  const html = applyResolvedDirectives(sanitised, resolution.substitutions);
 
   return {
     html,

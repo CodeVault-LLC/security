@@ -5,6 +5,8 @@ import {
 } from "@codevault/core";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
+import { translateDatabaseError } from "./database-errors.js";
+
 /**
  * Error handling.
  *
@@ -70,6 +72,26 @@ export function registerErrorHandler(app: FastifyInstance): void {
             category: error.category,
             message: error.message,
             ...(error.details === undefined ? {} : { details: error.details }),
+            requestId,
+          },
+        });
+      }
+
+      // A constraint violation is a client mistake, not a server fault. It is
+      // translated here so every route gets the behaviour without each one
+      // wrapping its own queries in a try/catch.
+      const translated = translateDatabaseError(error);
+
+      if (translated !== null) {
+        request.log.info(
+          { requestId, category: translated.category },
+          "database constraint rejected the request",
+        );
+
+        return reply.status(translated.statusCode).send({
+          error: {
+            category: translated.category,
+            message: translated.message,
             requestId,
           },
         });

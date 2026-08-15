@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { LintResult, ReportDetail } from "@codevault/contracts";
 import { notFound, type ReportAudience } from "@codevault/core";
@@ -71,7 +71,7 @@ export async function loadReportDetail(
             email: schema.users.email,
           })
           .from(schema.users)
-          .where(sql`${schema.users.id} = ANY(${editorIds})`);
+          .where(inArray(schema.users.id, editorIds));
 
   const editorsById = new Map(editors.map((editor) => [editor.id, editor]));
 

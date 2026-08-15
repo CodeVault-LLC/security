@@ -6,6 +6,8 @@ import { schema } from "@codevault/db";
 import {
   calculateCvss31,
   calculateCvss40,
+  Cvss31VectorError,
+  CvssVectorError,
   isCalculableScheme,
   isIntelligenceScheme,
   severityFromScore,
@@ -40,35 +42,52 @@ export function isKnownScheme(scheme: string): scheme is ScoreScheme {
   );
 }
 
+/**
+ * Computes a score from a vector.
+ *
+ * A malformed vector is a validation failure, not a server error: the string
+ * came from a client, and the researcher needs to be told which metric is
+ * wrong rather than seeing "something went wrong".
+ */
 export function computeScore(
   scheme: ScoreScheme,
   vector: string,
 ): ComputedScore {
-  if (scheme === "CVSS40") {
-    const result = calculateCvss40(vector);
+  try {
+    if (scheme === "CVSS40") {
+      const result = calculateCvss40(vector);
 
-    return {
-      vector: result.vector,
-      score: result.score,
-      severity: result.severity,
-      metrics: { ...result.metrics, macroVector: result.macroVector },
-    };
-  }
+      return {
+        vector: result.vector,
+        score: result.score,
+        severity: result.severity,
+        metrics: { ...result.metrics, macroVector: result.macroVector },
+      };
+    }
 
-  if (scheme === "CVSS31") {
-    const result = calculateCvss31(vector);
+    if (scheme === "CVSS31") {
+      const result = calculateCvss31(vector);
 
-    return {
-      vector: result.vector,
-      score: result.score,
-      severity: result.severity,
-      metrics: {
-        ...result.metrics,
-        baseScore: result.baseScore,
-        temporalScore: result.temporalScore,
-        environmentalScore: result.environmentalScore,
-      },
-    };
+      return {
+        vector: result.vector,
+        score: result.score,
+        severity: result.severity,
+        metrics: {
+          ...result.metrics,
+          baseScore: result.baseScore,
+          temporalScore: result.temporalScore,
+          environmentalScore: result.environmentalScore,
+        },
+      };
+    }
+  } catch (error: unknown) {
+    if (error instanceof CvssVectorError || error instanceof Cvss31VectorError) {
+      throw validationError(error.message, {
+        ...(error.metric === undefined ? {} : { metric: error.metric }),
+      });
+    }
+
+    throw error;
   }
 
   throw validationError(`Scheme "${scheme}" has no deterministic calculation.`);
