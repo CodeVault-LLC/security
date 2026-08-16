@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { ListFilter, Plus } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -12,9 +12,11 @@ import {
   ASSET_IDENTIFIER_SCHEMES,
   ASSET_KINDS,
   ASSET_RELATIONSHIPS,
+  type AssetIdentifierScheme,
   type AssetKind,
 } from "@codevault/core";
 import {
+  assetKindSelectOptions,
   AssetKindIcon,
   BarList,
   Button,
@@ -66,6 +68,25 @@ interface Paginated<T> {
   items: T[];
   nextCursor: string | null;
 }
+
+/**
+ * What each identifier scheme actually is.
+ *
+ * The codes are the industry's own and stay as the label, because that is what
+ * a researcher pastes from a CPE dictionary or a package URL. The expansion
+ * goes underneath, so the list is readable by someone meeting SWID for the
+ * first time without being condescending to someone who is not.
+ */
+const SCHEME_DESCRIPTIONS: Record<AssetIdentifierScheme, string> = {
+  CPE23: "Common Platform Enumeration 2.3",
+  PURL: "Package URL, e.g. pkg:npm/left-pad",
+  SWID: "Software identification tag",
+  REPOSITORY_URL: "Source repository address",
+  VENDOR_PRODUCT: "Vendor and product name",
+  MODEL: "Manufacturer model number",
+  SERIAL: "Serial number of one unit",
+  CUSTOM: "Anything else, described in the notes",
+};
 
 export function AssetsRoute(): React.JSX.Element {
   const user = useSession((state) => state.user);
@@ -186,18 +207,18 @@ export function AssetsRoute(): React.JSX.Element {
       <div className="flex items-center gap-2 border-b border-border px-4 py-2">
         <Select
           aria-label="Asset kind"
-          value={kindFilter.length === 0 ? undefined : kindFilter}
+          value={kindFilter.length === 0 ? "__all" : kindFilter}
           onValueChange={(value) =>
             setKindFilter(value === "__all" ? "" : value)
           }
-          placeholder="All kinds"
           className="w-56"
           options={[
-            { value: "__all", label: "All kinds" },
-            ...ASSET_KINDS.map((kind) => ({
-              value: kind,
-              label: humanise(kind),
-            })),
+            {
+              value: "__all",
+              label: "All kinds",
+              icon: <ListFilter className="size-3.5" />,
+            },
+            ...assetKindSelectOptions(ASSET_KINDS),
           ]}
         />
         <span className="ml-auto text-[11px] text-text-muted">
@@ -559,10 +580,7 @@ function CreateAssetDialog({
               value={kind}
               onValueChange={(value) => setKind(value as AssetKind)}
               className="mt-1"
-              options={ASSET_KINDS.map((value) => ({
-                value,
-                label: humanise(value),
-              }))}
+              options={assetKindSelectOptions(ASSET_KINDS)}
             />
           </div>
 
@@ -608,6 +626,7 @@ function CreateAssetDialog({
                     options={ASSET_IDENTIFIER_SCHEMES.map((value) => ({
                       value,
                       label: value,
+                      description: SCHEME_DESCRIPTIONS[value],
                     }))}
                   />
                 </div>

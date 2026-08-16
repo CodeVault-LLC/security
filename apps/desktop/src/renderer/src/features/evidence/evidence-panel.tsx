@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Evidence } from "@codevault/contracts";
 import { ARTIFACT_KINDS, CONTENT_VISIBILITIES } from "@codevault/core";
 import {
+  artifactKindSelectOptions,
   Button,
   Dialog,
   DialogBody,
@@ -14,6 +15,7 @@ import {
   Input,
   Label,
   Select,
+  visibilitySelectOptions,
 } from "@codevault/ui";
 
 import type {
@@ -292,10 +294,7 @@ function UploadDialog({
                 value={artifactKind}
                 onValueChange={setArtifactKind}
                 className="mt-1"
-                options={ARTIFACT_KINDS.map((kind) => ({
-                  value: kind,
-                  label: kind.replace(/_/g, " ").toLowerCase(),
-                }))}
+                options={artifactKindSelectOptions(ARTIFACT_KINDS)}
               />
             </div>
             <div>
@@ -305,16 +304,7 @@ function UploadDialog({
                 value={visibility}
                 onValueChange={setVisibility}
                 className="mt-1"
-                options={CONTENT_VISIBILITIES.map((value) => ({
-                  value,
-                  label: value.toLowerCase(),
-                  description:
-                    value === "INTERNAL"
-                      ? "Never appears in a vendor or public report."
-                      : value === "VENDOR"
-                        ? "May appear in vendor and public reports."
-                        : "May appear in any report.",
-                }))}
+                options={visibilitySelectOptions(CONTENT_VISIBILITIES)}
               />
             </div>
           </div>

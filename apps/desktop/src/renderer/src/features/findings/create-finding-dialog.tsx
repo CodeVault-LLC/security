@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { FolderOpen } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -8,6 +9,7 @@ import type {
 } from "@codevault/contracts";
 import { SEVERITY_RATINGS, type SeverityRating } from "@codevault/standards";
 import {
+  assetKindIcon,
   Button,
   Dialog,
   DialogBody,
@@ -16,6 +18,7 @@ import {
   Input,
   Label,
   Select,
+  severitySelectOptions,
 } from "@codevault/ui";
 
 import {
@@ -124,7 +127,9 @@ export function CreateFindingDialog({
               className="mt-1"
               options={(cases.data?.items ?? []).map((item) => ({
                 value: item.id,
-                label: `${item.ref} — ${item.title}`,
+                label: item.title,
+                description: item.ref,
+                icon: <FolderOpen className="size-3.5" />,
               }))}
             />
           </div>
@@ -156,6 +161,7 @@ export function CreateFindingDialog({
                 value: item.id,
                 label: `${item.name}${item.version === null ? "" : ` ${item.version}`}`,
                 description: item.ref,
+                icon: assetKindIcon(item.kind),
               }))}
             />
           </div>
@@ -184,10 +190,7 @@ export function CreateFindingDialog({
               onValueChange={(value) => setSeverity(value as SeverityRating)}
               placeholder="Leave unscored"
               className="mt-1"
-              options={SEVERITY_RATINGS.map((value) => ({
-                value,
-                label: value,
-              }))}
+              options={severitySelectOptions(SEVERITY_RATINGS)}
             />
             <p className="mt-1 text-[11px] text-text-muted">
               A placeholder for triage only. It is replaced the moment a CVSS

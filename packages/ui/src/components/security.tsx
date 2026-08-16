@@ -1,4 +1,6 @@
 import {
+  Archive,
+  ArrowLeftRight,
   Binary,
   Box,
   Boxes,
@@ -16,10 +18,12 @@ import {
   Monitor,
   Network,
   Package,
+  ScrollText,
   Server,
   Sparkles,
   Terminal,
   Video,
+  Wrench,
   X,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
@@ -60,6 +64,17 @@ const ASSET_KIND_ICONS: Record<AssetKind, ReactNode> = {
   CONTAINER_IMAGE: <Boxes aria-hidden className="size-3.5" />,
 };
 
+/**
+ * The bare glyph for an asset kind.
+ *
+ * Exported so the picker that sets a kind and the lists that show it afterwards
+ * draw the same thing. Callers that want it announced should use
+ * `AssetKindIcon`, which wraps this in a labelled element.
+ */
+export function assetKindIcon(kind: AssetKind): ReactNode {
+  return ASSET_KIND_ICONS[kind] ?? <Box aria-hidden className="size-3.5" />;
+}
+
 export function AssetKindIcon({
   kind,
   className,
@@ -74,7 +89,7 @@ export function AssetKindIcon({
       aria-label={humaniseState(kind)}
       role="img"
     >
-      {ASSET_KIND_ICONS[kind] ?? <Box aria-hidden className="size-3.5" />}
+      {assetKindIcon(kind)}
     </span>
   );
 }
@@ -133,16 +148,35 @@ export function severityChartSegments(
   ];
 }
 
-const ARTIFACT_KIND_ICONS: Partial<Record<ArtifactKind, ReactNode>> = {
+const ARTIFACT_KIND_ICONS: Record<ArtifactKind, ReactNode> = {
   SCREENSHOT: <ImageIcon aria-hidden className="size-3.5" />,
   IMAGE: <ImageIcon aria-hidden className="size-3.5" />,
+  HTTP_CAPTURE: <ArrowLeftRight aria-hidden className="size-3.5" />,
+  HAR: <ArrowLeftRight aria-hidden className="size-3.5" />,
+  PCAP: <Network aria-hidden className="size-3.5" />,
   SOURCE_CODE: <FileCode2 aria-hidden className="size-3.5" />,
   BINARY: <Binary aria-hidden className="size-3.5" />,
   FIRMWARE: <Binary aria-hidden className="size-3.5" />,
+  DOCUMENT: <FileText aria-hidden className="size-3.5" />,
+  POC: <Wrench aria-hidden className="size-3.5" />,
+  ARCHIVE: <Archive aria-hidden className="size-3.5" />,
+  LOG: <ScrollText aria-hidden className="size-3.5" />,
   TERMINAL_OUTPUT: <Terminal aria-hidden className="size-3.5" />,
   VIDEO: <Video aria-hidden className="size-3.5" />,
-  DOCUMENT: <FileText aria-hidden className="size-3.5" />,
+  OTHER: <FileText aria-hidden className="size-3.5" />,
 };
+
+/**
+ * The glyph for an evidence artifact.
+ *
+ * The map is total rather than partial: an evidence list and the kind picker
+ * both walk the whole vocabulary, and a kind that silently fell through to a
+ * generic document icon in both places was indistinguishable from one nobody
+ * had thought about.
+ */
+export function artifactKindIcon(kind: ArtifactKind): ReactNode {
+  return ARTIFACT_KIND_ICONS[kind];
+}
 
 /**
  * A file digest.
@@ -281,9 +315,7 @@ export function EvidenceCard({
             className="flex items-center gap-2 px-3 py-1.5 text-[12px]"
           >
             <span className="text-text-muted">
-              {ARTIFACT_KIND_ICONS[artifact.artifactKind] ?? (
-                <FileText aria-hidden className="size-3.5" />
-              )}
+              {artifactKindIcon(artifact.artifactKind)}
             </span>
             <button
               type="button"

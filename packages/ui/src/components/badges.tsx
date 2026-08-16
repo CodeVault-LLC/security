@@ -12,7 +12,7 @@ import {
   ShieldQuestion,
   Users,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 import type {
   DisclosureState,
@@ -49,6 +49,24 @@ const severityStyles: Record<SeverityRating, string> = {
     "border-severity-medium/50 bg-severity-medium/12 text-severity-medium",
   LOW: "border-severity-low/50 bg-severity-low/12 text-severity-low",
   NONE: "border-severity-info/50 bg-severity-info/12 text-severity-info",
+};
+
+/**
+ * The glyph for each severity.
+ *
+ * Exported because a severity has to look the same wherever it is chosen or
+ * shown — the badge in a findings row and the option in the severity picker
+ * that sets it are the same statement about the same finding.
+ */
+export const SEVERITY_ICON_KINDS: Record<
+  SeverityRating,
+  ComponentType<{ className?: string }>
+> = {
+  CRITICAL: AlertOctagon,
+  HIGH: AlertTriangle,
+  MEDIUM: AlertTriangle,
+  LOW: Info,
+  NONE: Info,
 };
 
 const severityIcons: Record<SeverityRating, ReactNode> = {
@@ -154,7 +172,9 @@ const stateBadgeVariants = cva(badgeBase, {
   defaultVariants: { tone: "neutral" },
 });
 
-type StateTone = NonNullable<VariantProps<typeof stateBadgeVariants>["tone"]>;
+export type StateTone = NonNullable<
+  VariantProps<typeof stateBadgeVariants>["tone"]
+>;
 
 const VALIDATION_TONES: Record<ValidationState, StateTone> = {
   DRAFT: "neutral",
@@ -222,6 +242,17 @@ const TONE_LOOKUP: Record<StateKind, Record<string, StateTone>> = {
   review: REVIEW_TONES,
 };
 
+export const STATE_TONE_ICON_KINDS: Record<
+  StateTone,
+  ComponentType<{ className?: string }>
+> = {
+  neutral: CircleDashed,
+  progress: CircleHelp,
+  good: CheckCircle2,
+  warn: AlertTriangle,
+  bad: AlertOctagon,
+};
+
 const STATE_ICONS: Record<StateTone, ReactNode> = {
   neutral: <CircleDashed aria-hidden className="size-3" />,
   progress: <CircleHelp aria-hidden className="size-3" />,
@@ -231,13 +262,41 @@ const STATE_ICONS: Record<StateTone, ReactNode> = {
 };
 
 /**
+ * The tone a state carries, for anything that has to colour-match a badge
+ * without being one — the option rows in the picker that sets the state, for
+ * instance. Unknown states fall back to neutral rather than throwing, because
+ * a state added to the vocabulary should degrade to "uncoloured", not to a
+ * blank screen.
+ */
+export function stateTone(kind: StateKind, state: string): StateTone {
+  return TONE_LOOKUP[kind][state] ?? "neutral";
+}
+
+/**
  * Domain words that are acronyms, and so keep their case.
  *
  * Without this `AI_DRAFT` reads as "Ai draft" and the `API` asset kind as
  * "Api", both of which appear in badges and in the icon labels a screen
- * reader announces.
+ * reader announces. The list grew when the pickers started humanising their
+ * options too: "Cve requested" and "Http capture" are the same mistake as
+ * "Ai draft", they were just hidden behind raw `SCREAMING_CASE` before.
  */
-const ACRONYMS = new Set(["ai", "api"]);
+const ACRONYMS = new Set([
+  "ai",
+  "api",
+  "cert",
+  "cna",
+  "cve",
+  "cwe",
+  "cvss",
+  "har",
+  "http",
+  "id",
+  "pcap",
+  "poc",
+  "tlp",
+  "url",
+]);
 
 const humaniseWord = (word: string): string =>
   ACRONYMS.has(word) ? word.toUpperCase() : word;
@@ -281,6 +340,15 @@ export function StateBadge({
     </span>
   );
 }
+
+export const PRIOR_ART_ICON_KINDS: Partial<
+  Record<PriorArtState, ComponentType<{ className?: string }>>
+> = {
+  UNCHECKED: ShieldQuestion,
+  NO_PRIOR_ART_FOUND: ShieldCheck,
+  CONFIRMED_KNOWN: ShieldAlert,
+  HUMAN_CONFIRMED_NOVEL: ShieldCheck,
+};
 
 const PRIOR_ART_ICONS: Partial<Record<PriorArtState, ReactNode>> = {
   UNCHECKED: <ShieldQuestion aria-hidden className="size-3" />,

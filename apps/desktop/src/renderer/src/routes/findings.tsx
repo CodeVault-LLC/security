@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Plus } from "lucide-react";
+import { ListFilter, Plus } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
 import type { FindingSummary } from "@codevault/contracts";
@@ -19,8 +19,11 @@ import {
   Mono,
   PriorArtBadge,
   Select,
+  severitySelectOptions,
   SeverityBadge,
   StateBadge,
+  stateSelectOptions,
+  type SelectOption,
 } from "@codevault/ui";
 
 import { PageHeader } from "../components/app-shell.js";
@@ -44,6 +47,15 @@ interface Paginated<T> {
 }
 
 const ROW_HEIGHT = 34;
+
+/**
+ * The sentinel for "no filter".
+ *
+ * A select cannot hold the empty string as a value — Radix reserves it for the
+ * placeholder — and an unfiltered column reads better as an explicit "All
+ * severities" than as an empty box anyway.
+ */
+const ALL = "__all";
 
 export function FindingsRoute(): React.JSX.Element {
   const user = useSession((state) => state.user);
@@ -130,25 +142,25 @@ export function FindingsRoute(): React.JSX.Element {
           label="Validation"
           value={validationState}
           onChange={setValidationState}
-          values={VALIDATION_STATES}
+          options={stateSelectOptions("validation", VALIDATION_STATES)}
         />
         <FilterSelect
           label="Disclosure"
           value={disclosureState}
           onChange={setDisclosureState}
-          values={DISCLOSURE_STATES}
+          options={stateSelectOptions("disclosure", DISCLOSURE_STATES)}
         />
         <FilterSelect
           label="Prior art"
           value={priorArtState}
           onChange={setPriorArtState}
-          values={PRIOR_ART_STATES}
+          options={stateSelectOptions("priorArt", PRIOR_ART_STATES)}
         />
         <FilterSelect
           label="Severity"
           value={severity}
           onChange={setSeverity}
-          values={SEVERITY_RATINGS}
+          options={severitySelectOptions(SEVERITY_RATINGS)}
         />
         <span className="ml-auto text-[11px] text-text-muted">
           {items.length} shown
@@ -240,27 +252,37 @@ export function FindingsRoute(): React.JSX.Element {
   );
 }
 
+/**
+ * One filter in the findings toolbar.
+ *
+ * The options are built from the same tables the badges in the rows below use,
+ * so the colour and glyph you pick in the filter are the colour and glyph you
+ * then scan for in the results.
+ */
 function FilterSelect({
   label,
   value,
   onChange,
-  values,
+  options,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  values: readonly string[];
+  options: readonly SelectOption[];
 }): React.JSX.Element {
   return (
     <Select
       aria-label={label}
-      value={value.length === 0 ? undefined : value}
-      onValueChange={(next) => onChange(next === "__all" ? "" : next)}
-      placeholder={label}
-      className="w-40"
+      value={value.length === 0 ? ALL : value}
+      onValueChange={(next) => onChange(next === ALL ? "" : next)}
+      className="w-44"
       options={[
-        { value: "__all", label: `All ${label.toLowerCase()}` },
-        ...values.map((item) => ({ value: item, label: item })),
+        {
+          value: ALL,
+          label: `All ${label.toLowerCase()}`,
+          icon: <ListFilter className="size-3.5" />,
+        },
+        ...options,
       ]}
     />
   );

@@ -1,4 +1,13 @@
-import { AlertTriangle, Plus } from "lucide-react";
+import {
+  AlertTriangle,
+  BadgeCheck,
+  Landmark,
+  Plus,
+  ShieldCheck,
+  Target,
+  UserRound,
+  Wrench,
+} from "lucide-react";
 import { useState } from "react";
 
 import type { DisclosureOverview } from "@codevault/contracts";
@@ -19,6 +28,7 @@ import {
   LoadingState,
   Mono,
   Select,
+  visibilitySelectOptions,
 } from "@codevault/ui";
 
 import {
@@ -41,6 +51,46 @@ import { QueryError } from "../../components/query-boundary.js";
  * notifies a third party on a schedule has made a disclosure decision that was
  * not its to make.
  */
+
+/**
+ * Who a stakeholder is to this case.
+ *
+ * Spelled out because the difference between a CNA and a CERT decides who
+ * assigns an identifier and who coordinates the date, and getting that wrong
+ * costs a researcher weeks.
+ */
+const STAKEHOLDER_ROLES = [
+  {
+    value: "VENDOR_SECURITY",
+    description: "The vendor's security or PSIRT contact.",
+    icon: <ShieldCheck className="size-3.5" />,
+  },
+  {
+    value: "VENDOR_ENGINEERING",
+    description: "Engineers building the fix.",
+    icon: <Wrench className="size-3.5" />,
+  },
+  {
+    value: "CNA",
+    description: "Numbering authority that assigns the CVE.",
+    icon: <BadgeCheck className="size-3.5" />,
+  },
+  {
+    value: "CERT",
+    description: "A coordination centre acting as intermediary.",
+    icon: <Landmark className="size-3.5" />,
+  },
+  {
+    value: "PROGRAM",
+    description: "A bug bounty or disclosure programme.",
+    icon: <Target className="size-3.5" />,
+  },
+  {
+    value: "OTHER",
+    description: "Anyone else involved in the coordination.",
+    icon: <UserRound className="size-3.5" />,
+  },
+] as const;
 
 export interface DisclosurePanelProps {
   caseId: string;
@@ -414,10 +464,7 @@ function RecordEventDialog({
               value={visibility}
               onValueChange={setVisibility}
               className="mt-1"
-              options={CONTENT_VISIBILITIES.map((value) => ({
-                value,
-                label: value.toLowerCase(),
-              }))}
+              options={visibilitySelectOptions(CONTENT_VISIBILITIES)}
             />
           </div>
 
@@ -531,14 +578,14 @@ function AddStakeholderDialog({
               value={role}
               onValueChange={setRole}
               className="mt-1"
-              options={[
-                "VENDOR_SECURITY",
-                "VENDOR_ENGINEERING",
-                "CNA",
-                "CERT",
-                "PROGRAM",
-                "OTHER",
-              ].map((value) => ({ value, label: humanise(value) }))}
+              options={STAKEHOLDER_ROLES.map(
+                ({ value, description, icon }) => ({
+                  value,
+                  label: humanise(value),
+                  description,
+                  icon,
+                }),
+              )}
             />
           </div>
 

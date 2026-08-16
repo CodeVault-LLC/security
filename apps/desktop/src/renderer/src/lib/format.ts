@@ -6,6 +6,8 @@
  * should not disagree about what a kilobyte is.
  */
 
+import { humaniseState } from "@codevault/ui";
+
 export function formatBytesApprox(bytes: number): string {
   if (bytes < 1024) {
     return `${bytes} B`;
@@ -23,16 +25,16 @@ export function formatBytesApprox(bytes: number): string {
   return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unit]}`;
 }
 
-/** Turns `PEER_REVIEWED` into `Peer reviewed`, for labels and filters. */
+/**
+ * Turns `PEER_REVIEWED` into `Peer reviewed`, for labels and filters.
+ *
+ * Delegates to the UI package rather than keeping a second implementation.
+ * The copy that used to live here had no acronym table, so the same enum came
+ * out as "Cve reserved" in a disclosure timeline and "CVE reserved" in the
+ * badge directly above it.
+ */
 export function humanise(value: string): string {
-  const words = value.toLowerCase().split("_");
-  const [first, ...rest] = words;
-
-  if (first === undefined) {
-    return value;
-  }
-
-  return [first.charAt(0).toUpperCase() + first.slice(1), ...rest].join(" ");
+  return humaniseState(value);
 }
 
 /** Truncates in the middle, keeping both ends legible. */

@@ -8,6 +8,7 @@ import type {
   FindingDetail,
 } from "@codevault/contracts";
 import {
+  CONTENT_VISIBILITIES,
   DISCLOSURE_STATES,
   REMEDIATION_STATES,
   VALIDATION_STATES,
@@ -25,11 +26,14 @@ import {
   LoadingState,
   Mono,
   Select,
+  stateSelectOptions,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
   VisibilityBadge,
+  visibilitySelectOptions,
+  type SelectOption,
 } from "@codevault/ui";
 
 import { AiToolbar } from "../features/ai/ai-toolbar.js";
@@ -423,28 +427,28 @@ function StatePanel({
         <StateRow
           label="Validation"
           value={finding.validationState}
-          values={VALIDATION_STATES}
+          options={stateSelectOptions("validation", VALIDATION_STATES)}
           disabled={!canEdit}
           onChange={(value) => change("validationState", value)}
         />
         <StateRow
           label="Remediation"
           value={finding.remediationState}
-          values={REMEDIATION_STATES}
+          options={stateSelectOptions("remediation", REMEDIATION_STATES)}
           disabled={!canEdit}
           onChange={(value) => change("remediationState", value)}
         />
         <StateRow
           label="Disclosure"
           value={finding.disclosureState}
-          values={DISCLOSURE_STATES}
+          options={stateSelectOptions("disclosure", DISCLOSURE_STATES)}
           disabled={!canEdit}
           onChange={(value) => change("disclosureState", value)}
         />
         <StateRow
           label="Visibility"
           value={finding.visibility}
-          values={["INTERNAL", "VENDOR", "PUBLIC"]}
+          options={visibilitySelectOptions(CONTENT_VISIBILITIES)}
           disabled={!canEdit}
           onChange={(value) => change("visibility", value)}
         />
@@ -460,13 +464,13 @@ function StatePanel({
 function StateRow({
   label,
   value,
-  values,
+  options,
   disabled,
   onChange,
 }: {
   label: string;
   value: string;
-  values: readonly string[];
+  options: readonly SelectOption[];
   disabled: boolean;
   onChange: (value: string) => void;
 }): React.JSX.Element {
@@ -480,10 +484,7 @@ function StateRow({
         value={value}
         onValueChange={onChange}
         disabled={disabled}
-        options={values.map((item) => ({
-          value: item,
-          label: item.replace(/_/g, " ").toLowerCase(),
-        }))}
+        options={options}
       />
     </div>
   );

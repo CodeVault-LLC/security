@@ -1,7 +1,7 @@
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as SelectPrimitive from "@radix-ui/react-select";
 import * as TabsPrimitive from "@radix-ui/react-tabs";
-import { Check, ChevronDown, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, X } from "lucide-react";
 import { forwardRef, type ReactNode } from "react";
 
 import { cn } from "../lib/cn.js";
@@ -168,12 +168,77 @@ export const TabsContent = forwardRef<
   );
 });
 
+/**
+ * Colour families an option can carry.
+ *
+ * The tone paints the option's icon or dot, not its label. Several of these
+ * tokens — medium severity in particular — sit at around 3:1 against the
+ * surface, which is fine for a 16px glyph but not for 13px body text, so the
+ * label always stays at full contrast and the colour is carried by the mark
+ * beside it. That is the same division the badges use.
+ */
+export type SelectTone =
+  | "neutral"
+  | "accent"
+  | "info"
+  | "success"
+  | "warning"
+  | "danger"
+  | "critical"
+  | "high"
+  | "medium"
+  | "low";
+
+const toneClasses: Record<SelectTone, string> = {
+  neutral: "text-text-muted",
+  accent: "text-accent",
+  info: "text-info",
+  success: "text-success",
+  warning: "text-warning",
+  danger: "text-danger",
+  critical: "text-severity-critical",
+  high: "text-severity-high",
+  medium: "text-severity-medium",
+  low: "text-severity-low",
+};
+
 export interface SelectOption {
   value: string;
   label: string;
   /** Optional second line; `undefined` is accepted so callers can pass it
    *  conditionally under `exactOptionalPropertyTypes`. */
   description?: string | undefined;
+  /**
+   * Leading glyph, shown in the list and in the closed trigger.
+   *
+   * An option with a tone but no icon gets a filled dot instead, so a set of
+   * states can be colour-coded without inventing an icon for each one.
+   */
+  icon?: ReactNode | undefined;
+  tone?: SelectTone | undefined;
+  disabled?: boolean | undefined;
+}
+
+/** The leading mark: the option's own icon, or a tone-coloured dot. */
+function OptionMark({
+  option,
+  className,
+}: {
+  option: SelectOption;
+  className?: string;
+}): React.JSX.Element {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "flex size-3.5 shrink-0 items-center justify-center",
+        toneClasses[option.tone ?? "neutral"],
+        className,
+      )}
+    >
+      {option.icon ?? <span className="size-2 rounded-full bg-current" />}
+    </span>
+  );
 }
 
 export function Select({
@@ -182,6 +247,7 @@ export function Select({
   options,
   placeholder = "Select…",
   className,
+  contentClassName,
   disabled,
   "aria-label": ariaLabel,
 }: {
@@ -190,9 +256,19 @@ export function Select({
   options: readonly SelectOption[];
   placeholder?: string;
   className?: string;
+  contentClassName?: string;
   disabled?: boolean;
   "aria-label"?: string;
 }): React.JSX.Element {
+  const selected = options.find((option) => option.value === value);
+
+  // A mark is reserved for every row as soon as one row has something to show
+  // there, so the labels stay on one left edge instead of stepping in and out
+  // as the eye runs down the list.
+  const marked = options.some(
+    (option) => option.icon !== undefined || option.tone !== undefined,
+  );
+
   // Radix's props are not declared as accepting `undefined`, and this project
   // runs with `exactOptionalPropertyTypes`, so optional props are omitted
   // rather than passed as undefined.
@@ -205,46 +281,112 @@ export function Select({
       <SelectPrimitive.Trigger
         aria-label={ariaLabel}
         className={cn(
-          "flex h-7 w-full items-center justify-between gap-2 rounded-(--cv-radius) border border-border",
-          "bg-surface px-2 text-[13px] disabled:opacity-60",
+          "group flex h-7 w-full items-center justify-between gap-1.5",
+          "rounded-(--cv-radius) border border-border bg-surface px-2",
+          "text-left text-[13px] text-text",
+          "transition-[background-color,border-color] duration-100",
+          "hover:border-border-strong hover:bg-surface-hover",
+          "focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
+          // Open is a held state, and the trigger is the only thing anchoring
+          // the panel to the field it belongs to.
+          "data-[state=open]:border-focus data-[state=open]:bg-surface-hover",
+          "data-[placeholder]:text-text-muted",
+          "disabled:cursor-not-allowed disabled:opacity-60",
+          "disabled:hover:border-border disabled:hover:bg-surface",
           className,
         )}
       >
-        <SelectPrimitive.Value placeholder={placeholder} />
-        <SelectPrimitive.Icon>
-          <ChevronDown aria-hidden className="size-3.5 text-text-muted" />
+        <SelectPrimitive.Value
+          className="min-w-0 flex-1 truncate"
+          placeholder={placeholder}
+        >
+          {selected === undefined ? null : (
+            <span className="flex min-w-0 items-center gap-1.5">
+              {marked ? <OptionMark option={selected} /> : null}
+              <span className="truncate">{selected.label}</span>
+            </span>
+          )}
+        </SelectPrimitive.Value>
+        <SelectPrimitive.Icon asChild>
+          <ChevronDown
+            aria-hidden
+            className={cn(
+              "size-3.5 shrink-0 text-text-muted",
+              "transition-transform duration-150 motion-reduce:transition-none",
+              "group-data-[state=open]:rotate-180",
+            )}
+          />
         </SelectPrimitive.Icon>
       </SelectPrimitive.Trigger>
 
       <SelectPrimitive.Portal>
         <SelectPrimitive.Content
           position="popper"
-          sideOffset={4}
-          className="z-50 max-h-72 overflow-hidden rounded-(--cv-radius) border border-border-strong bg-surface shadow-xl"
+          sideOffset={5}
+          collisionPadding={8}
+          className={cn(
+            "z-50 overflow-hidden rounded-(--cv-radius-lg) border border-border-strong",
+            "bg-surface shadow-lg",
+            // Never narrower than the field it belongs to, and never taller
+            // than the space actually left on screen — without the second
+            // clamp a select near the bottom edge renders a panel that runs
+            // off it.
+            "min-w-(--radix-select-trigger-width)",
+            "max-h-[min(20rem,var(--radix-select-content-available-height))]",
+            // Grows out of the corner nearest the trigger, whichever side the
+            // popper chose.
+            "origin-(--radix-select-content-transform-origin)",
+            "data-[state=open]:animate-popover-in",
+            contentClassName,
+          )}
         >
+          <SelectPrimitive.ScrollUpButton className="flex h-5 items-center justify-center bg-surface text-text-muted">
+            <ChevronUp aria-hidden className="size-3.5" />
+          </SelectPrimitive.ScrollUpButton>
+
           <SelectPrimitive.Viewport className="p-1">
             {options.map((option) => (
               <SelectPrimitive.Item
                 key={option.value}
                 value={option.value}
-                className="flex cursor-pointer items-start gap-2 rounded-(--cv-radius) px-2 py-1.5 text-[13px] data-[highlighted=true]:bg-surface-hover data-[highlighted=true]:outline-none"
+                {...(option.disabled === undefined
+                  ? {}
+                  : { disabled: option.disabled })}
+                className={cn(
+                  "relative flex cursor-pointer select-none items-start gap-2",
+                  "rounded-(--cv-radius) py-1.5 pl-2 pr-7 text-[13px] outline-none",
+                  "transition-colors duration-75 motion-reduce:transition-none",
+                  // Radix writes `data-highlighted` as an empty attribute, so
+                  // this must not be matched against a value.
+                  "data-[highlighted]:bg-surface-hover",
+                  "data-[state=checked]:bg-accent/10",
+                  "data-[state=checked]:data-[highlighted]:bg-accent/16",
+                  "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+                )}
               >
-                <SelectPrimitive.ItemIndicator className="mt-0.5">
-                  <Check aria-hidden className="size-3 text-accent" />
-                </SelectPrimitive.ItemIndicator>
-                <span className="min-w-0">
+                {marked ? (
+                  <OptionMark option={option} className="mt-[3px]" />
+                ) : null}
+                <span className="min-w-0 flex-1">
                   <SelectPrimitive.ItemText>
                     {option.label}
                   </SelectPrimitive.ItemText>
                   {option.description === undefined ? null : (
-                    <span className="block text-[11px] text-text-muted">
+                    <span className="mt-0.5 block text-[11px] leading-4 text-text-muted">
                       {option.description}
                     </span>
                   )}
                 </span>
+                <SelectPrimitive.ItemIndicator className="absolute right-2 top-2">
+                  <Check aria-hidden className="size-3.5 text-accent" />
+                </SelectPrimitive.ItemIndicator>
               </SelectPrimitive.Item>
             ))}
           </SelectPrimitive.Viewport>
+
+          <SelectPrimitive.ScrollDownButton className="flex h-5 items-center justify-center bg-surface text-text-muted">
+            <ChevronDown aria-hidden className="size-3.5" />
+          </SelectPrimitive.ScrollDownButton>
         </SelectPrimitive.Content>
       </SelectPrimitive.Portal>
     </SelectPrimitive.Root>

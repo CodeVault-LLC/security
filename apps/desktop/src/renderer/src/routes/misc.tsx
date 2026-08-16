@@ -1,5 +1,13 @@
 import { Link } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import {
+  Eye,
+  MonitorCog,
+  Moon,
+  ShieldCheck,
+  Sun,
+  UserRound,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import type {
@@ -374,9 +382,21 @@ export function SettingsRoute(): React.JSX.Element {
               }
               className="mt-1"
               options={[
-                { value: "dark", label: "Dark" },
-                { value: "light", label: "Light" },
-                { value: "system", label: "Follow the system" },
+                {
+                  value: "dark",
+                  label: "Dark",
+                  icon: <Moon className="size-3.5" />,
+                },
+                {
+                  value: "light",
+                  label: "Light",
+                  icon: <Sun className="size-3.5" />,
+                },
+                {
+                  value: "system",
+                  label: "Follow the system",
+                  icon: <MonitorCog className="size-3.5" />,
+                },
               ]}
             />
           </CardBody>
@@ -543,9 +563,27 @@ export function SettingsRoute(): React.JSX.Element {
                     onValueChange={setInviteRole}
                     className="mt-1"
                     options={[
-                      { value: "ADMIN", label: "Admin" },
-                      { value: "MEMBER", label: "Member" },
-                      { value: "VIEWER", label: "Viewer" },
+                      {
+                        value: "ADMIN",
+                        label: "Admin",
+                        description: "Manages members and settings.",
+                        tone: "warning",
+                        icon: <ShieldCheck className="size-3.5" />,
+                      },
+                      {
+                        value: "MEMBER",
+                        label: "Member",
+                        description: "Creates and edits cases and findings.",
+                        tone: "info",
+                        icon: <UserRound className="size-3.5" />,
+                      },
+                      {
+                        value: "VIEWER",
+                        label: "Viewer",
+                        description: "Reads everything, changes nothing.",
+                        tone: "neutral",
+                        icon: <Eye className="size-3.5" />,
+                      },
                     ]}
                   />
                 </div>
