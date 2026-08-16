@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "noEmit": true,
+
+    // This package runs in a browser as well as in Node: the diagram hydration
+    // and the SVG sanitiser are written against the DOM.
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+
+    // Mermaid's declarations pull in its own transitive typings, which are not
+    // clean under this project's settings. Our sources are still checked.
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts"]
+}

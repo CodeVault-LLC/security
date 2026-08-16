@@ -17,6 +17,7 @@ import {
 import { bridge } from "../../lib/bridge.js";
 import { formatDateTime } from "../../lib/dates.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../../lib/api.js";
+import { QueryError } from "../../components/query-boundary.js";
 
 /**
  * The prior-art tab.
@@ -121,6 +122,7 @@ export function PriorArtPanel({
 
   return (
     <div className="space-y-4 p-4">
+      <QueryError query={checks} />
       <Card>
         <CardHeader>
           <CardTitle>Prior art</CardTitle>
@@ -175,7 +177,7 @@ export function PriorArtPanel({
               <h3 className="mb-1 text-[11px] uppercase tracking-wide text-text-muted">
                 Sources checked
               </h3>
-              <ul className="divide-y divide-border rounded-[--radius] border border-border">
+              <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
                 {latest.sourcesChecked.map((source) => (
                   <li key={source.provider} className="px-2 py-1.5 text-[12px]">
                     <div className="flex items-center gap-2">
@@ -214,7 +216,7 @@ export function PriorArtPanel({
             </div>
 
             {latest.analysis === null ? null : (
-              <div className="rounded-[--radius] border border-accent/40 bg-accent/5 p-2">
+              <div className="rounded-(--cv-radius) border border-accent/40 bg-accent/5 p-2">
                 <h3 className="mb-1 text-[11px] uppercase tracking-wide text-accent">
                   AI comparison · advisory only
                 </h3>
@@ -255,11 +257,11 @@ export function PriorArtPanel({
               </h3>
 
               {latest.matches.length === 0 ? (
-                <p className="rounded-[--radius] border border-border px-2 py-3 text-center text-[12px] text-text-muted">
+                <p className="rounded-(--cv-radius) border border-border px-2 py-3 text-center text-[12px] text-text-muted">
                   Nothing came back from the sources that were checked.
                 </p>
               ) : (
-                <ul className="divide-y divide-border rounded-[--radius] border border-border">
+                <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
                   {latest.matches.map((match) => (
                     <li key={match.id} className="px-2 py-1.5 text-[12px]">
                       <div className="flex items-center gap-2">
@@ -312,7 +314,7 @@ export function PriorArtPanel({
             </div>
 
             {canEdit && latest.status === "COMPLETED" ? (
-              <div className="rounded-[--radius] border border-border p-2">
+              <div className="rounded-(--cv-radius) border border-border p-2">
                 <h3 className="mb-1 text-[11px] uppercase tracking-wide text-text-muted">
                   Your conclusion
                 </h3>

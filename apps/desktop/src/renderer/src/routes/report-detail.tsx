@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Check, Download, FileWarning } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type {
   AiProposal,
@@ -21,19 +21,29 @@ import {
   CardHeader,
   CardTitle,
   EmptyState,
+  ErrorState,
+  LoadingState,
   Mono,
   ReportSectionStatus,
   TlpBadge,
 } from "@codevault/ui";
 
 import { AiToolbar } from "../features/ai/ai-toolbar.js";
-import { MarkdownEditor } from "../features/reports/markdown-editor.js";
+import type { Command } from "../features/markdown/commands.js";
+import { InsertMenu } from "../features/markdown/insert-menu.js";
+import {
+  MarkdownEditor,
+  type MarkdownEditorHandle,
+} from "../features/markdown/markdown-editor.js";
+import { MarkdownToolbar } from "../features/markdown/markdown-toolbar.js";
+import { RenderedMarkdown } from "../features/markdown/markdown-preview.js";
 import {
   errorHeading,
   queryKeys,
   useApiMutation,
   useApiQuery,
 } from "../lib/api.js";
+import { QueryError } from "../components/query-boundary.js";
 import { bridge } from "../lib/bridge.js";
 import { canWrite, useSession } from "../lib/session.js";
 
@@ -178,15 +188,25 @@ export function ReportDetailRoute({
   );
 
   if (report.isLoading) {
-    return <p className="p-4 text-[12px] text-text-muted">Loading…</p>;
+    return <LoadingState label="Loading report…" />;
   }
 
   if (report.error !== null || report.data === undefined) {
     return (
-      <EmptyState
+      <ErrorState
         title={errorHeading(report.error)}
         description={
           report.error?.message ?? "That report could not be loaded."
+        }
+        action={
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={report.isFetching}
+            onClick={() => void report.refetch()}
+          >
+            Try again
+          </Button>
         }
       />
     );
@@ -287,6 +307,10 @@ export function ReportDetailRoute({
         </div>
       )}
 
+      <QueryError query={lint} className="mx-4 mt-3" />
+      <QueryError query={exports} className="mx-4 mt-3" />
+      <QueryError query={preview} className="mx-4 mt-3" />
+
       <ReportExportStrip items={exports.data?.items ?? []} onError={setError} />
 
       <div className="flex min-h-0 flex-1">
@@ -317,6 +341,7 @@ export function ReportDetailRoute({
               // proposal is accepted — without an effect writing state back.
               key={`${activeSection.id}:${activeSection.revision}`}
               reportId={reportId}
+              caseId={data.caseId}
               section={activeSection}
               canEdit={canEdit}
               showPreview={showPreview}
@@ -434,6 +459,7 @@ function titleCase(value: string): string {
 
 interface SectionWorkspaceProps {
   reportId: string;
+  caseId: string;
   section: ReportSection;
   canEdit: boolean;
   showPreview: boolean;
@@ -458,6 +484,7 @@ interface SectionWorkspaceProps {
  */
 function SectionWorkspace({
   reportId,
+  caseId,
   section,
   canEdit,
   showPreview,
@@ -473,7 +500,10 @@ function SectionWorkspace({
   onAiCompleted,
 }: SectionWorkspaceProps): React.JSX.Element {
   const [draft, setDraft] = useState(section.contentMarkdown);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const editorRef = useRef<MarkdownEditorHandle>(null);
   const dirty = draft !== section.contentMarkdown;
+  const locked = !canEdit || section.reviewState === "LOCKED";
 
   return (
     <>
@@ -551,16 +581,28 @@ function SectionWorkspace({
       )}
 
       <div className="flex min-h-0 flex-1">
-        <div className="min-w-0 flex-1 overflow-hidden border-r border-border">
-          <MarkdownEditor
-            value={draft}
-            onChange={(next) => {
-              onError(null);
-              setDraft(next);
-            }}
-            readOnly={!canEdit || section.reviewState === "LOCKED"}
-            className="h-full"
-          />
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r border-border">
+          {locked ? null : (
+            <MarkdownToolbar
+              onCommand={(command: Command) => editorRef.current?.run(command)}
+              onInsertMenu={() => setMenuOpen(true)}
+            />
+          )}
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <MarkdownEditor
+              ref={editorRef}
+              value={draft}
+              onChange={(next) => {
+                onError(null);
+                setDraft(next);
+              }}
+              readOnly={locked}
+              showLineNumbers
+              placeholder="Markdown. Press / to insert a table, a diagram or a reference to this case's evidence."
+              onSlash={() => setMenuOpen(true)}
+              className="h-full"
+            />
+          </div>
         </div>
 
         {showPreview ? (
@@ -573,6 +615,16 @@ function SectionWorkspace({
           </div>
         ) : null}
       </div>
+
+      <InsertMenu
+        open={menuOpen}
+        onOpenChange={setMenuOpen}
+        caseId={caseId}
+        onInsert={(snippet) => {
+          editorRef.current?.dropSlash();
+          editorRef.current?.insert(snippet);
+        }}
+      />
     </>
   );
 }
@@ -612,12 +664,12 @@ function PreviewPane({
           {html === null ? (
             <p className="text-[12px] text-text-muted">Rendering…</p>
           ) : (
-            // The HTML comes from the server's sanitising pipeline, which drops
-            // raw HTML at the Markdown AST and allow-lists the result. It is
-            // the same renderer the exported PDF uses.
-            <div
-              className="cv-preview text-[13px]"
-              dangerouslySetInnerHTML={{ __html: extractBody(html) }}
+            // Server-rendered, because only the server can resolve a directive
+            // against the database and apply this audience's visibility rules.
+            // Diagrams are drawn here, by the code the PDF worker also runs.
+            <RenderedMarkdown
+              html={extractBody(html)}
+              className="text-[13px]"
             />
           )}
         </CardBody>

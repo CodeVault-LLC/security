@@ -13,7 +13,9 @@ import { SEVERITY_RATINGS } from "@codevault/standards";
 import {
   Button,
   EmptyState,
+  ErrorState,
   Input,
+  LoadingState,
   Mono,
   PriorArtBadge,
   Select,
@@ -25,7 +27,7 @@ import { PageHeader } from "../components/app-shell.js";
 import { CreateFindingDialog } from "../features/findings/create-finding-dialog.js";
 import { useDebouncedValue } from "../hooks/use-debounced-value.js";
 import { formatDistanceToNowStrict } from "../lib/dates.js";
-import { queryKeys, useApiQuery } from "../lib/api.js";
+import { errorHeading, queryKeys, useApiQuery } from "../lib/api.js";
 import { canWrite, useSession } from "../lib/session.js";
 
 /**
@@ -153,8 +155,23 @@ export function FindingsRoute(): React.JSX.Element {
         </span>
       </div>
 
-      {findings.isLoading ? (
-        <p className="p-4 text-[12px] text-text-muted">Loading…</p>
+      {findings.error !== null ? (
+        <ErrorState
+          title={errorHeading(findings.error)}
+          description={findings.error.message}
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={findings.isFetching}
+              onClick={() => void findings.refetch()}
+            >
+              Try again
+            </Button>
+          }
+        />
+      ) : findings.isLoading ? (
+        <LoadingState label="Loading findings…" />
       ) : items.length === 0 ? (
         <EmptyState
           title="No findings match"

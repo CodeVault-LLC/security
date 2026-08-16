@@ -1,4 +1,4 @@
-import { Eye, Loader2, Sparkles } from "lucide-react";
+import { Eye, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -9,10 +9,12 @@ import type {
 } from "@codevault/contracts";
 import {
   Button,
+  ButtonGroup,
   Dialog,
   DialogBody,
   DialogContent,
   DialogFooter,
+  InlineError,
   Mono,
   VisibilityBadge,
 } from "@codevault/ui";
@@ -104,24 +106,21 @@ export function AiToolbar({
         </span>
 
         {actions.map((action) => (
-          <span key={action.id} className="flex items-center">
+          <ButtonGroup key={action.id}>
             <Button
               size="sm"
               variant="secondary"
-              className="rounded-r-none"
+              loading={runningAction === action.id}
               disabled={disabled || runningAction !== null}
               title={action.description}
               onClick={() => void runAction(action.id)}
             >
-              {runningAction === action.id ? (
-                <Loader2 aria-hidden className="size-3 animate-spin" />
-              ) : null}
               {action.label}
             </Button>
             <Button
-              size="icon"
+              size="sm"
               variant="secondary"
-              className="-ml-px rounded-l-none"
+              className="w-6 px-0"
               disabled={disabled || runningAction !== null}
               title="View the exact context that would be sent"
               aria-label={`View context for ${action.label}`}
@@ -129,15 +128,11 @@ export function AiToolbar({
             >
               <Eye aria-hidden className="size-3" />
             </Button>
-          </span>
+          </ButtonGroup>
         ))}
       </div>
 
-      {error === null ? null : (
-        <p className="rounded-[--radius] border border-warning/40 bg-warning/10 px-2 py-1.5 text-[12px] text-warning">
-          {error}
-        </p>
-      )}
+      {error === null ? null : <InlineError>{error}</InlineError>}
 
       <Dialog
         open={preview !== null}
@@ -166,7 +161,7 @@ export function AiToolbar({
                     {preview.items.length === 1 ? "" : "s"} · audience{" "}
                     {preview.audience}
                   </h3>
-                  <ul className="divide-y divide-border rounded-[--radius] border border-border">
+                  <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
                     {preview.items.map((item) => (
                       <li
                         key={`${item.kind}-${item.id}`}
@@ -201,7 +196,7 @@ export function AiToolbar({
                     <h3 className="mb-1 text-[11px] uppercase tracking-wide text-text-muted">
                       Excluded by policy · {preview.excluded.length}
                     </h3>
-                    <ul className="divide-y divide-border rounded-[--radius] border border-border">
+                    <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
                       {preview.excluded.map((item, index) => (
                         <li
                           key={`${item.label}-${index}`}
@@ -224,7 +219,7 @@ export function AiToolbar({
                   <h3 className="mb-1 text-[11px] uppercase tracking-wide text-text-muted">
                     Prompt
                   </h3>
-                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-[--radius] border border-border bg-surface-raised p-2 font-mono text-[11px] text-text-muted">
+                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-(--cv-radius) border border-border bg-surface-raised p-2 font-mono text-[11px] text-text-muted">
                     {preview.promptText}
                   </pre>
                 </section>

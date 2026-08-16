@@ -1,4 +1,5 @@
 import type { ReportAudience } from "@codevault/core";
+import { MARKDOWN_PRINT_THEME, MARKDOWN_STYLESHEET } from "@codevault/markdown";
 import { TLP_DEFINITIONS, type TlpLabel } from "@codevault/standards";
 
 import { escapeHtml } from "./markdown.js";
@@ -120,6 +121,8 @@ export function buildReportHtml(input: ReportDocumentInput): string {
   --cv-report-reference: "${input.reference}";
 }
 ${REPORT_STYLESHEET}
+${MARKDOWN_PRINT_THEME}
+${MARKDOWN_STYLESHEET}
 </style>
 </head>
 <body>

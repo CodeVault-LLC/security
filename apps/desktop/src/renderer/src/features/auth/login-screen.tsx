@@ -59,7 +59,7 @@ export function LoginScreen(): React.JSX.Element {
     <div className="flex h-full items-center justify-center bg-background p-6">
       <form
         onSubmit={(event) => void submit(event)}
-        className="w-[380px] rounded-[--radius-lg] border border-border bg-surface p-5"
+        className="w-[380px] rounded-(--cv-radius-lg) border border-border bg-surface p-5"
       >
         <div className="mb-5 flex items-center gap-2">
           <ShieldCheck aria-hidden className="size-5 text-accent" />
@@ -114,7 +114,7 @@ export function LoginScreen(): React.JSX.Element {
         {error === null ? null : (
           <p
             role="alert"
-            className="mt-3 rounded-[--radius] border border-danger/40 bg-danger/10 px-2 py-1.5 text-[12px] text-danger"
+            className="mt-3 rounded-(--cv-radius) border border-danger/40 bg-danger/10 px-2 py-1.5 text-[12px] text-danger"
           >
             {error}
           </p>

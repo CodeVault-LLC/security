@@ -205,7 +205,7 @@ export function ScoringPanel({
             </div>
           ))}
 
-          <div className="mt-3 rounded-[--radius] border border-border bg-surface-raised p-2">
+          <div className="mt-3 rounded-(--cv-radius) border border-border bg-surface-raised p-2">
             <div className="flex items-center gap-2">
               <SeverityBadge
                 severity={proposed.severity}
@@ -343,7 +343,7 @@ export function ScoringPanel({
                 finding.cweIds.map((cweId) => (
                   <span
                     key={cweId}
-                    className="inline-flex items-center gap-1 rounded-[--radius] border border-border bg-surface-raised px-1.5 py-0.5 text-[11px]"
+                    className="inline-flex items-center gap-1 rounded-(--cv-radius) border border-border bg-surface-raised px-1.5 py-0.5 text-[11px]"
                   >
                     <Mono>{cweId}</Mono>
                     {canEdit ? (
@@ -374,7 +374,7 @@ export function ScoringPanel({
                   aria-label="Search CWE"
                 />
                 {cweSuggestions.length === 0 ? null : (
-                  <ul className="divide-y divide-border rounded-[--radius] border border-border">
+                  <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
                     {cweSuggestions.map((entry) => (
                       <li key={entry.id}>
                         <button

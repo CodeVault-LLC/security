@@ -100,4 +100,9 @@ describe("humaniseState", () => {
     expect(humaniseState("PEER_REVIEWED")).toBe("Peer reviewed");
     expect(humaniseState("FIX_VERIFIED")).toBe("Fix verified");
   });
+
+  it("keeps domain acronyms upper case", () => {
+    expect(humaniseState("AI_DRAFT")).toBe("AI draft");
+    expect(humaniseState("API")).toBe("API");
+  });
 });

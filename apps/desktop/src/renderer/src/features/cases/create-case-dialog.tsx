@@ -129,7 +129,7 @@ export function CreateCaseDialog({
           </div>
 
           {create.error === null ? null : (
-            <p className="rounded-[--radius] border border-danger/40 bg-danger/10 px-2 py-1.5 text-[12px] text-danger">
+            <p className="rounded-(--cv-radius) border border-danger/40 bg-danger/10 px-2 py-1.5 text-[12px] text-danger">
               <span className="font-medium">{errorHeading(create.error)}.</span>{" "}
               {create.error.message}
             </p>

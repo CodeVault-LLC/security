@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
@@ -26,6 +26,26 @@ function electronDirectory(): string | null {
   }
 }
 
+/**
+ * Reports whether the platform binary is already present.
+ *
+ * `dist/electron` only exists on Linux and Windows. On macOS the binary lives
+ * inside `dist/Electron.app`, so probing that name re-downloads ~220 MB on
+ * every install. `path.txt` is what the electron package itself reads to find
+ * the executable, which makes it the one check that is right on all three.
+ */
+function isInstalled(directory: string): boolean {
+  const pathFile = join(directory, "path.txt");
+
+  if (!existsSync(pathFile)) {
+    return false;
+  }
+
+  const relative = readFileSync(pathFile, "utf8").trim();
+
+  return relative.length > 0 && existsSync(join(directory, "dist", relative));
+}
+
 function main(): void {
   const directory = electronDirectory();
 
@@ -37,7 +57,7 @@ function main(): void {
     return;
   }
 
-  if (existsSync(join(directory, "dist", "electron"))) {
+  if (isInstalled(directory)) {
     return;
   }
 

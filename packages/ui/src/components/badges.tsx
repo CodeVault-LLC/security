@@ -38,7 +38,7 @@ import { cn } from "../lib/cn.js";
  */
 
 const badgeBase =
-  "inline-flex items-center gap-1 rounded-[--radius] border px-1.5 py-0.5 " +
+  "inline-flex items-center gap-1 rounded-(--cv-radius) border px-1.5 py-0.5 " +
   "text-[11px] font-medium leading-4 whitespace-nowrap";
 
 const severityStyles: Record<SeverityRating, string> = {
@@ -126,7 +126,10 @@ export function TlpBadge({
     <span
       className={cn(
         badgeBase,
-        "font-mono uppercase tracking-wide",
+        // Sans, like every other badge. TLP labels are designations, not code,
+        // and a monospace badge beside a sans severity badge reads as a
+        // different kind of thing when it is the same kind of thing.
+        "uppercase tracking-wide",
         tlpStyles[label],
         className,
       )}
@@ -227,7 +230,19 @@ const STATE_ICONS: Record<StateTone, ReactNode> = {
   bad: <AlertOctagon aria-hidden className="size-3" />,
 };
 
-/** Turns `PEER_REVIEWED` into `Peer reviewed`. */
+/**
+ * Domain words that are acronyms, and so keep their case.
+ *
+ * Without this `AI_DRAFT` reads as "Ai draft" and the `API` asset kind as
+ * "Api", both of which appear in badges and in the icon labels a screen
+ * reader announces.
+ */
+const ACRONYMS = new Set(["ai", "api"]);
+
+const humaniseWord = (word: string): string =>
+  ACRONYMS.has(word) ? word.toUpperCase() : word;
+
+/** Turns `PEER_REVIEWED` into `Peer reviewed`, and `AI_DRAFT` into `AI draft`. */
 export function humaniseState(state: string): string {
   const words = state.toLowerCase().split("_");
   const [first, ...rest] = words;
@@ -236,7 +251,11 @@ export function humaniseState(state: string): string {
     return state;
   }
 
-  return [first.charAt(0).toUpperCase() + first.slice(1), ...rest].join(" ");
+  const head = ACRONYMS.has(first)
+    ? first.toUpperCase()
+    : first.charAt(0).toUpperCase() + first.slice(1);
+
+  return [head, ...rest.map(humaniseWord)].join(" ");
 }
 
 export function StateBadge({

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { renderMarkdown } from "@codevault/markdown";
+
 import { buildReportHtml } from "./html.js";
 import { extractPdfText, renderPdf } from "./pdf.js";
 
@@ -97,6 +99,52 @@ describeIfBrowser("PDF rendering", () => {
     expect(first.bytes.slice(0, 5)).toEqual(
       new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]),
     );
+  }, 180_000);
+
+  /**
+   * The end of the diagram path: a mermaid fence written in the editor,
+   * rendered by the shared pipeline, drawn by the same hydration code the
+   * preview uses, and printed. The label is read back out of the PDF text,
+   * which is only there if the SVG survived sanitisation and pagination.
+   */
+  it("draws a mermaid diagram into the printed page", async () => {
+    const section = await renderMarkdown(
+      [
+        "```mermaid",
+        "graph LR;",
+        "  Attacker-->|crafted filename| UpdateHandler;",
+        "  UpdateHandler-->Shell;",
+        "```",
+      ].join("\n"),
+    );
+
+    const withDiagram = buildReportHtml({
+      title: "Attack path",
+      reference: "RPT-000043",
+      audience: "PUBLIC",
+      tlp: "TLP:CLEAR",
+      caseReference: "CASE-2026-0007",
+      generatedAt: "2026-08-15",
+      organisation: "CodeVault Research",
+      authorName: "A. Researcher",
+      templateVersion: "1.0.0",
+      sections: [{ title: "Attack path", html: section }],
+    });
+
+    const result = await renderPdf({
+      html: withDiagram,
+      title: "Attack path",
+    });
+    const text = await extractPdfText(result.bytes);
+    // Each label is its own text run in the SVG, so the extractor spaces them
+    // more generously than the prose around them.
+    const collapsed = text.replace(/\s+/g, " ");
+
+    expect(collapsed).toContain("Attacker");
+    expect(collapsed).toContain("UpdateHandler");
+    expect(collapsed).toContain("crafted filename");
+    // The source block is replaced by the drawing, not printed beside it.
+    expect(collapsed).not.toContain("graph LR;");
   }, 180_000);
 
   it("refuses to load a remote resource while rendering", async () => {

@@ -15,6 +15,8 @@ import {
   CardHeader,
   CardTitle,
   EmptyState,
+  ErrorState,
+  LoadingState,
   Mono,
   PriorArtBadge,
   SeverityBadge,
@@ -38,6 +40,7 @@ import {
   useApiQuery,
 } from "../lib/api.js";
 import { canWrite, useSession } from "../lib/session.js";
+import { QueryError } from "../components/query-boundary.js";
 
 /**
  * The case workspace.
@@ -82,14 +85,24 @@ export function CaseDetailRoute({
   );
 
   if (detail.isLoading) {
-    return <p className="p-4 text-[12px] text-text-muted">Loading…</p>;
+    return <LoadingState label="Loading case…" />;
   }
 
   if (detail.error !== null || detail.data === undefined) {
     return (
-      <EmptyState
+      <ErrorState
         title={errorHeading(detail.error)}
         description={detail.error?.message ?? "That case could not be loaded."}
+        action={
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={detail.isFetching}
+            onClick={() => void detail.refetch()}
+          >
+            Try again
+          </Button>
+        }
       />
     );
   }
@@ -166,10 +179,10 @@ export function CaseDetailRoute({
                   </span>
                 )}
               </CardHeader>
+              <QueryError query={readiness} className="mx-3 mt-3" />
+
               {readiness.data === undefined ? (
-                <CardBody className="text-[12px] text-text-muted">
-                  Loading…
-                </CardBody>
+                <LoadingState />
               ) : readiness.data.requirements.length === 0 ? (
                 <CardBody className="text-[12px] text-text-muted">
                   This case's policy pack imposes no publication requirements.
@@ -236,6 +249,7 @@ export function CaseDetailRoute({
         </TabsContent>
 
         <TabsContent value="findings">
+          <QueryError query={findings} className="mb-3" />
           <FindingsTable findings={findings.data?.items ?? []} />
         </TabsContent>
 
@@ -250,6 +264,7 @@ export function CaseDetailRoute({
         ) : null}
 
         <TabsContent value="reports" className="p-4">
+          <QueryError query={reports} className="mb-3" />
           <ReportsPanel
             caseId={caseId}
             reports={reports.data?.items ?? []}

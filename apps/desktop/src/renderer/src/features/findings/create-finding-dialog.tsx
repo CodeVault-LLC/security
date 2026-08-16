@@ -16,7 +16,6 @@ import {
   Input,
   Label,
   Select,
-  Textarea,
 } from "@codevault/ui";
 
 import {
@@ -25,6 +24,8 @@ import {
   useApiMutation,
   useApiQuery,
 } from "../../lib/api.js";
+import { MarkdownField } from "../markdown/markdown-field.js";
+import { QueryError } from "../../components/query-boundary.js";
 
 /**
  * Finding creation.
@@ -128,6 +129,9 @@ export function CreateFindingDialog({
             />
           </div>
 
+          <QueryError query={cases} />
+          <QueryError query={assets} />
+
           <div>
             <Label htmlFor="finding-title">Title</Label>
             <Input
@@ -157,15 +161,19 @@ export function CreateFindingDialog({
           </div>
 
           <div>
-            <Label htmlFor="finding-summary">Short summary (optional)</Label>
-            <Textarea
-              id="finding-summary"
-              value={summary}
-              onChange={(event) => setSummary(event.target.value)}
-              rows={3}
-              placeholder="What it is, in a sentence or two."
-              className="mt-1"
-            />
+            <Label>Short summary (optional)</Label>
+            <div className="mt-1">
+              <MarkdownField
+                value={summary}
+                onChange={setSummary}
+                draftKey={`finding:new:${selectedCaseId}`}
+                caseId={
+                  selectedCaseId.length === 0 ? undefined : selectedCaseId
+                }
+                minHeight="8rem"
+                placeholder="What it is, in a sentence or two. Markdown."
+              />
+            </div>
           </div>
 
           <div>
@@ -188,7 +196,7 @@ export function CreateFindingDialog({
           </div>
 
           {create.error === null ? null : (
-            <p className="rounded-[--radius] border border-danger/40 bg-danger/10 px-2 py-1.5 text-[12px] text-danger">
+            <p className="rounded-(--cv-radius) border border-danger/40 bg-danger/10 px-2 py-1.5 text-[12px] text-danger">
               <span className="font-medium">{errorHeading(create.error)}.</span>{" "}
               {create.error.message}
             </p>

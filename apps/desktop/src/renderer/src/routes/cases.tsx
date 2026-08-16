@@ -3,13 +3,20 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 
 import type { CaseSummary } from "@codevault/contracts";
-import { Button, EmptyState, Mono, StateBadge } from "@codevault/ui";
+import {
+  Button,
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  Mono,
+  StateBadge,
+} from "@codevault/ui";
 
 import { PageHeader } from "../components/app-shell.js";
 import { CreateCaseDialog } from "../features/cases/create-case-dialog.js";
 import { formatDistanceToNowStrict } from "../lib/dates.js";
 import { humanise } from "../lib/format.js";
-import { queryKeys, useApiQuery } from "../lib/api.js";
+import { errorHeading, queryKeys, useApiQuery } from "../lib/api.js";
 import { canWrite, useSession } from "../lib/session.js";
 
 /**
@@ -51,8 +58,23 @@ export function CasesRoute(): React.JSX.Element {
         }
       />
 
-      {cases.isLoading ? (
-        <p className="p-4 text-[12px] text-text-muted">Loading…</p>
+      {cases.error !== null ? (
+        <ErrorState
+          title={errorHeading(cases.error)}
+          description={cases.error.message}
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={cases.isFetching}
+              onClick={() => void cases.refetch()}
+            >
+              Try again
+            </Button>
+          }
+        />
+      ) : cases.isLoading ? (
+        <LoadingState label="Loading cases…" />
       ) : items.length === 0 ? (
         <EmptyState
           title="No cases yet"

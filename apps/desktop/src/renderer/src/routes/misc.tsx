@@ -19,19 +19,28 @@ import {
   CardHeader,
   CardTitle,
   EmptyState,
+  ErrorState,
   Input,
   Label,
+  LoadingState,
   Mono,
   Select,
+  Spinner,
   TlpBadge,
 } from "@codevault/ui";
 
 import { PageBody, PageHeader } from "../components/app-shell.js";
+import { QueryBoundary, QueryError } from "../components/query-boundary.js";
 import { bridge } from "../lib/bridge.js";
 import { formatDateTime } from "../lib/dates.js";
 import { humanise } from "../lib/format.js";
 import { useTheme } from "../hooks/use-theme.js";
-import { queryKeys, useApiMutation, useApiQuery } from "../lib/api.js";
+import {
+  errorHeading,
+  queryKeys,
+  useApiMutation,
+  useApiQuery,
+} from "../lib/api.js";
 import { isAdmin, useSession } from "../lib/session.js";
 
 /**
@@ -61,16 +70,20 @@ export function ReportsRoute(): React.JSX.Element {
       />
 
       <PageBody className="space-y-3">
-        {(cases.data?.items ?? []).map((item) => (
-          <CaseReports key={item.id} caseSummary={item} />
-        ))}
-
-        {cases.data?.items.length === 0 ? (
-          <EmptyState
-            title="No cases yet"
-            description="Reports are created from a case, once there is something to report."
-          />
-        ) : null}
+        <QueryBoundary query={cases} loadingLabel="Loading cases…">
+          {(data) =>
+            data.items.length === 0 ? (
+              <EmptyState
+                title="No cases yet"
+                description="Reports are created from a case, once there is something to report."
+              />
+            ) : (
+              data.items.map((item) => (
+                <CaseReports key={item.id} caseSummary={item} />
+              ))
+            )
+          }
+        </QueryBoundary>
       </PageBody>
     </div>
   );
@@ -87,6 +100,10 @@ function CaseReports({
   );
 
   const items = reports.data?.items ?? [];
+
+  if (reports.error !== null) {
+    return <QueryError query={reports} />;
+  }
 
   if (items.length === 0) {
     return <></>;
@@ -146,13 +163,30 @@ export function DisclosureIndexRoute(): React.JSX.Element {
       />
 
       <PageBody>
-        {coordinated.length === 0 ? (
+        {cases.error !== null ? (
+          <ErrorState
+            title={errorHeading(cases.error)}
+            description={cases.error.message}
+            action={
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={cases.isFetching}
+                onClick={() => void cases.refetch()}
+              >
+                Try again
+              </Button>
+            }
+          />
+        ) : cases.isLoading ? (
+          <LoadingState label="Loading cases…" />
+        ) : coordinated.length === 0 ? (
           <EmptyState
             title="No cases are in coordinated disclosure"
             description="Disclosure appears here once a case's profile calls for it, or you enable it on the case."
           />
         ) : (
-          <ul className="divide-y divide-border rounded-[--radius] border border-border">
+          <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
             {coordinated.map((item) => (
               <li key={item.id}>
                 <Link
@@ -205,7 +239,24 @@ export function ActivityRoute(): React.JSX.Element {
         description="Append-only history. Every sensitive change is recorded here and cannot be altered."
       />
 
-      {items.length === 0 ? (
+      {activity.error !== null ? (
+        <ErrorState
+          title={errorHeading(activity.error)}
+          description={activity.error.message}
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={activity.isFetching}
+              onClick={() => void activity.refetch()}
+            >
+              Try again
+            </Button>
+          }
+        />
+      ) : activity.isLoading ? (
+        <LoadingState label="Loading activity…" />
+      ) : items.length === 0 ? (
         <EmptyState title="No activity recorded yet" />
       ) : (
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
@@ -336,8 +387,13 @@ export function SettingsRoute(): React.JSX.Element {
             <CardTitle>Local AI providers</CardTitle>
           </CardHeader>
           <CardBody className="space-y-2 text-[12px]">
+            <QueryError query={policies} />
+
             {providers.length === 0 ? (
-              <p className="text-text-muted">Detecting…</p>
+              <p className="flex items-center gap-2 text-text-muted">
+                <Spinner className="size-3.5" />
+                Detecting…
+              </p>
             ) : (
               providers.map((provider) => {
                 const policy = policies.data?.items.find(
@@ -347,7 +403,7 @@ export function SettingsRoute(): React.JSX.Element {
                 return (
                   <div
                     key={provider.providerId}
-                    className="rounded-[--radius] border border-border p-2"
+                    className="rounded-(--cv-radius) border border-border p-2"
                   >
                     <div className="flex items-center gap-2">
                       <span className="font-medium">
@@ -512,7 +568,7 @@ export function SettingsRoute(): React.JSX.Element {
               </div>
 
               {inviteToken === null ? null : (
-                <div className="rounded-[--radius] border border-accent/50 bg-accent/10 p-2">
+                <div className="rounded-(--cv-radius) border border-accent/50 bg-accent/10 p-2">
                   <p className="font-medium text-accent">
                     Copy this token now — it is shown once.
                   </p>
@@ -520,8 +576,10 @@ export function SettingsRoute(): React.JSX.Element {
                 </div>
               )}
 
+              <QueryError query={invites} className="mb-2" />
+
               {invites.data === undefined ? null : (
-                <ul className="divide-y divide-border rounded-[--radius] border border-border">
+                <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
                   {invites.data.items.map((invite) => (
                     <li
                       key={invite.id}
@@ -543,12 +601,14 @@ export function SettingsRoute(): React.JSX.Element {
                 </ul>
               )}
 
+              <QueryError query={users} className="mb-2" />
+
               {users.data === undefined ? null : (
                 <div>
                   <p className="mb-1 text-[11px] uppercase tracking-wide text-text-muted">
                     Users
                   </p>
-                  <ul className="divide-y divide-border rounded-[--radius] border border-border">
+                  <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
                     {users.data.items.map((item) => (
                       <li
                         key={item.id}

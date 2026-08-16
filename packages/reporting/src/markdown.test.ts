@@ -85,7 +85,8 @@ describe("ordinary Markdown", () => {
       "# Title\n\n- one\n- two\n\n**bold** and *italic*",
     );
 
-    expect(html).toContain("<h1>Title</h1>");
+    // Headings carry a namespaced anchor so a section can be linked to.
+    expect(html).toContain('<h1 id="cv-h-title">Title</h1>');
     expect(html).toContain("<li>one</li>");
     expect(html).toContain("<strong>bold</strong>");
   });
@@ -97,7 +98,10 @@ describe("ordinary Markdown", () => {
 
     expect(html).toContain("<pre>");
     expect(html).toContain("language-http");
-    expect(html).toContain("POST /api/export");
+    // Highlighted, so the request is split across token spans. The text still
+    // has to survive intact once they are removed.
+    expect(html).toContain("hljs-");
+    expect(html.replace(/<[^>]+>/g, "")).toContain("POST /api/export HTTP/1.1");
   });
 
   it("escapes payload text inside a code block", async () => {

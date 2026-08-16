@@ -6,6 +6,28 @@
  */
 @import "@codevault/ui/tokens.css";
 
+/*
+ * Text selection.
+ *
+ * Chromium's default selection colour does not follow `color-scheme`, so in a
+ * dark window it paints a near-white block that is brighter than anything
+ * around it and leaves the selected words harder to read than the ones that
+ * are not selected. Nothing else in the application sets this, so every
+ * surface — prose, the rendered preview, tables, labels — needs the one rule
+ * here.
+ *
+ * Only the background is stated. Leaving `color` alone keeps the text its own
+ * colour through a selection, which is what a highlighted code block needs:
+ * dragging across a payload should not flatten its syntax colours.
+ *
+ * The editor is not affected: CodeMirror marks its own lines' native selection
+ * `transparent !important` and draws its selection layer instead, themed in
+ * `features/markdown/editor-theme.ts`.
+ */
+::selection {
+  background: var(--cv-selection);
+}
+
 /* The window chrome is draggable; interactive regions inside it are not. */
 .cv-drag-region {
   -webkit-app-region: drag;
@@ -15,33 +37,18 @@
   -webkit-app-region: no-drag;
 }
 
-/* CodeMirror lives inside a bordered pane and provides its own scrolling. */
+/*
+ * CodeMirror's colours are not set here.
+ *
+ * Its base theme is injected scoped to a generated class, so a plain
+ * `.cm-activeLine` rule in this file loses on specificity and silently does
+ * nothing. They live in `features/markdown/editor-theme.ts` instead, which is
+ * the only place they take effect.
+ *
+ * Font size is safe here: nothing in the base theme sets it.
+ */
 .cm-editor {
-  height: 100%;
-  font-family: var(--font-mono);
   font-size: 12.5px;
-}
-
-.cm-editor.cm-focused {
-  outline: none;
-}
-
-.cm-scroller {
-  line-height: 1.6;
-}
-
-.cm-gutters {
-  background: var(--cv-surface-raised);
-  border-right: 1px solid var(--cv-border);
-  color: var(--cv-text-muted);
-}
-
-.cm-activeLine {
-  background: var(--cv-surface-hover);
-}
-
-.cm-activeLineGutter {
-  background: var(--cv-surface-hover);
 }
 
 /* Rendered report preview: matches the print stylesheet's structure so the

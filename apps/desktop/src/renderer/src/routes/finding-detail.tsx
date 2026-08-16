@@ -20,18 +20,20 @@ import {
   CardHeader,
   CardTitle,
   EmptyState,
+  ErrorState,
   FindingHeader,
+  LoadingState,
   Mono,
   Select,
   Tabs,
   TabsContent,
   TabsList,
   TabsTrigger,
-  Textarea,
   VisibilityBadge,
 } from "@codevault/ui";
 
 import { AiToolbar } from "../features/ai/ai-toolbar.js";
+import { MarkdownField } from "../features/markdown/markdown-field.js";
 import { PriorArtPanel } from "../features/findings/prior-art-panel.js";
 import { ScoringPanel } from "../features/findings/scoring-panel.js";
 import { EvidencePanel } from "../features/evidence/evidence-panel.js";
@@ -43,6 +45,7 @@ import {
   useApiQuery,
 } from "../lib/api.js";
 import { canWrite, useSession } from "../lib/session.js";
+import { QueryError } from "../components/query-boundary.js";
 
 /**
  * The finding workspace.
@@ -52,15 +55,62 @@ import { canWrite, useSession } from "../lib/session.js";
  * changes anything until one of those buttons is pressed.
  */
 
+/**
+ * The written body of a finding.
+ *
+ * The hints are prompts, not instructions: an empty field is the most common
+ * state of a half-written finding, and a blank box asks a researcher to
+ * remember what belongs in it while they are still thinking about the bug.
+ */
 const FINDING_FIELDS = [
-  { key: "summaryMarkdown", label: "Executive summary" },
-  { key: "technicalMarkdown", label: "Technical description" },
-  { key: "preconditionsMarkdown", label: "Attack preconditions" },
-  { key: "attackPathMarkdown", label: "Attack path" },
-  { key: "impactMarkdown", label: "Security impact" },
-  { key: "reproductionMarkdown", label: "Reproduction steps" },
-  { key: "remediationMarkdown", label: "Remediation recommendation" },
-  { key: "researcherNotesMarkdown", label: "Researcher notes (internal)" },
+  {
+    key: "summaryMarkdown",
+    label: "Executive summary",
+    hint: "What it is and why it matters, in a paragraph a manager will read.",
+    height: "10rem",
+  },
+  {
+    key: "technicalMarkdown",
+    label: "Technical description",
+    hint: "The mechanism. Code, requests and a diagram if the path is worth drawing.",
+    height: "22rem",
+  },
+  {
+    key: "preconditionsMarkdown",
+    label: "Attack preconditions",
+    hint: "What an attacker needs first: position, credentials, timing.",
+    height: "10rem",
+  },
+  {
+    key: "attackPathMarkdown",
+    label: "Attack path",
+    hint: "Entry to impact. A ```mermaid flowchart renders in the report.",
+    height: "14rem",
+  },
+  {
+    key: "impactMarkdown",
+    label: "Security impact",
+    hint: "What an attacker gains, in terms the vendor's risk owner uses.",
+    height: "10rem",
+  },
+  {
+    key: "reproductionMarkdown",
+    label: "Reproduction steps",
+    hint: "Numbered steps someone else can follow exactly. Fence the requests.",
+    height: "16rem",
+  },
+  {
+    key: "remediationMarkdown",
+    label: "Remediation recommendation",
+    hint: "The fix, and any interim mitigation worth naming.",
+    height: "10rem",
+  },
+  {
+    key: "researcherNotesMarkdown",
+    label: "Researcher notes (internal)",
+    hint: "Working notes. Never included in a report.",
+    height: "10rem",
+  },
 ] as const;
 
 const AI_ACTIONS = [
@@ -113,15 +163,25 @@ export function FindingDetailRoute({
   );
 
   if (finding.isLoading) {
-    return <p className="p-4 text-[12px] text-text-muted">Loading…</p>;
+    return <LoadingState label="Loading finding…" />;
   }
 
   if (finding.error !== null || finding.data === undefined) {
     return (
-      <EmptyState
+      <ErrorState
         title={errorHeading(finding.error)}
         description={
           finding.error?.message ?? "That finding could not be loaded."
+        }
+        action={
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={finding.isFetching}
+            onClick={() => void finding.refetch()}
+          >
+            Try again
+          </Button>
         }
       />
     );
@@ -438,8 +498,7 @@ function FindingContentEditor({
   canEdit: boolean;
   technicalOnly?: boolean;
 }): React.JSX.Element {
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [savedField, setSavedField] = useState<string | null>(null);
+  const [savingField, setSavingField] = useState<string | null>(null);
 
   const update = useApiMutation<
     FindingDetail,
@@ -469,53 +528,40 @@ function FindingContentEditor({
       {fields.map((field) => {
         const stored =
           (finding[field.key as keyof FindingDetail] as string | null) ?? "";
-        const draft = drafts[field.key] ?? stored;
-        const dirty = draft !== stored;
 
         return (
           <Card key={field.key}>
             <CardHeader>
               <CardTitle>{field.label}</CardTitle>
-              {canEdit && dirty ? (
-                <Button
-                  size="sm"
-                  variant="primary"
-                  disabled={update.isPending}
-                  onClick={() =>
-                    update.mutate(
-                      { field: field.key, value: draft },
-                      {
-                        onSuccess: () => {
-                          setSavedField(field.key);
-                          setTimeout(() => setSavedField(null), 1_500);
-                        },
-                      },
-                    )
-                  }
-                >
-                  Save
-                </Button>
-              ) : savedField === field.key ? (
-                <span className="text-[11px] text-success">Saved</span>
-              ) : null}
+              <span className="text-[11px] text-text-muted">{field.hint}</span>
             </CardHeader>
             <CardBody>
-              <Textarea
-                value={draft}
-                rows={field.key === "technicalMarkdown" ? 12 : 5}
+              {/*
+                Autosaved: the old per-field Save button meant eight of them on
+                a page, and a finding left unsaved because the researcher moved
+                on to the next box.
+              */}
+              <MarkdownField
+                value={stored}
                 readOnly={!canEdit}
-                onChange={(event) =>
-                  setDrafts((current) => ({
-                    ...current,
-                    [field.key]: event.target.value,
-                  }))
-                }
+                draftKey={`finding:${finding.id}:${field.key}`}
+                caseId={finding.caseId}
+                minHeight={field.height}
                 placeholder={
                   canEdit
-                    ? "Markdown. Empty until you or AI drafts it."
+                    ? `${field.hint} Markdown, with tables and diagrams.`
                     : "Empty."
                 }
-                className="font-mono text-[12px]"
+                saving={update.isPending && savingField === field.key}
+                error={
+                  update.error === null || savingField !== field.key
+                    ? null
+                    : `${errorHeading(update.error)}. ${update.error.message}`
+                }
+                onSave={(value) => {
+                  setSavingField(field.key);
+                  update.mutate({ field: field.key, value });
+                }}
               />
             </CardBody>
           </Card>
@@ -600,6 +646,10 @@ function FindingHistory({
 
   const items = activity.data?.items ?? [];
 
+  if (activity.error !== null) {
+    return <QueryError query={activity} className="m-4" />;
+  }
+
   if (items.length === 0) {
     return (
       <EmptyState
@@ -610,7 +660,7 @@ function FindingHistory({
   }
 
   return (
-    <ul className="divide-y divide-border rounded-[--radius] border border-border">
+    <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
       {items.map((event) => (
         <li key={event.id} className="px-3 py-2 text-[12px]">
           <div className="flex items-center gap-2">
@@ -625,7 +675,7 @@ function FindingHistory({
             </span>
           </div>
           {event.after === null ? null : (
-            <pre className="mt-1 overflow-x-auto rounded-[--radius] bg-surface-raised p-1.5 font-mono text-[10.5px] text-text-muted">
+            <pre className="mt-1 overflow-x-auto rounded-(--cv-radius) bg-surface-raised p-1.5 font-mono text-[10.5px] text-text-muted">
               {JSON.stringify(event.after)}
             </pre>
           )}

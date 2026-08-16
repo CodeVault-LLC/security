@@ -56,11 +56,11 @@ export function FindingHeader({
         <PriorArtBadge state={finding.priorArtState} />
 
         {finding.primaryAsset === null ? (
-          <span className="inline-flex items-center gap-1 rounded-[--radius] border border-dashed border-border px-1.5 py-0.5 text-[11px] text-text-muted">
+          <span className="inline-flex items-center gap-1 rounded-(--cv-radius) border border-dashed border-border px-1.5 py-0.5 text-[11px] text-text-muted">
             No primary asset
           </span>
         ) : (
-          <span className="inline-flex items-center gap-1 rounded-[--radius] border border-border bg-surface-raised px-1.5 py-0.5 text-[11px]">
+          <span className="inline-flex items-center gap-1 rounded-(--cv-radius) border border-border bg-surface-raised px-1.5 py-0.5 text-[11px]">
             <AssetKindIcon kind={finding.primaryAsset.kind} />
             <span className="max-w-56 truncate">
               {finding.primaryAsset.name}
@@ -72,7 +72,7 @@ export function FindingHeader({
         )}
 
         {finding.pendingProposalCount > 0 ? (
-          <span className="inline-flex items-center gap-1 rounded-[--radius] border border-accent/50 bg-accent/10 px-1.5 py-0.5 text-[11px] text-accent">
+          <span className="inline-flex items-center gap-1 rounded-(--cv-radius) border border-accent/50 bg-accent/10 px-1.5 py-0.5 text-[11px] text-accent">
             <Sparkles aria-hidden className="size-3" />
             {finding.pendingProposalCount} AI proposal
             {finding.pendingProposalCount === 1 ? "" : "s"} pending

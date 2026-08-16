@@ -16,9 +16,9 @@ import {
   EmptyState,
   Input,
   Label,
+  LoadingState,
   Mono,
   Select,
-  Textarea,
 } from "@codevault/ui";
 
 import {
@@ -27,7 +27,10 @@ import {
   toDateInputValue,
 } from "../../lib/dates.js";
 import { humanise } from "../../lib/format.js";
+import { MarkdownField } from "../markdown/markdown-field.js";
+import { MarkdownPreview } from "../markdown/markdown-preview.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../../lib/api.js";
+import { QueryError } from "../../components/query-boundary.js";
 
 /**
  * Disclosure coordination.
@@ -113,10 +116,10 @@ export function DisclosurePanel({
             ) : null}
           </CardHeader>
 
+          <QueryError query={overview} />
+
           {data === undefined ? (
-            <CardBody className="text-[12px] text-text-muted">
-              Loading…
-            </CardBody>
+            <LoadingState />
           ) : data.events.length === 0 ? (
             <EmptyState
               title="No disclosure events recorded"
@@ -134,9 +137,11 @@ export function DisclosurePanel({
                       {event.label ?? humanise(event.type)}
                     </p>
                     {event.detailMarkdown === null ? null : (
-                      <p className="mt-0.5 whitespace-pre-wrap text-text-muted">
-                        {event.detailMarkdown}
-                      </p>
+                      <MarkdownPreview
+                        markdown={event.detailMarkdown}
+                        className="mt-0.5 text-text-muted"
+                        debounceMs={0}
+                      />
                     )}
                     <p className="mt-0.5 text-[11px] text-text-muted">
                       {event.stakeholderName === null
@@ -417,14 +422,17 @@ function RecordEventDialog({
           </div>
 
           <div>
-            <Label htmlFor="event-detail">Detail (optional)</Label>
-            <Textarea
-              id="event-detail"
-              value={detail}
-              rows={3}
-              onChange={(event) => setDetail(event.target.value)}
-              className="mt-1"
-            />
+            <Label>Detail (optional)</Label>
+            <div className="mt-1">
+              <MarkdownField
+                value={detail}
+                onChange={setDetail}
+                draftKey={`disclosure:new:${caseId}`}
+                caseId={caseId}
+                minHeight="9rem"
+                placeholder="What happened, and what was sent or received. Markdown."
+              />
+            </div>
           </div>
 
           {error === null ? null : (

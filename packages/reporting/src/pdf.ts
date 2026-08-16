@@ -1,5 +1,13 @@
 import { createHash } from "node:crypto";
 
+import {
+  hydrateDiagramsIn,
+  MERMAID_CONFIG,
+  sanitiseSvgElement,
+  SVG_POLICY,
+} from "@codevault/markdown/diagrams";
+import type { Page } from "playwright";
+
 /**
  * PDF rendering.
  *
@@ -51,6 +59,83 @@ async function pagedJsScript(): Promise<string | null> {
   }
 }
 
+/**
+ * Mermaid, for reports that contain a diagram.
+ *
+ * Read from the installed package, never a CDN, and injected into a page that
+ * is already offline. Loaded only when the document actually has a diagram in
+ * it: the bundle is several megabytes and most reports have none.
+ */
+async function mermaidScript(): Promise<string | null> {
+  try {
+    const { readFile } = await import("node:fs/promises");
+    // Resolved by the package that depends on mermaid; it does not resolve
+    // from here.
+    const { mermaidBundlePath } = await import("@codevault/markdown/bundle");
+
+    return await readFile(mermaidBundlePath(), "utf8");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Draws the report's diagrams inside the page.
+ *
+ * The sanitiser and the hydration routine are injected as their own source —
+ * the same functions the desktop preview calls — so a diagram in the PDF is
+ * produced by the same code, and filtered by the same allow-list, as the one
+ * the researcher approved on screen.
+ *
+ * Runs before Paged.js: pagination has to measure the drawn SVG, not the
+ * source block it replaces.
+ */
+async function drawDiagrams(page: Page, timeout: number): Promise<void> {
+  const script = await mermaidScript();
+
+  if (script === null) {
+    // Without mermaid the diagram containers keep their source visible, which
+    // is the same fallback an un-hydrated preview shows.
+    return;
+  }
+
+  await page.addScriptTag({ content: script });
+  await page.addScriptTag({
+    content: `window.__cvSanitiseSvg = (${sanitiseSvgElement.toString()});
+      window.__cvHydrateDiagrams = (${hydrateDiagramsIn.toString()});`,
+  });
+
+  // Passed as source text rather than a callback so this module needs no DOM
+  // library in its own compilation, matching the Paged.js wait below.
+  await page
+    .evaluate(
+      `(async () => {
+        const config = ${JSON.stringify(MERMAID_CONFIG)};
+        window.mermaid.initialize({ ...config, secure: [...config.secure] });
+
+        return window.__cvHydrateDiagrams(document, {
+          render: (id, source) => window.mermaid.render(id, source),
+          sanitise: window.__cvSanitiseSvg,
+          policy: ${JSON.stringify(SVG_POLICY)},
+        });
+      })()`,
+    )
+    .catch(() => {
+      // A diagram that cannot be drawn leaves its source in the document. The
+      // export is still valid and the reader can still see what was meant.
+    });
+
+  await page
+    .waitForFunction(
+      `document.querySelectorAll('[data-cv-diagram]:not([data-cv-drawn])').length === 0`,
+      undefined,
+      { timeout: Math.min(timeout, 30_000) },
+    )
+    .catch(() => {
+      // Same fallback: print what is there rather than failing the export.
+    });
+}
+
 export async function renderPdf(
   options: PdfRenderOptions,
 ): Promise<PdfRenderResult> {
@@ -95,6 +180,10 @@ export async function renderPdf(
       waitUntil: "domcontentloaded",
       timeout,
     });
+
+    if (options.html.includes("data-cv-diagram")) {
+      await drawDiagrams(page, timeout);
+    }
 
     const polyfill = await pagedJsScript();
 

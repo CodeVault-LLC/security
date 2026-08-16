@@ -36,8 +36,11 @@ export const DialogContent = forwardRef<
       <DialogPrimitive.Content
         ref={ref}
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-[min(92vw,var(--dialog-width))] -translate-x-1/2 -translate-y-1/2",
-          "rounded-[--radius-lg] border border-border-strong bg-surface shadow-2xl",
+          // The width comes from the `width` prop's max-w-* class; this keeps a
+          // dialog off the window edges on a small screen. Both are needed: a
+          // fixed-position element with no width shrinks to fit its content.
+          "fixed left-1/2 top-1/2 z-50 w-[92vw] -translate-x-1/2 -translate-y-1/2",
+          "rounded-(--cv-radius-lg) border border-border-strong bg-surface shadow-2xl",
           width,
           className,
         )}
@@ -55,7 +58,7 @@ export const DialogContent = forwardRef<
             )}
           </div>
           <DialogPrimitive.Close
-            className="rounded-[--radius] p-1 text-text-muted hover:bg-surface-hover hover:text-text"
+            className="rounded-(--cv-radius) p-1 text-text-muted hover:bg-surface-hover hover:text-text"
             aria-label="Close"
           >
             <X aria-hidden className="size-4" />
@@ -102,19 +105,31 @@ export function DialogFooter({
 
 export const Tabs = TabsPrimitive.Root;
 
+/**
+ * A segmented control.
+ *
+ * The list is a recessed track and the active tab a pill inside it, so which
+ * view you are on is legible at a glance rather than from a two-pixel
+ * underline. The active pill is accent-tinted rather than a lighter surface:
+ * the surface ramp runs in opposite directions in the two themes, so a
+ * lightness step that lifts the pill in light mode would sink it in dark.
+ */
 export const TabsList = forwardRef<
   React.ComponentRef<typeof TabsPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
 >(function TabsList({ className, ...props }, ref) {
   return (
-    <TabsPrimitive.List
-      ref={ref}
-      className={cn(
-        "flex items-center gap-0.5 border-b border-border px-2",
-        className,
-      )}
-      {...props}
-    />
+    <div className="shrink-0 border-b border-border px-4 py-2.5">
+      <TabsPrimitive.List
+        ref={ref}
+        className={cn(
+          "inline-flex items-center gap-0.5 rounded-(--cv-radius-lg) border border-border",
+          "bg-surface-raised p-0.5",
+          className,
+        )}
+        {...props}
+      />
+    </div>
   );
 });
 
@@ -126,8 +141,13 @@ export const TabsTrigger = forwardRef<
     <TabsPrimitive.Trigger
       ref={ref}
       className={cn(
-        "relative -mb-px border-b-2 border-transparent px-2.5 py-1.5 text-[12px] text-text-muted",
-        "hover:text-text data-[state=active]:border-accent data-[state=active]:text-text",
+        "relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-(--cv-radius)",
+        "px-3 py-1 text-[12px] font-medium text-text-muted",
+        "transition-[background-color,color] duration-100",
+        "hover:bg-surface-hover hover:text-text",
+        "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
+        "data-[state=active]:bg-accent/12 data-[state=active]:text-accent",
+        "data-[state=active]:hover:bg-accent/16",
         className,
       )}
       {...props}
@@ -185,7 +205,7 @@ export function Select({
       <SelectPrimitive.Trigger
         aria-label={ariaLabel}
         className={cn(
-          "flex h-7 w-full items-center justify-between gap-2 rounded-[--radius] border border-border",
+          "flex h-7 w-full items-center justify-between gap-2 rounded-(--cv-radius) border border-border",
           "bg-surface px-2 text-[13px] disabled:opacity-60",
           className,
         )}
@@ -200,14 +220,14 @@ export function Select({
         <SelectPrimitive.Content
           position="popper"
           sideOffset={4}
-          className="z-50 max-h-72 overflow-hidden rounded-[--radius] border border-border-strong bg-surface shadow-xl"
+          className="z-50 max-h-72 overflow-hidden rounded-(--cv-radius) border border-border-strong bg-surface shadow-xl"
         >
           <SelectPrimitive.Viewport className="p-1">
             {options.map((option) => (
               <SelectPrimitive.Item
                 key={option.value}
                 value={option.value}
-                className="flex cursor-pointer items-start gap-2 rounded-[--radius] px-2 py-1.5 text-[13px] data-[highlighted=true]:bg-surface-hover data-[highlighted=true]:outline-none"
+                className="flex cursor-pointer items-start gap-2 rounded-(--cv-radius) px-2 py-1.5 text-[13px] data-[highlighted=true]:bg-surface-hover data-[highlighted=true]:outline-none"
               >
                 <SelectPrimitive.ItemIndicator className="mt-0.5">
                   <Check aria-hidden className="size-3 text-accent" />

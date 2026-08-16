@@ -14,15 +14,16 @@ import {
   Input,
   Label,
   Select,
-  Textarea,
 } from "@codevault/ui";
 
 import type {
   UploadProgress,
   UploadSelection,
 } from "../../../../preload/contracts.js";
+import { QueryError } from "../../components/query-boundary.js";
 import { bridge } from "../../lib/bridge.js";
 import { formatBytesApprox } from "../../lib/format.js";
+import { MarkdownField } from "../markdown/markdown-field.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../../lib/api.js";
 
 /**
@@ -91,6 +92,8 @@ export function EvidencePanel({
           </Button>
         ) : null}
       </div>
+
+      <QueryError query={evidence} className="mx-4" />
 
       {items.length === 0 ? (
         <EmptyState
@@ -234,7 +237,7 @@ function UploadDialog({
           </div>
 
           {selections.length === 0 ? null : (
-            <ul className="divide-y divide-border rounded-[--radius] border border-border">
+            <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
               {selections.map((selection) => {
                 const update = Object.values(progress).find(
                   (item) => item.filename === selection.filename,
@@ -317,14 +320,17 @@ function UploadDialog({
           </div>
 
           <div>
-            <Label htmlFor="evidence-description">Description (optional)</Label>
-            <Textarea
-              id="evidence-description"
-              value={description}
-              rows={3}
-              onChange={(event) => setDescription(event.target.value)}
-              className="mt-1"
-            />
+            <Label>Description (optional)</Label>
+            <div className="mt-1">
+              <MarkdownField
+                value={description}
+                onChange={setDescription}
+                draftKey={`evidence:new:${caseId}`}
+                caseId={caseId}
+                minHeight="9rem"
+                placeholder="What this shows, and what it proves. Markdown."
+              />
+            </div>
           </div>
 
           {error === null ? null : (

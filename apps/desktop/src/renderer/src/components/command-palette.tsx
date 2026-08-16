@@ -93,7 +93,7 @@ function PaletteContents({
       // it knows about identifiers, hashes and CVEs that a fuzzy string match
       // would bury under title similarity.
       shouldFilter={false}
-      className="fixed left-1/2 top-24 z-50 w-[min(680px,90vw)] -translate-x-1/2 overflow-hidden rounded-[--radius-lg] border border-border-strong bg-surface shadow-2xl"
+      className="fixed left-1/2 top-24 z-50 w-[min(680px,90vw)] -translate-x-1/2 overflow-hidden rounded-(--cv-radius-lg) border border-border-strong bg-surface shadow-2xl"
     >
       <div className="flex items-center gap-2 border-b border-border px-3">
         <SearchIcon aria-hidden className="size-4 text-text-muted" />
@@ -134,7 +134,7 @@ function PaletteContents({
                     }
                   })
                 }
-                className="flex cursor-pointer items-center gap-2 rounded-[--radius] px-2 py-1.5 text-[13px] text-text data-[selected=true]:bg-surface-hover"
+                className="flex cursor-pointer items-center gap-2 rounded-(--cv-radius) px-2 py-1.5 text-[13px] text-text data-[selected=true]:bg-surface-hover"
               >
                 <Mono className="shrink-0 text-text-muted">{hit.ref}</Mono>
                 <span className="min-w-0 flex-1 truncate normal-case tracking-normal">
@@ -209,7 +209,7 @@ function PaletteAction({
     <Command.Item
       value={label}
       onSelect={onSelect}
-      className="flex cursor-pointer items-center gap-2 rounded-[--radius] px-2 py-1.5 text-[13px] normal-case tracking-normal text-text data-[selected=true]:bg-surface-hover"
+      className="flex cursor-pointer items-center gap-2 rounded-(--cv-radius) px-2 py-1.5 text-[13px] normal-case tracking-normal text-text data-[selected=true]:bg-surface-hover"
     >
       <span className="text-text-muted">{icon}</span>
       {label}
