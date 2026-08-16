@@ -2,7 +2,12 @@ import { Link } from "@tanstack/react-router";
 import { Plus } from "lucide-react";
 import { useState } from "react";
 
-import type { AssetDetail, AssetSummary } from "@codevault/contracts";
+import type {
+  AssetDetail,
+  AssetDetailMetricsResponse,
+  AssetMetricsResponse,
+  AssetSummary,
+} from "@codevault/contracts";
 import {
   ASSET_IDENTIFIER_SCHEMES,
   ASSET_KINDS,
@@ -11,6 +16,7 @@ import {
 } from "@codevault/core";
 import {
   AssetKindIcon,
+  BarList,
   Button,
   Card,
   CardBody,
@@ -21,14 +27,21 @@ import {
   DialogContent,
   DialogFooter,
   EmptyState,
+  ErrorState,
   Input,
   Label,
+  LoadingState,
+  Meter,
   Mono,
   Select,
+  severityChartSegments,
+  StackedBar,
   Textarea,
+  TrendChart,
 } from "@codevault/ui";
 
 import { PageHeader } from "../components/app-shell.js";
+import { QueryError } from "../components/query-boundary.js";
 import { formatDate } from "../lib/dates.js";
 import { humanise } from "../lib/format.js";
 import {
@@ -38,6 +51,7 @@ import {
   useApiQuery,
 } from "../lib/api.js";
 import { canWrite, useSession } from "../lib/session.js";
+import { formatBucket } from "./metrics.js";
 
 /**
  * Assets.
@@ -65,7 +79,13 @@ export function AssetsRoute(): React.JSX.Element {
       : `/v1/assets?kind=${kindFilter}&limit=200`,
   );
 
+  const metrics = useApiQuery<AssetMetricsResponse>(
+    queryKeys.assetMetrics,
+    "/v1/metrics/assets",
+  );
+
   const items = assets.data?.items ?? [];
+  const stats = metrics.data;
 
   return (
     <div className="flex h-full flex-col">
@@ -81,6 +101,87 @@ export function AssetsRoute(): React.JSX.Element {
           ) : undefined
         }
       />
+
+      <div className="border-b border-border p-4">
+        <QueryError query={metrics} className="mb-3" />
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>Findings by kind</CardTitle>
+            </CardHeader>
+            <CardBody>
+              {stats === undefined ? (
+                <LoadingState className="py-2" />
+              ) : (
+                <BarList
+                  caption="Findings by asset kind"
+                  items={stats.byKind
+                    .filter((entry) => entry.findingCount > 0)
+                    .sort((a, b) => b.findingCount - a.findingCount)
+                    .slice(0, 6)
+                    .map((entry) => ({
+                      key: entry.kind,
+                      label: humanise(entry.kind),
+                      value: entry.findingCount,
+                    }))}
+                />
+              )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Most affected</CardTitle>
+            </CardHeader>
+            <CardBody>
+              {stats === undefined ? (
+                <LoadingState className="py-2" />
+              ) : (
+                <BarList
+                  caption="Assets by finding count"
+                  items={stats.topAssets.slice(0, 6).map((entry) => ({
+                    key: entry.assetId,
+                    label: entry.name,
+                    value: entry.total,
+                  }))}
+                />
+              )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Identifier coverage</CardTitle>
+            </CardHeader>
+            <CardBody className="space-y-2">
+              {stats === undefined ? (
+                <LoadingState className="py-2" />
+              ) : (
+                <>
+                  <Meter
+                    label="Any identifier"
+                    value={stats.identifierCoverage.withIdentifier}
+                    total={stats.identifierCoverage.total}
+                  />
+                  <Meter
+                    label="Primary identifier"
+                    value={stats.identifierCoverage.withPrimary}
+                    total={stats.identifierCoverage.total}
+                  />
+                  {/* Not a vanity figure: prior-art matching is far more
+                      accurate against a PURL or CPE than a product name, so
+                      this number is a piece of work rather than a score. */}
+                  <p className="text-[11px] text-text-muted">
+                    A PURL or CPE makes prior-art matching far more accurate
+                    than a product name.
+                  </p>
+                </>
+              )}
+            </CardBody>
+          </Card>
+        </div>
+      </div>
 
       <div className="flex items-center gap-2 border-b border-border px-4 py-2">
         <Select
@@ -104,7 +205,24 @@ export function AssetsRoute(): React.JSX.Element {
         </span>
       </div>
 
-      {items.length === 0 ? (
+      {assets.error !== null ? (
+        <ErrorState
+          title={errorHeading(assets.error)}
+          description={assets.error.message}
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={assets.isFetching}
+              onClick={() => void assets.refetch()}
+            >
+              Try again
+            </Button>
+          }
+        />
+      ) : assets.isLoading ? (
+        <LoadingState label="Loading assets…" />
+      ) : items.length === 0 ? (
         <EmptyState
           title="No assets yet"
           description="Create the thing you are researching: a component, a device, a service or a firmware image."
@@ -158,15 +276,30 @@ export function AssetDetailRoute({
     `/v1/assets/${assetId}`,
   );
 
+  const metrics = useApiQuery<AssetDetailMetricsResponse>(
+    queryKeys.assetDetailMetrics(assetId),
+    `/v1/assets/${assetId}/metrics`,
+  );
+
   if (asset.isLoading) {
-    return <p className="p-4 text-[12px] text-text-muted">Loading…</p>;
+    return <LoadingState label="Loading asset…" />;
   }
 
   if (asset.error !== null || asset.data === undefined) {
     return (
-      <EmptyState
+      <ErrorState
         title={errorHeading(asset.error)}
         description={asset.error?.message ?? "That asset could not be loaded."}
+        action={
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={asset.isFetching}
+            onClick={() => void asset.refetch()}
+          >
+            Try again
+          </Button>
+        }
       />
     );
   }
@@ -191,7 +324,80 @@ export function AssetDetailRoute({
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
+        <QueryError query={metrics} className="mb-4" />
+
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+          <Card className="xl:col-span-2">
+            <CardHeader>
+              <CardTitle>Findings</CardTitle>
+              <span className="text-[11px] text-text-muted">
+                {metrics.data?.total ?? 0} against this asset
+              </span>
+            </CardHeader>
+            <CardBody>
+              {metrics.data === undefined ? (
+                <LoadingState className="py-2" />
+              ) : metrics.data.total === 0 ? (
+                <p className="text-[12px] text-text-muted">
+                  No findings are recorded against this asset yet.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                  <div className="lg:col-span-1">
+                    <StackedBar
+                      caption={`Findings against ${data.name} by severity`}
+                      segments={severityChartSegments(metrics.data.severity)}
+                    />
+                  </div>
+
+                  <div className="lg:col-span-1">
+                    <TrendChart
+                      caption={`Findings opened against ${data.name}`}
+                      buckets={metrics.data.trend.map((point) =>
+                        formatBucket(
+                          point.bucketStart,
+                          metrics.data?.bucket ?? "week",
+                        ),
+                      )}
+                      series={[
+                        {
+                          key: "opened",
+                          label: "Opened",
+                          color: "--cv-accent",
+                          points: metrics.data.trend.map(
+                            (point) => point.opened,
+                          ),
+                        },
+                      ]}
+                    />
+                  </div>
+
+                  <div className="flex flex-col justify-center gap-2 lg:col-span-1">
+                    {/* Pairs with the dashboard's "unverified affected
+                        versions" alert, so the two agree about what is
+                        outstanding rather than counting it differently. */}
+                    <Meter
+                      label="Version ranges verified"
+                      value={metrics.data.affectedRanges.verified}
+                      total={metrics.data.affectedRanges.total}
+                    />
+                    {metrics.data.affectedRanges.inferredUnverified ===
+                    0 ? null : (
+                      <p className="text-[11px] text-warning">
+                        {metrics.data.affectedRanges.inferredUnverified}{" "}
+                        inferred range
+                        {metrics.data.affectedRanges.inferredUnverified === 1
+                          ? " has"
+                          : "s have"}{" "}
+                        never been verified.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </CardBody>
+          </Card>
+
           <Card>
             <CardHeader>
               <CardTitle>Identifiers</CardTitle>
@@ -390,7 +596,7 @@ function CreateAssetDialog({
           </button>
 
           {showAdvanced ? (
-            <div className="space-y-3 rounded-[--radius] border border-border p-2">
+            <div className="space-y-3 rounded-(--cv-radius) border border-border p-2">
               <div className="grid grid-cols-[140px_1fr] gap-2">
                 <div>
                   <Label>Scheme</Label>

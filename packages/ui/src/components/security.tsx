@@ -24,11 +24,17 @@ import {
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
 
-import type { AiProposal, Artifact } from "@codevault/contracts";
+import type {
+  AiProposal,
+  Artifact,
+  SeverityTotals,
+} from "@codevault/contracts";
 import type { ArtifactKind, AssetKind, ReviewState } from "@codevault/core";
+import { markdownToPlainText } from "@codevault/markdown/text";
 
 import { cn } from "../lib/cn.js";
 import { humaniseState, StateBadge, VisibilityBadge } from "./badges.js";
+import type { ChartDatum } from "./charts.js";
 import { Button, Card, Mono } from "./primitives.js";
 
 /**
@@ -71,6 +77,60 @@ export function AssetKindIcon({
       {ASSET_KIND_ICONS[kind] ?? <Box aria-hidden className="size-3.5" />}
     </span>
   );
+}
+
+/**
+ * Severity as chart segments, in descending order.
+ *
+ * Lives here rather than in `charts.tsx` because it is a domain decision: the
+ * chart layer takes numbers and colour tokens and knows nothing about what
+ * critical means. Defined once so the dashboard, the metrics page and both
+ * asset views cannot drift into three different orderings of the same six
+ * numbers.
+ *
+ * A caution for whoever edits the severity tokens next. Critical and high are
+ * both reds, measured ΔE 8.4 apart in light and 8.8 in dark — under the 15
+ * floor at which adjacent fills stay comfortably distinguishable. They are fine
+ * in badges, which are separated and captioned, but in a stacked bar they
+ * touch. That is why `StackedBar` will not render a multi-segment bar without
+ * either a legend or an explicit description.
+ */
+export function severityChartSegments(
+  totals: SeverityTotals,
+): readonly ChartDatum[] {
+  return [
+    {
+      key: "critical",
+      label: "Critical",
+      value: totals.critical,
+      color: "--cv-severity-critical",
+    },
+    {
+      key: "high",
+      label: "High",
+      value: totals.high,
+      color: "--cv-severity-high",
+    },
+    {
+      key: "medium",
+      label: "Medium",
+      value: totals.medium,
+      color: "--cv-severity-medium",
+    },
+    { key: "low", label: "Low", value: totals.low, color: "--cv-severity-low" },
+    {
+      key: "none",
+      label: "None",
+      value: totals.none,
+      color: "--cv-severity-info",
+    },
+    {
+      key: "unscored",
+      label: "Unscored",
+      value: totals.unscored,
+      color: "--cv-border-strong",
+    },
+  ];
 }
 
 const ARTIFACT_KIND_ICONS: Partial<Record<ArtifactKind, ReactNode>> = {
@@ -150,7 +210,7 @@ export function ReferenceLink({
       type="button"
       onClick={() => onOpen(url)}
       className={cn(
-        "group flex w-full items-start gap-2 rounded-[--radius] px-2 py-1.5 text-left",
+        "group flex w-full items-start gap-2 rounded-(--cv-radius) px-2 py-1.5 text-left",
         "hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-focus",
         className,
       )}
@@ -203,8 +263,11 @@ export function EvidenceCard({
             <span className="truncate text-[13px] font-medium">{title}</span>
           </div>
           {description === null || description === undefined ? null : (
+            // Stripped rather than rendered: this is a two-line summary, and a
+            // description that opens with a table or a diagram would other-
+            // wise arrive as a wall of pipes.
             <p className="mt-0.5 line-clamp-2 text-[12px] text-text-muted">
-              {description}
+              {markdownToPlainText(description)}
             </p>
           )}
         </div>
@@ -312,7 +375,7 @@ export function ReportSectionStatus({
       type="button"
       onClick={onSelect}
       className={cn(
-        "flex w-full items-center justify-between gap-2 rounded-[--radius] px-2 py-1 text-left text-[12px]",
+        "flex w-full items-center justify-between gap-2 rounded-(--cv-radius) px-2 py-1 text-left text-[12px]",
         active
           ? "bg-surface-hover text-text"
           : "text-text-muted hover:bg-surface-hover",
@@ -392,7 +455,7 @@ export function AiProposalPanel({
               <p className="mb-1 text-[11px] uppercase tracking-wide text-text-muted">
                 Current · {field}
               </p>
-              <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-[--radius] bg-surface-raised p-2 font-sans text-text-muted">
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-(--cv-radius) bg-surface-raised p-2 font-sans text-text-muted">
                 {formatValue(currentValues[field])}
               </pre>
             </div>
@@ -400,7 +463,7 @@ export function AiProposalPanel({
               <p className="mb-1 text-[11px] uppercase tracking-wide text-accent">
                 Proposed · {field}
               </p>
-              <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-[--radius] bg-accent/8 p-2 font-sans">
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-(--cv-radius) bg-accent/8 p-2 font-sans">
                 {formatValue(proposed)}
               </pre>
             </div>

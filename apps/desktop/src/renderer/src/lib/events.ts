@@ -81,6 +81,10 @@ export function invalidateForEvent(
 
   invalidate(queryKeys.dashboard);
   invalidate(["activity"]);
+  // Every aggregate on the dashboard, the metrics page and both asset views
+  // sits under this prefix, so one entry keeps the charts as live as the lists
+  // they sit above.
+  invalidate(["metrics"]);
 }
 
 export interface EventSubscription {

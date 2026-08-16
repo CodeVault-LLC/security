@@ -88,6 +88,12 @@ export const queryKeys = {
       ? (["assets"] as const)
       : (["assets", filters] as const),
   asset: (id: string) => ["asset", id] as const,
+  metrics: (filters?: Record<string, unknown>) =>
+    filters === undefined
+      ? (["metrics"] as const)
+      : (["metrics", filters] as const),
+  assetMetrics: ["metrics", "assets"] as const,
+  assetDetailMetrics: (id: string) => ["metrics", "asset", id] as const,
   evidence: (filters?: Record<string, unknown>) =>
     filters === undefined
       ? (["evidence"] as const)

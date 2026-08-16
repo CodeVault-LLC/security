@@ -16,11 +16,35 @@
 
 @import "tailwindcss";
 
+/*
+ * Typefaces.
+ *
+ * Bundled rather than fetched. The renderer's CSP allows fonts only from the
+ * application's own origin, so a CDN reference would be blocked and silently
+ * fall back to the system font — which is exactly what the previous
+ * `"Inter", ...` declaration did, having never loaded Inter at all.
+ *
+ * Both are variable fonts covering weights 100-900 in one file per subset, so
+ * the whole range costs a single download instead of one per weight.
+ */
+@import "@fontsource-variable/geist/index.css";
+@import "@fontsource-variable/geist-mono/index.css";
+
+/*
+ * Tailwind's automatic source detection skips node_modules, and an application
+ * reaches this package through a workspace symlink inside it. Without this the
+ * components' own classes are never compiled: the app still renders, but every
+ * button, input, badge and dialog loses the utilities only this package uses.
+ */
+@source "./components";
+@source "./index.ts";
+
 @theme {
   --font-sans:
-    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    "Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    sans-serif;
   --font-mono:
-    "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono",
+    "Geist Mono Variable", ui-monospace, "SF Mono", "Cascadia Mono",
     "Liberation Mono", monospace;
 }
 
@@ -43,13 +67,41 @@
   --cv-accent-hover: oklch(46% 0.17 255);
   --cv-focus: oklch(60% 0.18 255);
 
+  /*
+   * Selected text.
+   *
+   * Defined once because two different mechanisms paint it: the browser's
+   * `::selection` everywhere, and CodeMirror's own drawn layer inside an
+   * editor. Derived from the accent rather than fixed, so it follows the theme
+   * without being restated in the dark block below.
+   */
+  --cv-selection: color-mix(in oklab, var(--cv-accent) 35%, transparent);
+
   /* --- Status ------------------------------------------------------------ */
   --cv-success: oklch(52% 0.13 155);
   --cv-warning: oklch(62% 0.14 75);
   --cv-danger: oklch(53% 0.19 27);
   --cv-info: oklch(56% 0.13 235);
 
-  /* --- Severity ---------------------------------------------------------- */
+  /*
+   * --- Severity ----------------------------------------------------------
+   *
+   * Critical and high are both reds, and they sit closer together than they
+   * look: measured ΔE 8.4 apart in this mode and 8.8 in dark (OKLab ×100),
+   * against a floor of 15 for fills a reader has to tell apart at a glance.
+   *
+   * That is fine everywhere they appear as badges, because a badge is separated
+   * from its neighbours and carries an icon and a word. It is not fine where
+   * two severities physically touch, which is why `StackedBar` refuses to
+   * render a multi-segment bar without either a visible legend or an explicit
+   * description — see `components/charts.tsx`.
+   *
+   * Re-stepping them to oklch(38% 0.20 15) and oklch(58% 0.20 42) reaches ΔE
+   * 18.0 here and 17.6 in dark, if these tokens are ever revisited. It was
+   * measured and deliberately not applied: severity colours reach every badge,
+   * finding header, report and PDF export, so changing them is its own piece of
+   * work rather than a side effect of adding charts.
+   */
   --cv-severity-critical: oklch(44% 0.21 20);
   --cv-severity-high: oklch(54% 0.19 32);
   --cv-severity-medium: oklch(64% 0.15 75);
@@ -176,9 +228,18 @@
   --color-tlp-amber: var(--cv-tlp-amber);
   --color-tlp-green: var(--cv-tlp-green);
   --color-tlp-clear: var(--cv-tlp-clear);
-  --radius: var(--cv-radius);
-  --radius-lg: var(--cv-radius-lg);
 }
+
+/*
+ * Radius is not bound here on purpose. Tailwind's `--radius-*` namespace backs
+ * the built-in `rounded-*` utilities, so aliasing `--radius-lg` would silently
+ * redefine `rounded-lg` for anyone who reached for it. Components name the
+ * token directly instead: `rounded-(--cv-radius)`.
+ *
+ * Note the parentheses. `rounded-[--cv-radius]` is the Tailwind 3 spelling and
+ * compiles to `border-radius: --cv-radius`, which is not valid CSS and is
+ * dropped by the browser, leaving square corners and no warning at build time.
+ */
 
 * {
   border-color: var(--cv-border);

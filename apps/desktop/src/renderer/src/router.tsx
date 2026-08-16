@@ -14,6 +14,7 @@ import { CasesRoute } from "./routes/cases.js";
 import { DashboardRoute } from "./routes/dashboard.js";
 import { FindingDetailRoute } from "./routes/finding-detail.js";
 import { FindingsRoute } from "./routes/findings.js";
+import { MetricsRoute } from "./routes/metrics.js";
 import {
   ActivityRoute,
   DisclosureIndexRoute,
@@ -121,6 +122,12 @@ const activityRoute = createRoute({
   component: ActivityRoute,
 });
 
+const metricsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/metrics",
+  component: MetricsRoute,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -145,6 +152,7 @@ const routeTree = rootRoute.addChildren([
   reportDetailRoute,
   disclosureRoute,
   activityRoute,
+  metricsRoute,
   settingsRoute,
   accountRoute,
 ]);

@@ -10,6 +10,7 @@ import { registerEventRoutes } from "./modules/events/routes.js";
 import { registerEvidenceRoutes } from "./modules/evidence/routes.js";
 import { registerPocRoutes } from "./modules/evidence/poc-routes.js";
 import { registerFindingRoutes } from "./modules/findings/routes.js";
+import { registerMetricsRoutes } from "./modules/metrics/routes.js";
 import { registerPriorArtRoutes } from "./modules/prior-art/routes.js";
 import { registerReportRoutes } from "./modules/reports/routes.js";
 import { registerSearchRoutes } from "./modules/search/routes.js";
@@ -38,5 +39,6 @@ export async function registerRoutes(app: AppInstance): Promise<void> {
   await registerAiRoutes(app);
   await registerSearchRoutes(app);
   await registerDashboardRoutes(app);
+  await registerMetricsRoutes(app);
   await registerEventRoutes(app);
 }

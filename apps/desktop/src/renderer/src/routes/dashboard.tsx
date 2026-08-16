@@ -1,26 +1,47 @@
 import { Link } from "@tanstack/react-router";
 import { formatDistanceToNowStrict } from "../lib/dates.js";
 
-import type { AttentionItem, DashboardResponse } from "@codevault/contracts";
+import type {
+  AttentionItem,
+  DashboardResponse,
+  MetricsResponse,
+} from "@codevault/contracts";
 import {
+  BarList,
+  Button,
   Card,
   CardBody,
   CardHeader,
   CardTitle,
   EmptyState,
+  ErrorState,
+  LoadingState,
   Mono,
+  severityChartSegments,
   SeverityBadge,
+  StackedBar,
+  StatTile,
+  TrendChart,
 } from "@codevault/ui";
 
 import { PageBody, PageHeader } from "../components/app-shell.js";
-import { queryKeys, useApiQuery } from "../lib/api.js";
+import { QueryError } from "../components/query-boundary.js";
+import { errorHeading, queryKeys, useApiQuery } from "../lib/api.js";
+import { humanise } from "../lib/format.js";
+import { formatBucket } from "./metrics.js";
 
 /**
  * The dashboard.
  *
- * Two questions: what needs me, and what moved. A count of open criticals is
- * not something a researcher can act on at nine in the morning; "the vendor
- * response on CASE-2026-0004 was due yesterday" is.
+ * Three questions now: how does the corpus look, what needs me, and what moved.
+ *
+ * The quantitative strip leads, which is a deliberate reversal of the original
+ * rule that severity totals must never be the headline. That rule was guarding
+ * against a wall of donuts standing in for an operational view; it is not
+ * violated by a dense strip that a researcher reads in a second and then scrolls
+ * past. Needs Attention and What Changed are unchanged and still carry the
+ * actionable work — "the vendor response on CASE-2026-0004 was due yesterday"
+ * is a thing to do, and no chart replaces it.
  */
 
 const ATTENTION_LABELS: Record<AttentionItem["kind"], string> = {
@@ -48,16 +69,143 @@ export function DashboardRoute(): React.JSX.Element {
     "/v1/dashboard",
   );
 
+  const metrics = useApiQuery<MetricsResponse>(
+    queryKeys.metrics({ window: "90d" }),
+    "/v1/metrics?window=90d",
+  );
+
   const data = dashboard.data;
+  const stats = metrics.data;
 
   return (
     <div className="flex h-full flex-col">
       <PageHeader
         title="Home"
-        description="What needs attention, and what changed."
+        description="Where the work stands, what needs attention, and what changed."
       />
 
       <PageBody className="space-y-4">
+        {dashboard.error === null ? null : (
+          <ErrorState
+            title={errorHeading(dashboard.error)}
+            description={dashboard.error.message}
+            action={
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={dashboard.isFetching}
+                onClick={() => void dashboard.refetch()}
+              >
+                Try again
+              </Button>
+            }
+          />
+        )}
+
+        {/* The charts fail independently of the lists below. A metrics outage
+            must not take the operational half of the page with it. */}
+        <QueryError query={metrics} />
+
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatTile
+            label="Open findings"
+            value={stats?.totals.findings ?? 0}
+            {...(stats === undefined
+              ? {}
+              : { trend: stats.trend.map((point) => point.opened) })}
+          />
+          <StatTile
+            label="Criticals unfixed"
+            value={stats?.totals.criticalsUnfixed ?? 0}
+            hint="Severe, and not yet remediated"
+          />
+          <StatTile
+            label="Open cases"
+            value={stats?.totals.openCases ?? data?.openCaseCount ?? 0}
+          />
+          <StatTile
+            label="Median ack"
+            value={
+              stats?.totals.medianAcknowledgementDays == null
+                ? "—"
+                : `${stats.totals.medianAcknowledgementDays.toFixed(0)}d`
+            }
+            hint={
+              stats?.totals.medianAcknowledgementDays == null
+                ? "Too few coordinated cases"
+                : "Vendor acknowledgement"
+            }
+          />
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <CardTitle>Severity</CardTitle>
+            </CardHeader>
+            <CardBody>
+              {stats === undefined ? (
+                <LoadingState className="py-2" />
+              ) : (
+                <StackedBar
+                  caption="Findings by severity"
+                  segments={severityChartSegments(stats.severity)}
+                />
+              )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Intake</CardTitle>
+              <span className="text-[11px] text-text-muted">last 90 days</span>
+            </CardHeader>
+            <CardBody>
+              {stats === undefined ? (
+                <LoadingState className="py-2" />
+              ) : (
+                <TrendChart
+                  caption="Findings opened over the last 90 days"
+                  buckets={stats.trend.map((point) =>
+                    formatBucket(point.bucketStart, stats.bucket),
+                  )}
+                  series={[
+                    {
+                      key: "opened",
+                      label: "Opened",
+                      color: "--cv-accent",
+                      points: stats.trend.map((point) => point.opened),
+                    },
+                  ]}
+                />
+              )}
+            </CardBody>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Disclosure posture</CardTitle>
+            </CardHeader>
+            <CardBody>
+              {stats === undefined ? (
+                <LoadingState className="py-2" />
+              ) : (
+                <BarList
+                  caption="Findings by disclosure state"
+                  items={stats.disclosure
+                    .filter((entry) => entry.count > 0)
+                    .map((entry) => ({
+                      key: entry.state,
+                      label: humanise(entry.state),
+                      value: entry.count,
+                      color: "--cv-info",
+                    }))}
+                />
+              )}
+            </CardBody>
+          </Card>
+        </div>
+
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
           <Card>
             <CardHeader>
@@ -69,9 +217,7 @@ export function DashboardRoute(): React.JSX.Element {
             </CardHeader>
 
             {data === undefined ? (
-              <CardBody className="text-[12px] text-text-muted">
-                Loading…
-              </CardBody>
+              <LoadingState />
             ) : data.needsAttention.length === 0 ? (
               <EmptyState
                 title="Nothing is waiting on you"
@@ -95,9 +241,7 @@ export function DashboardRoute(): React.JSX.Element {
             </CardHeader>
 
             {data === undefined ? (
-              <CardBody className="text-[12px] text-text-muted">
-                Loading…
-              </CardBody>
+              <LoadingState />
             ) : data.whatChanged.length === 0 ? (
               <EmptyState
                 title="No recent activity"
@@ -129,30 +273,6 @@ export function DashboardRoute(): React.JSX.Element {
             )}
           </Card>
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Severity totals</CardTitle>
-            <span className="text-[11px] text-text-muted">
-              {data?.openCaseCount ?? 0} open case
-              {data?.openCaseCount === 1 ? "" : "s"}
-            </span>
-          </CardHeader>
-          <CardBody className="flex flex-wrap items-center gap-4">
-            {data === undefined ? (
-              <span className="text-[12px] text-text-muted">Loading…</span>
-            ) : (
-              <>
-                <Total label="Critical" value={data.severityTotals.critical} />
-                <Total label="High" value={data.severityTotals.high} />
-                <Total label="Medium" value={data.severityTotals.medium} />
-                <Total label="Low" value={data.severityTotals.low} />
-                <Total label="None" value={data.severityTotals.none} />
-                <Total label="Unscored" value={data.severityTotals.unscored} />
-              </>
-            )}
-          </CardBody>
-        </Card>
       </PageBody>
     </div>
   );
@@ -191,22 +311,5 @@ function AttentionRow({ item }: { item: AttentionItem }): React.JSX.Element {
     <Link to={route(item.entityId)} className="block">
       {body}
     </Link>
-  );
-}
-
-function Total({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}): React.JSX.Element {
-  return (
-    <div className="flex items-baseline gap-1.5">
-      <span className="font-mono text-[16px] tabular-nums">{value}</span>
-      <span className="text-[11px] uppercase tracking-wide text-text-muted">
-        {label}
-      </span>
-    </div>
   );
 }

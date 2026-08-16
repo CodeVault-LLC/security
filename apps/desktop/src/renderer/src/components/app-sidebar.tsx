@@ -1,6 +1,7 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Activity,
+  BarChart3,
   Boxes,
   FileText,
   Home,
@@ -20,10 +21,15 @@ import { useSession } from "../lib/session.js";
 /**
  * The global sidebar.
  *
- * Nine destinations, not one per database table. Everything else is reached
- * from the thing it belongs to — evidence from a case, scores from a finding —
+ * Ten destinations, not one per database table. Everything else is reached from
+ * the thing it belongs to — evidence from a case, scores from a finding —
  * because a flat list of every concept is how a research tool turns into an
  * enterprise console.
+ *
+ * Metrics is the tenth, and earns its place by not fitting anywhere else: the
+ * deep analytics are workspace-wide rather than belonging to any one case,
+ * asset or finding, and folding them into the dashboard would push the
+ * operational lists off the first screen.
  */
 
 interface NavigationItem {
@@ -86,7 +92,7 @@ export function AppSidebar({
       key={item.to}
       to={item.to}
       className={cn(
-        "flex items-center gap-2 rounded-[--radius] px-2 py-1 text-[13px] transition-colors",
+        "flex items-center gap-2 rounded-(--cv-radius) px-2 py-1 text-[13px] transition-colors",
         isActive(item.to)
           ? "bg-surface-hover text-text"
           : "text-text-muted hover:bg-surface-hover hover:text-text",
@@ -109,7 +115,7 @@ export function AppSidebar({
         <button
           type="button"
           onClick={onOpenCommandPalette}
-          className="flex w-full items-center gap-2 rounded-[--radius] border border-border bg-surface-raised px-2 py-1 text-[12px] text-text-muted hover:bg-surface-hover"
+          className="flex w-full items-center gap-2 rounded-(--cv-radius) border border-border bg-surface-raised px-2 py-1 text-[12px] text-text-muted hover:bg-surface-hover"
         >
           <Search aria-hidden className="size-3.5" />
           <span className="flex-1 text-left">Search</span>
@@ -137,13 +143,18 @@ export function AppSidebar({
             label: "Activity",
             icon: <Activity aria-hidden className="size-4" />,
           })}
+          {renderItem({
+            to: "/metrics",
+            label: "Metrics",
+            icon: <BarChart3 aria-hidden className="size-4" />,
+          })}
         </div>
       </div>
 
       <div className="border-t border-border p-2">
         {eventsConnected ? null : (
           <div
-            className="mb-2 flex items-center gap-1.5 rounded-[--radius] border border-warning/40 bg-warning/10 px-2 py-1 text-[11px] text-warning"
+            className="mb-2 flex items-center gap-1.5 rounded-(--cv-radius) border border-warning/40 bg-warning/10 px-2 py-1 text-[11px] text-warning"
             title="Live updates are not connected. Data may be out of date until it reconnects."
           >
             <WifiOff aria-hidden className="size-3" />
@@ -160,7 +171,7 @@ export function AppSidebar({
 
           <Link
             to="/settings/account"
-            className="flex items-center gap-2 rounded-[--radius] px-2 py-1 text-[13px] text-text-muted hover:bg-surface-hover hover:text-text"
+            className="flex items-center gap-2 rounded-(--cv-radius) px-2 py-1 text-[13px] text-text-muted hover:bg-surface-hover hover:text-text"
           >
             <UserCircle2 aria-hidden className="size-4 shrink-0" />
             <span className="min-w-0 flex-1 truncate">

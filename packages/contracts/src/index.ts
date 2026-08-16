@@ -7,6 +7,7 @@ export * from "./dashboard.js";
 export * from "./disclosure.js";
 export * from "./evidence.js";
 export * from "./findings.js";
+export * from "./metrics.js";
 export * from "./prior-art.js";
 export * from "./reports.js";
 export * from "./search.js";

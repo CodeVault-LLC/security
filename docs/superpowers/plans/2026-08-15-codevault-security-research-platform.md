@@ -1734,9 +1734,40 @@ Do not force disclosure UI onto standard cases that do not need it.
 
 ## 24. Dashboard
 
-The dashboard is operational, not a severity pie-chart collection.
+The dashboard leads with a compact quantitative strip, then the operational
+lists.
 
-Show:
+> **Revised 2026-08-16.** This section previously read "the dashboard is
+> operational, not a severity pie-chart collection", and ended "severity totals
+> can exist as a secondary compact widget, never the primary dashboard". The
+> concern behind that wording still stands, but it was aimed at the wrong
+> target: what makes a dashboard useless is a wall of donuts standing in for an
+> operational view, not the presence of quantity. A dense strip — a stacked
+> severity bar, a 90-day intake line, a disclosure breakdown — is read in about
+> a second and then scrolled past, and it answers "is my intake accelerating?",
+> which no list on this page ever could. See
+> `docs/superpowers/specs/2026-08-16-metrics-and-charts-design.md`.
+>
+> What has *not* changed: Needs Attention and What Changed remain the working
+> half of the page and are never displaced or abbreviated, and no chart here is
+> a vanity metric or a derived risk score.
+
+Show, in this order:
+
+```text
+Headline figures
+- open findings
+- criticals unfixed
+- open cases
+- median vendor acknowledgement (suppressed below three cases)
+
+Charts
+- severity distribution (stacked, always with a legend and counts)
+- intake over the last 90 days
+- disclosure posture
+```
+
+Then show:
 
 ```text
 Needs Attention
@@ -1762,7 +1793,9 @@ What Changed
 - KEV/EPSS enrichment change
 ```
 
-Severity totals can exist as a secondary compact widget, never the primary dashboard.
+The deeper analytics — validation funnel, disclosure timing, weakness classes,
+prior-art novelty, most affected assets — live on their own Metrics destination
+rather than on this page, so the homepage stays readable.
 
 ---
 
