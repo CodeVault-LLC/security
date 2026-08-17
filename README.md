@@ -12,11 +12,15 @@ responsibly.
 
 ## The two rules
 
-**AI drafts; humans own truth.** A model may propose text, a classification,
-CVSS metrics or a rewrite. It cannot record that a finding is novel, confirmed,
-fixed, approved or published. Every AI result arrives as a proposal with Accept,
-Edit and Reject, and the researcher can see the exact context — item by item,
-with digests — before anything leaves their machine.
+**AI drafts; humans own truth.** Claude Code or Codex CLI may propose text, a
+classification, CVSS metrics or a rewrite. A model cannot record that a finding
+is novel, confirmed, fixed, approved or published. Every AI result arrives as a
+proposal with Accept, Edit and Reject, and the researcher can see the exact
+context — item by item, with digests — before anything leaves their machine.
+
+Existing findings can also enter a case through the intake queue. Intake is not
+canonical data: every draft remains pending until a case writer accepts,
+rejects, edits or merges it.
 
 **One source of truth, three publication views.** The internal report, the vendor
 report and the public advisory are projections of the same case. Internal

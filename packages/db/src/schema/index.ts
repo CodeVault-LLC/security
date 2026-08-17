@@ -7,4 +7,5 @@ export * from "./columns.js";
 export * from "./disclosure.js";
 export * from "./evidence.js";
 export * from "./findings.js";
+export * from "./intake.js";
 export * from "./reports.js";

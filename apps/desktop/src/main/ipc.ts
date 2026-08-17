@@ -328,7 +328,8 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       targetId?: unknown;
       instruction?: unknown;
       providerId?: unknown;
-      timeoutMs?: unknown;
+      model?: unknown;
+      effort?: unknown;
     };
 
     const providerId =
@@ -379,6 +380,15 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
             ? { instruction: request.instruction }
             : {}),
           providerId,
+          // Preferences only. The server checks both against the workspace
+          // allow-list and refuses rather than downgrading, so a run never
+          // claims a model it did not use.
+          ...(typeof request.model === "string"
+            ? { model: request.model }
+            : {}),
+          ...(typeof request.effort === "string"
+            ? { effort: request.effort }
+            : {}),
         },
       });
 
@@ -396,15 +406,18 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       const result = await provider.run({
         action: prepared.action,
         prompt: prepared.promptText,
-        timeoutMs:
-          typeof request.timeoutMs === "number" ? request.timeoutMs : 300_000,
+        // Both decided by the server, alongside the context filtering.
+        profile: prepared.profile,
+        outputSchema: prepared.outputSchema,
         environmentAllowlist: [...DEFAULT_ENVIRONMENT_ALLOWLIST],
         signal: controller.signal,
       });
 
       const status = result.cancelled
         ? "CANCELLED"
-        : result.timedOut || result.exitCode !== 0
+        : result.timedOut ||
+            result.exitCode !== 0 ||
+            result.providerError !== null
           ? "FAILED"
           : "COMPLETED";
 
@@ -416,6 +429,14 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
             status,
             providerVersion: result.version ?? undefined,
             durationMs: result.durationMs,
+            ...(result.costUsd === null ? {} : { costUsd: result.costUsd }),
+            ...(result.inputTokens === null
+              ? {}
+              : { inputTokens: result.inputTokens }),
+            ...(result.outputTokens === null
+              ? {}
+              : { outputTokens: result.outputTokens }),
+            toolDenials: result.toolDenials,
             ...(status === "COMPLETED" ? { output: result.stdout } : {}),
             ...(status === "COMPLETED"
               ? {}
@@ -424,8 +445,9 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
                     ? "The provider exceeded its time limit."
                     : result.cancelled
                       ? "Cancelled by the researcher."
-                      : result.stderr.slice(0, 500) ||
-                        `The provider exited with status ${result.exitCode}.`,
+                      : (result.providerError ??
+                        (result.stderr.slice(0, 500) ||
+                          `The provider exited with status ${result.exitCode}.`)),
                 }),
           },
         },

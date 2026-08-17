@@ -158,7 +158,9 @@ export function FindingDetailRoute({
 }): React.JSX.Element {
   const queryClient = useQueryClient();
   const user = useSession((state) => state.user);
-  const [proposals, setProposals] = useState<AiProposal[]>([]);
+  // Carries the run's model alongside each proposal: the model is a property of
+  // the run, but the reviewer needs it where they decide whether to accept.
+  const [proposals, setProposals] = useState<ReviewableProposal[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const finding = useApiQuery<FindingDetail>(
@@ -195,7 +197,10 @@ export function FindingDetailRoute({
   const canEdit = canWrite(user);
 
   const onAiCompleted = (run: AiRunWithProposals): void => {
-    setProposals((current) => [...run.proposals, ...current]);
+    setProposals((current) => [
+      ...run.proposals.map((proposal) => ({ proposal, model: run.model })),
+      ...current,
+    ]);
     void queryClient.invalidateQueries({
       queryKey: queryKeys.finding(findingId),
     });
@@ -246,14 +251,17 @@ export function FindingDetailRoute({
 
               {proposals.length === 0 ? null : (
                 <div className="space-y-3">
-                  {proposals.map((proposal) => (
+                  {proposals.map(({ proposal, model }) => (
                     <ProposalReview
                       key={proposal.id}
                       proposal={proposal}
+                      model={model}
                       finding={data}
                       onResolved={() => {
                         setProposals((current) =>
-                          current.filter((item) => item.id !== proposal.id),
+                          current.filter(
+                            (item) => item.proposal.id !== proposal.id,
+                          ),
                         );
                         void queryClient.invalidateQueries({
                           queryKey: queryKeys.finding(findingId),
@@ -572,12 +580,20 @@ function FindingContentEditor({
   );
 }
 
+/** A proposal together with the model that produced it. */
+interface ReviewableProposal {
+  proposal: AiProposal;
+  model: AiRunWithProposals["model"];
+}
+
 function ProposalReview({
   proposal,
+  model,
   finding,
   onResolved,
 }: {
   proposal: AiProposal;
+  model: AiRunWithProposals["model"];
   finding: FindingDetail;
   onResolved: () => void;
 }): React.JSX.Element {
@@ -612,6 +628,7 @@ function ProposalReview({
       <AiProposalPanel
         proposal={proposal}
         currentValues={currentValues}
+        model={model}
         busy={accept.isPending || reject.isPending}
         onAccept={() => accept.mutate(undefined, { onSuccess: onResolved })}
         onReject={() => reject.mutate(undefined, { onSuccess: onResolved })}

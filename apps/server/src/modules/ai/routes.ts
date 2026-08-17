@@ -6,6 +6,7 @@ import {
   AiContextPreview,
   AiProposal,
   AiProviderPolicy,
+  AiProviderIdSchema,
   AiRunWithProposals,
   CreateAiRunRequest,
   ErrorResponse,
@@ -23,9 +24,11 @@ import {
   buildProposal,
   extractJson,
   ProviderPolicyError,
+  resolveRunProfile,
   sha256,
   validateOutput,
   type PriorArtSynthesisOutput,
+  type ProviderProfilePolicy,
 } from "@codevault/ai";
 import {
   aiOutputInvalid,
@@ -37,7 +40,13 @@ import {
 } from "@codevault/core";
 import { schema } from "@codevault/db";
 import { Type } from "@sinclair/typebox";
-import type { AiRun } from "@codevault/contracts";
+import type {
+  AiEffort,
+  AiModelId,
+  AiProviderId,
+  AiRun,
+  AiSettingSource,
+} from "@codevault/contracts";
 
 import {
   actingUser,
@@ -77,16 +86,7 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
 
       const rows = await app.db.select().from(schema.aiProviderPolicies);
 
-      return {
-        items: rows.map((row) => ({
-          providerId: row.providerId,
-          enabled: row.enabled,
-          allowedVisibility: row.allowedVisibility,
-          allowRestrictedCases: row.allowRestrictedCases,
-          retainFullPrompts: row.retainFullPrompts,
-          updatedAt: row.updatedAt,
-        })),
-      };
+      return { items: rows.map(toPolicy) };
     },
   );
 
@@ -94,7 +94,7 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
     "/v1/ai/policies/:providerId",
     {
       schema: {
-        params: Type.Object({ providerId: Type.String({ maxLength: 60 }) }),
+        params: Type.Object({ providerId: AiProviderIdSchema }),
         body: UpdateAiProviderPolicyRequest,
         response: { 200: AiProviderPolicy, 403: ErrorResponse },
       },
@@ -113,6 +113,15 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
           allowedVisibility: body.allowedVisibility ?? [],
           allowRestrictedCases: body.allowRestrictedCases ?? false,
           retainFullPrompts: body.retainFullPrompts ?? false,
+          allowedModels: body.allowedModels ?? [],
+          allowedEfforts: body.allowedEfforts ?? [],
+          defaultModel: body.defaultModel ?? null,
+          settingSources: body.settingSources ?? ["user"],
+          isolated: body.isolated ?? false,
+          maxBudgetUsd:
+            body.maxBudgetUsd === undefined || body.maxBudgetUsd === null
+              ? null
+              : String(body.maxBudgetUsd),
           updatedBy: admin.id,
         })
         .onConflictDoUpdate({
@@ -128,6 +137,27 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
             ...(body.retainFullPrompts === undefined
               ? {}
               : { retainFullPrompts: body.retainFullPrompts }),
+            ...(body.allowedModels === undefined
+              ? {}
+              : { allowedModels: body.allowedModels }),
+            ...(body.allowedEfforts === undefined
+              ? {}
+              : { allowedEfforts: body.allowedEfforts }),
+            ...(body.defaultModel === undefined
+              ? {}
+              : { defaultModel: body.defaultModel }),
+            ...(body.settingSources === undefined
+              ? {}
+              : { settingSources: body.settingSources }),
+            ...(body.isolated === undefined ? {} : { isolated: body.isolated }),
+            ...(body.maxBudgetUsd === undefined
+              ? {}
+              : {
+                  maxBudgetUsd:
+                    body.maxBudgetUsd === null
+                      ? null
+                      : String(body.maxBudgetUsd),
+                }),
             updatedBy: admin.id,
             updatedAt: sql`now()`,
           },
@@ -153,18 +183,17 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
             enabled: row.enabled,
             allowedVisibility: row.allowedVisibility,
             allowRestrictedCases: row.allowRestrictedCases,
+            allowedModels: row.allowedModels,
+            allowedEfforts: row.allowedEfforts,
+            defaultModel: row.defaultModel,
+            settingSources: row.settingSources,
+            isolated: row.isolated,
+            maxBudgetUsd: row.maxBudgetUsd,
           },
         },
       );
 
-      return {
-        providerId: row.providerId,
-        enabled: row.enabled,
-        allowedVisibility: row.allowedVisibility,
-        allowRestrictedCases: row.allowRestrictedCases,
-        retainFullPrompts: row.retainFullPrompts,
-        updatedAt: row.updatedAt,
-      };
+      return toPolicy(row);
     },
   );
 
@@ -211,8 +240,16 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
       }
 
       let prepared;
+      let profile;
 
       try {
+        // Both gates before anything is recorded: what the provider may be
+        // given, and how it may be run.
+        profile = resolveRunProfile(providerId, body.action, policy, {
+          ...(body.model === undefined ? {} : { model: body.model }),
+          ...(body.effort === undefined ? {} : { effort: body.effort }),
+        });
+
         prepared = await prepareRun({
           db: app.db,
           action: body.action,
@@ -249,6 +286,8 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
           // The prompt itself is retained only when policy says to: a prompt
           // about a restricted case is restricted material.
           promptText: policy.retainFullPrompts ? prepared.promptText : null,
+          model: profile.model,
+          effort: profile.effort,
           startedBy: user.id,
         })
         .returning();
@@ -273,6 +312,9 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
           after: {
             action: body.action,
             providerId,
+            model: profile.model,
+            effort: profile.effort,
+            toolPolicy: profile.toolPolicy,
             contextItems: prepared.context.manifest.length,
             promptSha256: promptHash,
           },
@@ -282,6 +324,8 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
       return {
         ...toAiRun(run, principal.user),
         promptText: prepared.promptText,
+        profile,
+        outputSchema: definition.outputSchema,
       };
     },
   );
@@ -307,8 +351,14 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
       const policy = await loadPolicy(app, providerId);
 
       let prepared;
+      let profile;
 
       try {
+        profile = resolveRunProfile(providerId, body.action, policy, {
+          ...(body.model === undefined ? {} : { model: body.model }),
+          ...(body.effort === undefined ? {} : { effort: body.effort }),
+        });
+
         prepared = await prepareRun({
           db: app.db,
           action: body.action,
@@ -336,6 +386,9 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
         audience: prepared.audience,
         items: prepared.context.manifest,
         promptText: prepared.promptText,
+        // Shown beside the context, so the researcher sees which model would
+        // receive it and how deeply it would think before they send anything.
+        profile,
         excluded: prepared.context.excluded,
       };
     },
@@ -382,14 +435,23 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
         throw conflict("That run has already been completed.");
       }
 
+      // Recorded on every outcome, including failures: a run that burned money
+      // and produced nothing is exactly the kind a workspace wants to see.
+      const accounting = {
+        providerVersion: body.providerVersion ?? null,
+        durationMs: body.durationMs ?? null,
+        costUsd: body.costUsd === undefined ? null : String(body.costUsd),
+        inputTokens: body.inputTokens ?? null,
+        outputTokens: body.outputTokens ?? null,
+      };
+
       if (body.status !== "COMPLETED") {
         await app.db
           .update(schema.aiRuns)
           .set({
             status: body.status,
             failureReason: body.failureReason ?? null,
-            providerVersion: body.providerVersion ?? null,
-            durationMs: body.durationMs ?? null,
+            ...accounting,
             completedAt: sql`now()`,
           })
           .where(eq(schema.aiRuns.id, run.id));
@@ -427,8 +489,7 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
               status: "FAILED",
               failureReason: error.message,
               rawOutput: output.slice(0, 100_000),
-              providerVersion: body.providerVersion ?? null,
-              durationMs: body.durationMs ?? null,
+              ...accounting,
               completedAt: sql`now()`,
             })
             .where(eq(schema.aiRuns.id, run.id));
@@ -452,8 +513,7 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
           .update(schema.aiRuns)
           .set({
             status: "COMPLETED",
-            providerVersion: body.providerVersion ?? null,
-            durationMs: body.durationMs ?? null,
+            ...accounting,
             rawOutput: JSON.stringify(parsed).slice(0, 100_000),
             completedAt: sql`now()`,
           })
@@ -496,6 +556,13 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
               action: run.action,
               producedProposal: proposalDraft !== null,
               providerVersion: body.providerVersion ?? null,
+              model: run.model,
+              effort: run.effort,
+              costUsd: body.costUsd ?? null,
+              // Expected to be zero. A drafting run is spawned with no tools,
+              // so anything else means the model reached for something it was
+              // not given — worth a record even though the attempt failed.
+              toolDenials: body.toolDenials ?? 0,
             },
           },
         );
@@ -691,15 +758,17 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
   );
 }
 
-async function loadPolicy(
-  app: AppInstance,
-  providerId: string,
-): Promise<{
+interface LoadedPolicy extends ProviderProfilePolicy {
   enabled: boolean;
   allowedVisibility: ("INTERNAL" | "VENDOR" | "PUBLIC")[];
   allowRestrictedCases: boolean;
   retainFullPrompts: boolean;
-}> {
+}
+
+async function loadPolicy(
+  app: AppInstance,
+  providerId: AiProviderId,
+): Promise<LoadedPolicy> {
   const rows = await app.db
     .select()
     .from(schema.aiProviderPolicies)
@@ -710,12 +779,19 @@ async function loadPolicy(
 
   if (row === undefined) {
     // A provider with no policy is disabled. Defaulting to "allowed" would
-    // make forgetting to configure something the same as approving it.
+    // make forgetting to configure something the same as approving it, and the
+    // same reasoning applies to every allow-list below.
     return {
       enabled: false,
       allowedVisibility: [],
       allowRestrictedCases: false,
       retainFullPrompts: false,
+      allowedModels: [],
+      allowedEfforts: [],
+      defaultModel: null,
+      settingSources: [],
+      isolated: false,
+      maxBudgetUsd: null,
     };
   }
 
@@ -724,7 +800,24 @@ async function loadPolicy(
     allowedVisibility: row.allowedVisibility,
     allowRestrictedCases: row.allowRestrictedCases,
     retainFullPrompts: row.retainFullPrompts,
+    allowedModels: row.allowedModels as AiModelId[],
+    allowedEfforts: row.allowedEfforts as AiEffort[],
+    defaultModel: (row.defaultModel as AiModelId | null) ?? null,
+    settingSources: row.settingSources as AiSettingSource[],
+    isolated: row.isolated,
+    maxBudgetUsd: numericOrNull(row.maxBudgetUsd),
   };
+}
+
+/** Postgres `numeric` arrives as a string; the contract wants a number. */
+function numericOrNull(value: string | null): number | null {
+  if (value === null) {
+    return null;
+  }
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 async function currentTargetRevision(
@@ -803,7 +896,25 @@ async function attachPriorArtAnalysis(
 
 type AiRunRow = typeof schema.aiRuns.$inferSelect;
 type AiProposalRow = typeof schema.aiProposals.$inferSelect;
+type AiPolicyRow = typeof schema.aiProviderPolicies.$inferSelect;
 type Actor = { id: string; displayName: string; email: string };
+
+function toPolicy(row: AiPolicyRow): AiProviderPolicy {
+  return {
+    providerId: row.providerId as AiProviderId,
+    enabled: row.enabled,
+    allowedVisibility: row.allowedVisibility,
+    allowRestrictedCases: row.allowRestrictedCases,
+    retainFullPrompts: row.retainFullPrompts,
+    allowedModels: row.allowedModels as AiProviderPolicy["allowedModels"],
+    allowedEfforts: row.allowedEfforts as AiProviderPolicy["allowedEfforts"],
+    defaultModel: (row.defaultModel as AiModelId | null) ?? null,
+    settingSources: row.settingSources as AiSettingSource[],
+    isolated: row.isolated,
+    maxBudgetUsd: numericOrNull(row.maxBudgetUsd),
+    updatedAt: row.updatedAt,
+  };
+}
 
 function toAiRun(row: AiRunRow, startedBy: Actor): AiRun {
   return {
@@ -814,6 +925,11 @@ function toAiRun(row: AiRunRow, startedBy: Actor): AiRun {
     caseId: row.caseId,
     providerId: row.providerId,
     providerVersion: row.providerVersion,
+    model: (row.model as AiRun["model"]) ?? null,
+    effort: row.effort ?? null,
+    costUsd: numericOrNull(row.costUsd),
+    inputTokens: row.inputTokens,
+    outputTokens: row.outputTokens,
     status: row.status,
     contextManifest: row.contextManifest,
     promptSha256: row.promptSha256,

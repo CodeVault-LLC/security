@@ -52,6 +52,9 @@ describeIntegration("AI context filtering", () => {
         allowedVisibility: ["INTERNAL", "VENDOR", "PUBLIC"],
         allowRestrictedCases: true,
         retainFullPrompts: true,
+        allowedModels: ["claude-opus-5"],
+        allowedEfforts: ["low", "medium", "high", "xhigh", "max"],
+        defaultModel: "claude-opus-5",
       })
       .onConflictDoUpdate({
         target: schema.aiProviderPolicies.providerId,
@@ -60,6 +63,9 @@ describeIntegration("AI context filtering", () => {
           allowedVisibility: ["INTERNAL", "VENDOR", "PUBLIC"],
           allowRestrictedCases: true,
           retainFullPrompts: true,
+          allowedModels: ["claude-opus-5"],
+          allowedEfforts: ["low", "medium", "high", "xhigh", "max"],
+          defaultModel: "claude-opus-5",
         },
       });
 
@@ -338,10 +344,18 @@ describeIntegration("AI proposals", () => {
         allowedVisibility: ["INTERNAL", "VENDOR", "PUBLIC"],
         allowRestrictedCases: true,
         retainFullPrompts: false,
+        allowedModels: ["claude-opus-5"],
+        allowedEfforts: ["low", "medium", "high", "xhigh", "max"],
+        defaultModel: "claude-opus-5",
       })
       .onConflictDoUpdate({
         target: schema.aiProviderPolicies.providerId,
-        set: { enabled: true },
+        set: {
+          enabled: true,
+          allowedModels: ["claude-opus-5"],
+          allowedEfforts: ["low", "medium", "high", "xhigh", "max"],
+          defaultModel: "claude-opus-5",
+        },
       });
 
     const created = await harness.app.inject({

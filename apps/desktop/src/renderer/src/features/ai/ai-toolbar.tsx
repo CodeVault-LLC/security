@@ -1,9 +1,14 @@
 import { Eye, Sparkles } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type {
   AiActionId,
   AiContextPreview,
+  AiEffort,
+  AiModelId,
+  AiProviderPolicy,
+  AiProviderId,
+  AiProviderStatus,
   AiRunWithProposals,
   AiTargetType,
 } from "@codevault/contracts";
@@ -16,11 +21,14 @@ import {
   DialogFooter,
   InlineError,
   Mono,
+  Select,
   VisibilityBadge,
 } from "@codevault/ui";
 
 import { bridge } from "../../lib/bridge.js";
+import { normalizeAiProviderStatuses } from "../../lib/ai-providers.js";
 import { formatBytesApprox } from "../../lib/format.js";
+import { queryKeys, useApiQuery } from "../../lib/api.js";
 
 /**
  * The AI action toolbar.
@@ -30,7 +38,23 @@ import { formatBytesApprox } from "../../lib/format.js";
  * researcher exactly what would be sent — every item, its visibility, its
  * digest, and everything the policy excluded — before anything leaves the
  * machine.
+ *
+ * The model and effort pickers are preferences, not settings. Both are bounded
+ * by the workspace allow-list, and a value outside it is refused by the server
+ * rather than quietly downgraded — a run that claimed one model and used
+ * another would make the record of it useless.
  */
+
+/** Effort left unset means the action's own default, which varies by action. */
+const AUTOMATIC_EFFORT = "__automatic__";
+
+const EFFORT_DESCRIPTIONS: Readonly<Record<AiEffort, string>> = {
+  low: "Fastest and cheapest",
+  medium: "Balanced",
+  high: "More thorough",
+  xhigh: "Slower, for work that has to be right",
+  max: "Deepest reasoning, highest cost",
+};
 
 export interface AiAction {
   id: AiActionId;
@@ -57,13 +81,47 @@ export function AiToolbar({
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<AiContextPreview | null>(null);
   const [previewFor, setPreviewFor] = useState<AiActionId | null>(null);
+  const [model, setModel] = useState<AiModelId | null>(null);
+  const [effort, setEffort] = useState<AiEffort | null>(null);
+  const [providerId, setProviderId] = useState<AiProviderId>("claude-code");
+  const [providers, setProviders] = useState<AiProviderStatus[]>([]);
+
+  useEffect(() => {
+    void bridge()
+      .ai.providers()
+      .then((statuses) => setProviders(normalizeAiProviderStatuses(statuses)));
+  }, []);
+
+  const policies = useApiQuery<{ items: AiProviderPolicy[] }>(
+    queryKeys.aiPolicies,
+    "/v1/ai/policies",
+  );
+
+  const policy = policies.data?.items.find(
+    (item) => item.providerId === providerId,
+  );
+  const provider = providers.find((item) => item.providerId === providerId);
+  const allowedModels = policy?.allowedModels ?? [];
+  const allowedEfforts = policy?.allowedEfforts ?? [];
+  const selectedModel = model ?? policy?.defaultModel ?? allowedModels[0];
+
+  const preferences = {
+    ...(selectedModel === undefined ? {} : { model: selectedModel }),
+    ...(effort === null ? {} : { effort }),
+  };
 
   const runAction = async (action: AiActionId): Promise<void> => {
     setRunningAction(action);
     setError(null);
 
     try {
-      const outcome = await bridge().ai.run({ action, targetType, targetId });
+      const outcome = await bridge().ai.run({
+        action,
+        targetType,
+        targetId,
+        providerId,
+        ...preferences,
+      });
 
       if (!outcome.ok) {
         setError(outcome.message);
@@ -85,6 +143,8 @@ export function AiToolbar({
       action,
       targetType,
       targetId,
+      providerId,
+      ...preferences,
     });
 
     if (!outcome.ok) {
@@ -130,6 +190,74 @@ export function AiToolbar({
             </Button>
           </ButtonGroup>
         ))}
+
+        {providers.length === 0 ? null : (
+          <div className="ml-auto flex items-center gap-1.5">
+            <Select
+              aria-label="AI provider"
+              className="w-36"
+              disabled={disabled || runningAction !== null}
+              value={providerId}
+              onValueChange={(value) => {
+                setProviderId(value as AiProviderId);
+                setModel(null);
+                setEffort(null);
+              }}
+              options={providers.map((item) => ({
+                value: item.providerId,
+                label: item.displayName,
+                description: item.available ? "Detected" : "Not detected",
+              }))}
+            />
+
+            {allowedModels.length === 0 ? (
+              <span className="text-[11px] text-warning">
+                {provider?.available === false
+                  ? "Provider unavailable"
+                  : "Provider not configured"}
+              </span>
+            ) : (
+              <Select
+                aria-label="Model"
+                className="w-44"
+                disabled={disabled || runningAction !== null}
+                value={selectedModel}
+                onValueChange={(value) => setModel(value as AiModelId)}
+                options={allowedModels.map((id) => ({ value: id, label: id }))}
+              />
+            )}
+
+            {allowedModels.length === 0 ||
+            allowedEfforts.length === 0 ? null : (
+              <Select
+                aria-label="Reasoning effort"
+                className="w-40"
+                disabled={disabled || runningAction !== null}
+                value={effort ?? AUTOMATIC_EFFORT}
+                onValueChange={(value) =>
+                  setEffort(
+                    value === AUTOMATIC_EFFORT ? null : (value as AiEffort),
+                  )
+                }
+                options={[
+                  {
+                    value: AUTOMATIC_EFFORT,
+                    label: "Effort: automatic",
+                    // Each action declares how much thinking its own work is
+                    // worth, so leaving this alone gives scoring more than it
+                    // gives a title rewrite.
+                    description: "Chosen per action",
+                  },
+                  ...allowedEfforts.map((level) => ({
+                    value: level,
+                    label: `Effort: ${level}`,
+                    description: EFFORT_DESCRIPTIONS[level],
+                  })),
+                ]}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {error === null ? null : <InlineError>{error}</InlineError>}
@@ -214,6 +342,43 @@ export function AiToolbar({
                     </ul>
                   </section>
                 )}
+
+                <section>
+                  <h3 className="mb-1 text-[11px] uppercase tracking-wide text-text-muted">
+                    Execution
+                  </h3>
+                  <ul className="divide-y divide-border rounded-(--cv-radius) border border-border text-[12px]">
+                    <li className="flex items-center gap-2 px-2 py-1.5">
+                      <span className="w-24 shrink-0 text-text-muted">
+                        Model
+                      </span>
+                      <Mono>{preview.profile.model}</Mono>
+                      <span className="text-text-muted">
+                        at {preview.profile.effort} effort
+                      </span>
+                    </li>
+                    <li className="flex items-center gap-2 px-2 py-1.5">
+                      <span className="w-24 shrink-0 text-text-muted">
+                        Tools
+                      </span>
+                      <span>
+                        {preview.profile.toolPolicy === "NONE"
+                          ? "None. The provider runs with no filesystem or network access."
+                          : "Reading only, within the directory you chose."}
+                      </span>
+                    </li>
+                    {preview.profile.maxBudgetUsd === null ? null : (
+                      <li className="flex items-center gap-2 px-2 py-1.5">
+                        <span className="w-24 shrink-0 text-text-muted">
+                          Budget
+                        </span>
+                        <span>
+                          stops at ${preview.profile.maxBudgetUsd.toFixed(2)}
+                        </span>
+                      </li>
+                    )}
+                  </ul>
+                </section>
 
                 <section>
                   <h3 className="mb-1 text-[11px] uppercase tracking-wide text-text-muted">

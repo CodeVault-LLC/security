@@ -1,6 +1,11 @@
 import type { TSchema } from "@sinclair/typebox";
 
-import type { AiActionId, AiTargetType } from "@codevault/contracts";
+import type {
+  AiActionId,
+  AiEffort,
+  AiTargetType,
+  AiToolPolicy,
+} from "@codevault/contracts";
 import type { ReportAudience } from "@codevault/core";
 
 import {
@@ -57,6 +62,23 @@ export interface AiActionDefinition {
    * state change into its patch.
    */
   allowedPatchFields: readonly string[];
+  /**
+   * Reasoning depth this action is worth.
+   *
+   * Set per action rather than per workspace because it is a property of the
+   * work: rephrasing a title and deriving eleven CVSS metrics from evidence are
+   * not the same job. The actions where a wrong answer costs the most — scoring,
+   * fact checking, leak review — get the most thinking.
+   */
+  defaultEffort: AiEffort;
+  /**
+   * What the provider may reach for while running this action.
+   *
+   * Every action here is `NONE`: the server has already assembled everything
+   * the model is meant to see, so a filesystem or network call could only reach
+   * something it was not given.
+   */
+  toolPolicy: AiToolPolicy;
 }
 
 const DRAFT_FIELDS = {
@@ -76,6 +98,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INTERNAL",
     producesPatch: true,
     allowedPatchFields: ["title"],
+    defaultEffort: "low",
+    toolPolicy: "NONE",
   },
   FINDING_DRAFT_SUMMARY: {
     id: "FINDING_DRAFT_SUMMARY",
@@ -86,6 +110,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INTERNAL",
     producesPatch: true,
     allowedPatchFields: [DRAFT_FIELDS.FINDING_DRAFT_SUMMARY],
+    defaultEffort: "medium",
+    toolPolicy: "NONE",
   },
   FINDING_DRAFT_TECHNICAL: {
     id: "FINDING_DRAFT_TECHNICAL",
@@ -96,6 +122,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INTERNAL",
     producesPatch: true,
     allowedPatchFields: [DRAFT_FIELDS.FINDING_DRAFT_TECHNICAL],
+    defaultEffort: "high",
+    toolPolicy: "NONE",
   },
   FINDING_DRAFT_IMPACT: {
     id: "FINDING_DRAFT_IMPACT",
@@ -106,6 +134,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INTERNAL",
     producesPatch: true,
     allowedPatchFields: [DRAFT_FIELDS.FINDING_DRAFT_IMPACT],
+    defaultEffort: "medium",
+    toolPolicy: "NONE",
   },
   FINDING_DRAFT_REMEDIATION: {
     id: "FINDING_DRAFT_REMEDIATION",
@@ -116,6 +146,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INTERNAL",
     producesPatch: true,
     allowedPatchFields: [DRAFT_FIELDS.FINDING_DRAFT_REMEDIATION],
+    defaultEffort: "medium",
+    toolPolicy: "NONE",
   },
   FINDING_SUGGEST_CWE: {
     id: "FINDING_SUGGEST_CWE",
@@ -126,6 +158,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INTERNAL",
     producesPatch: true,
     allowedPatchFields: ["cweIds"],
+    defaultEffort: "high",
+    toolPolicy: "NONE",
   },
   FINDING_SUGGEST_CVSS40: {
     id: "FINDING_SUGGEST_CVSS40",
@@ -137,6 +171,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     producesPatch: true,
     // The vector is assembled from approved metrics; the score is computed.
     allowedPatchFields: ["metrics", "reasoningMarkdown"],
+    defaultEffort: "xhigh",
+    toolPolicy: "NONE",
   },
   FINDING_SUGGEST_CVSS31: {
     id: "FINDING_SUGGEST_CVSS31",
@@ -147,6 +183,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INTERNAL",
     producesPatch: true,
     allowedPatchFields: ["metrics", "reasoningMarkdown"],
+    defaultEffort: "xhigh",
+    toolPolicy: "NONE",
   },
   FINDING_FACT_CHECK: {
     id: "FINDING_FACT_CHECK",
@@ -158,6 +196,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INTERNAL",
     producesPatch: false,
     allowedPatchFields: [],
+    defaultEffort: "xhigh",
+    toolPolicy: "NONE",
   },
   FINDING_PRIOR_ART_SYNTHESIS: {
     id: "FINDING_PRIOR_ART_SYNTHESIS",
@@ -169,6 +209,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INTERNAL",
     producesPatch: false,
     allowedPatchFields: [],
+    defaultEffort: "high",
+    toolPolicy: "NONE",
   },
   REPORT_DRAFT_SECTION: {
     id: "REPORT_DRAFT_SECTION",
@@ -179,6 +221,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INHERIT_FROM_REPORT",
     producesPatch: true,
     allowedPatchFields: ["contentMarkdown"],
+    defaultEffort: "high",
+    toolPolicy: "NONE",
   },
   REPORT_POLISH_SECTION: {
     id: "REPORT_POLISH_SECTION",
@@ -189,6 +233,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INHERIT_FROM_REPORT",
     producesPatch: true,
     allowedPatchFields: ["contentMarkdown"],
+    defaultEffort: "medium",
+    toolPolicy: "NONE",
   },
   REPORT_CONSISTENCY_REVIEW: {
     id: "REPORT_CONSISTENCY_REVIEW",
@@ -200,6 +246,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INHERIT_FROM_REPORT",
     producesPatch: false,
     allowedPatchFields: [],
+    defaultEffort: "high",
+    toolPolicy: "NONE",
   },
   REPORT_LEAK_REVIEW: {
     id: "REPORT_LEAK_REVIEW",
@@ -211,6 +259,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INHERIT_FROM_REPORT",
     producesPatch: false,
     allowedPatchFields: [],
+    defaultEffort: "xhigh",
+    toolPolicy: "NONE",
   },
   AFFECTED_VERSION_REVIEW: {
     id: "AFFECTED_VERSION_REVIEW",
@@ -222,6 +272,8 @@ export const AI_ACTIONS: Readonly<Record<AiActionId, AiActionDefinition>> = {
     contextAudience: "INTERNAL",
     producesPatch: false,
     allowedPatchFields: [],
+    defaultEffort: "high",
+    toolPolicy: "NONE",
   },
 };
 

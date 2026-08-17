@@ -73,10 +73,15 @@ export interface StartUploadRequest {
   selections: UploadSelection[];
 }
 
-export interface AiRunRequest extends CreateAiRunRequest {
-  /** Milliseconds before the local provider is stopped. */
-  timeoutMs?: number;
-}
+/**
+ * What the renderer may say about a run.
+ *
+ * Exactly the server's own request shape and nothing more. Execution settings —
+ * the timeout, the tool capability, the settings scope — are resolved on the
+ * server against the workspace policy, so there is no field here through which
+ * the renderer could influence how the provider is spawned.
+ */
+export type AiRunRequest = CreateAiRunRequest;
 
 export interface CodeVaultDesktopApi {
   app: {

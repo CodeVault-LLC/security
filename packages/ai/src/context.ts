@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 
-import type { AiContextItem, AiContextPreview } from "@codevault/contracts";
+import type {
+  AiContextItem,
+  AiContextPreview,
+  AiRunProfile,
+} from "@codevault/contracts";
 import {
   canInclude,
   type ContentVisibility,
@@ -188,6 +192,7 @@ export function toContextPreview(
   audience: ReportAudience,
   context: BuiltContext,
   promptText: string,
+  profile: AiRunProfile,
 ): AiContextPreview {
   return {
     action,
@@ -196,6 +201,7 @@ export function toContextPreview(
     audience,
     items: context.manifest,
     promptText,
+    profile,
     excluded: context.excluded,
   };
 }

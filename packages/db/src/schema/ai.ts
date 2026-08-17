@@ -4,6 +4,7 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgTable,
   text,
   uuid,
@@ -36,7 +37,22 @@ export const aiRuns = pgTable(
       .notNull()
       .references(() => cases.id, { onDelete: "cascade" }),
     providerId: text("provider_id").notNull(),
+    /** Version of the command-line tool, not of the model. */
     providerVersion: text("provider_version"),
+    /**
+     * The model and reasoning depth the run was prepared with.
+     *
+     * Null on runs recorded before profiles existed; an unknown model on a
+     * historical run is the honest value, not a guess at the default.
+     */
+    model: text("model"),
+    effort: text("effort").$type<
+      "low" | "medium" | "high" | "xhigh" | "max" | null
+    >(),
+    /** Reported by the provider once the run finishes. */
+    costUsd: numeric("cost_usd", { precision: 12, scale: 6 }),
+    inputTokens: integer("input_tokens"),
+    outputTokens: integer("output_tokens"),
     status: text("status")
       .$type<"PREPARED" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED">()
       .notNull()
@@ -119,8 +135,13 @@ export const aiProposals = pgTable(
 /**
  * Workspace provider policy.
  *
- * Decides which visibilities a provider may ever receive and whether restricted
- * cases may be sent at all. Checked before context is built, not after.
+ * Decides which visibilities a provider may ever receive, whether restricted
+ * cases may be sent at all, and how a run is executed. Checked before context
+ * is built, not after.
+ *
+ * Every allow-list defaults to empty, and an empty allow-list disables rather
+ * than permits. Forgetting to configure something must not be the same as
+ * approving it.
  */
 export const aiProviderPolicies = pgTable("ai_provider_policies", {
   providerId: text("provider_id").primaryKey(),
@@ -133,6 +154,31 @@ export const aiProviderPolicies = pgTable("ai_provider_policies", {
     .notNull()
     .default(false),
   retainFullPrompts: boolean("retain_full_prompts").notNull().default(false),
+  /** Models this provider may run. Empty means no run can be prepared. */
+  allowedModels: jsonb("allowed_models")
+    .$type<string[]>()
+    .notNull()
+    .default([]),
+  /** Effort levels a researcher may select. Empty means no run can be prepared. */
+  allowedEfforts: jsonb("allowed_efforts")
+    .$type<string[]>()
+    .notNull()
+    .default([]),
+  defaultModel: text("default_model"),
+  /** Settings scopes the provider may load. Ignored when isolated. */
+  settingSources: jsonb("setting_sources")
+    .$type<string[]>()
+    .notNull()
+    .default(["user"]),
+  /**
+   * Run with no hooks, plugins or project-file discovery.
+   *
+   * Off by default because it requires API-key authentication: an isolated
+   * provider never reads OAuth credentials or the keychain, so turning it on
+   * for a workspace signed in with a subscription would disable AI entirely.
+   */
+  isolated: boolean("isolated").notNull().default(false),
+  maxBudgetUsd: numeric("max_budget_usd", { precision: 8, scale: 4 }),
   updatedBy: uuid("updated_by").references(() => users.id),
   createdAt: createdAt(),
   updatedAt: updatedAt(),

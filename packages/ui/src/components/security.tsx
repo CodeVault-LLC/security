@@ -442,6 +442,14 @@ export interface AiProposalPanelProps {
   proposal: AiProposal;
   /** Current value of each field the patch would change. */
   currentValues: Record<string, unknown>;
+  /**
+   * The model that wrote it.
+   *
+   * Shown next to the action because a reviewer weighing whether to accept a
+   * CVSS vector is entitled to know what produced it. Null on proposals from
+   * before runs recorded a model.
+   */
+  model?: string | null;
   onAccept: () => void;
   onReject: () => void;
   onEdit?: () => void;
@@ -459,6 +467,7 @@ export interface AiProposalPanelProps {
 export function AiProposalPanel({
   proposal,
   currentValues,
+  model = null,
   onAccept,
   onReject,
   onEdit,
@@ -475,8 +484,9 @@ export function AiProposalPanel({
           AI proposal
           <Mono className="text-text-muted">{proposal.action}</Mono>
         </span>
-        <span className="text-[11px] text-text-muted">
-          against revision {proposal.baseRevision}
+        <span className="flex items-center gap-2 text-[11px] text-text-muted">
+          {model === null ? null : <Mono>{model}</Mono>}
+          <span>against revision {proposal.baseRevision}</span>
         </span>
       </div>
 

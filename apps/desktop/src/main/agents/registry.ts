@@ -1,6 +1,7 @@
 import type { AiProviderStatus } from "@codevault/contracts";
 
 import { createClaudeCodeProvider } from "./claude-code.js";
+import { createCodexCliProvider } from "./codex-cli.js";
 import type { LocalAiProvider } from "./types.js";
 
 /**
@@ -27,9 +28,13 @@ export function createProviderRegistry(
   options: RegistryOptions = {},
 ): ProviderRegistry {
   const claudePath = options.executablePaths?.["claude-code"];
+  const codexPath = options.executablePaths?.["codex-cli"];
   const providers: LocalAiProvider[] = [
     createClaudeCodeProvider(
       claudePath === undefined ? {} : { executablePath: claudePath },
+    ),
+    createCodexCliProvider(
+      codexPath === undefined ? {} : { executablePath: codexPath },
     ),
   ];
 
@@ -55,6 +60,9 @@ export function createProviderRegistry(
           version: detection.version ?? null,
           executablePath: detection.executable ?? null,
           detail: detection.detail ?? null,
+          models: [...provider.models],
+          efforts: [...provider.efforts],
+          defaultModel: provider.defaultModel,
         });
       }
 

@@ -11,6 +11,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import type {
+  AiModelId,
   AiProviderPolicy,
   AiProviderStatus,
   AuditEvent,
@@ -40,6 +41,7 @@ import {
 import { PageBody, PageHeader } from "../components/app-shell.js";
 import { QueryBoundary, QueryError } from "../components/query-boundary.js";
 import { bridge } from "../lib/bridge.js";
+import { normalizeAiProviderStatuses } from "../lib/ai-providers.js";
 import { formatDateTime } from "../lib/dates.js";
 import { humanise } from "../lib/format.js";
 import { useTheme } from "../hooks/use-theme.js";
@@ -360,7 +362,9 @@ export function SettingsRoute(): React.JSX.Element {
   );
 
   useEffect(() => {
-    void bridge().ai.providers().then(setProviders);
+    void bridge()
+      .ai.providers()
+      .then((statuses) => setProviders(normalizeAiProviderStatuses(statuses)));
   }, []);
 
   return (
@@ -524,6 +528,145 @@ export function SettingsRoute(): React.JSX.Element {
                             );
                           })}
                         </div>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-text-muted">
+                            Models allowed:
+                          </span>
+                          {provider.models.map((id) => {
+                            const allowed =
+                              policy?.allowedModels.includes(id) ?? false;
+
+                            return (
+                              <label
+                                key={id}
+                                className="flex items-center gap-1"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={allowed}
+                                  onChange={(event) => {
+                                    const current = policy?.allowedModels ?? [];
+                                    const next = event.target.checked
+                                      ? [...new Set([...current, id])]
+                                      : current.filter((item) => item !== id);
+
+                                    updatePolicy.mutate({
+                                      providerId: provider.providerId,
+                                      changes: {
+                                        allowedModels: next,
+                                        // Never leave a default pointing at a
+                                        // model that was just removed: the
+                                        // server refuses such a run rather than
+                                        // silently picking another one.
+                                        ...(policy?.defaultModel !== null &&
+                                        policy?.defaultModel !== undefined &&
+                                        !next.includes(policy.defaultModel)
+                                          ? { defaultModel: next[0] ?? null }
+                                          : {}),
+                                      },
+                                    });
+                                  }}
+                                />
+                                <Mono>{id}</Mono>
+                              </label>
+                            );
+                          })}
+                        </div>
+
+                        {policy === undefined ||
+                        policy.allowedModels.length === 0 ? (
+                          <p className="text-warning">
+                            No model is allow-listed, so AI actions cannot run.
+                            Choose one above.
+                          </p>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-text-muted">
+                              Default model:
+                            </span>
+                            <Select
+                              aria-label="Default model"
+                              className="w-52"
+                              value={policy.defaultModel ?? undefined}
+                              onValueChange={(value) =>
+                                updatePolicy.mutate({
+                                  providerId: provider.providerId,
+                                  changes: {
+                                    defaultModel: value as AiModelId,
+                                  },
+                                })
+                              }
+                              options={policy.allowedModels.map((id) => ({
+                                value: id,
+                                label: id,
+                              }))}
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-text-muted">
+                            Effort levels allowed:
+                          </span>
+                          {provider.efforts.map((level) => {
+                            const allowed =
+                              policy?.allowedEfforts.includes(level) ?? false;
+
+                            return (
+                              <label
+                                key={level}
+                                className="flex items-center gap-1"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={allowed}
+                                  onChange={(event) => {
+                                    const current =
+                                      policy?.allowedEfforts ?? [];
+                                    const next = event.target.checked
+                                      ? [...new Set([...current, level])]
+                                      : current.filter(
+                                          (item) => item !== level,
+                                        );
+
+                                    updatePolicy.mutate({
+                                      providerId: provider.providerId,
+                                      changes: { allowedEfforts: next },
+                                    });
+                                  }}
+                                />
+                                {level}
+                              </label>
+                            );
+                          })}
+                        </div>
+
+                        <label className="flex items-start gap-2">
+                          <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={policy?.isolated ?? false}
+                            onChange={(event) =>
+                              updatePolicy.mutate({
+                                providerId: provider.providerId,
+                                changes: { isolated: event.target.checked },
+                              })
+                            }
+                          />
+                          <span>
+                            Run isolated from this workstation&rsquo;s
+                            configuration
+                            <span className="block text-text-muted">
+                              Skips hooks, plugins and project files, so nothing
+                              configured on the workstation runs inside a
+                              CodeVault run. Requires the provider to
+                              authenticate with an API key — a workspace signed
+                              in with a subscription will not be able to run AI
+                              at all with this on.
+                            </span>
+                          </span>
+                        </label>
                       </div>
                     ) : null}
                   </div>

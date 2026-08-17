@@ -14,7 +14,19 @@ import { defineConfig, externalizeDepsPlugin } from "electron-vite";
  */
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    // Workspace packages publish TypeScript source rather than runtime JS.
+    // Bundle contracts when main-process code uses its runtime constants;
+    // externalizing it makes Electron try to resolve `src/*.js` files that do
+    // not exist until a package build emits JavaScript.
+    plugins: [
+      externalizeDepsPlugin({
+        exclude: [
+          "@codevault/contracts",
+          "@codevault/core",
+          "@codevault/standards",
+        ],
+      }),
+    ],
     build: {
       outDir: "out/main",
       rollupOptions: {

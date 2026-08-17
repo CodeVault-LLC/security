@@ -31,6 +31,7 @@ import {
 import { CreateFindingDialog } from "../features/findings/create-finding-dialog.js";
 import { DisclosurePanel } from "../features/disclosure/disclosure-panel.js";
 import { EvidencePanel } from "../features/evidence/evidence-panel.js";
+import { IntakePanel } from "../features/intake/intake-panel.js";
 import { formatDistanceToNowStrict } from "../lib/dates.js";
 import { humanise } from "../lib/format.js";
 import {
@@ -153,6 +154,7 @@ export function CaseDetailRoute({
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="findings">Findings</TabsTrigger>
+          <TabsTrigger value="intake">Intake</TabsTrigger>
           <TabsTrigger value="evidence">Evidence</TabsTrigger>
           {data.disclosureEnabled ? (
             <TabsTrigger value="disclosure">Disclosure</TabsTrigger>
@@ -251,6 +253,14 @@ export function CaseDetailRoute({
         <TabsContent value="findings">
           <QueryError query={findings} className="mb-3" />
           <FindingsTable findings={findings.data?.items ?? []} />
+        </TabsContent>
+
+        <TabsContent value="intake">
+          <IntakePanel
+            caseId={caseId}
+            canEdit={canEdit}
+            findings={findings.data?.items ?? []}
+          />
         </TabsContent>
 
         <TabsContent value="evidence">
