@@ -26,6 +26,8 @@ export const REFERENCE_PREFIXES = {
   poc: "POC",
   reference: "REF",
   report: "RPT",
+  vendor: "VND",
+  submission: "SUB",
 } as const;
 
 export type ReferenceKind = keyof typeof REFERENCE_PREFIXES;

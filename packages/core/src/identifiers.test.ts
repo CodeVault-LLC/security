@@ -37,6 +37,8 @@ describe("formatReference", () => {
     expect(formatReference("asset", 12)).toBe("AST-000012");
     expect(formatReference("evidence", 123)).toBe("EVID-000123");
     expect(formatReference("poc", 1)).toBe("POC-000001");
+    expect(formatReference("vendor", 1)).toBe("VND-000001");
+    expect(formatReference("submission", 42)).toBe("SUB-000042");
   });
 
   it("requires a year for year-scoped kinds", () => {
@@ -70,6 +72,16 @@ describe("parseReference", () => {
       kind: "evidence",
       year: null,
       sequence: 123,
+    });
+    expect(parseReference("VND-000007")).toEqual({
+      kind: "vendor",
+      year: null,
+      sequence: 7,
+    });
+    expect(parseReference("SUB-000012")).toEqual({
+      kind: "submission",
+      year: null,
+      sequence: 12,
     });
   });
 
