@@ -18,6 +18,7 @@ import { registerSearchRoutes } from "./modules/search/routes.js";
 import { registerSubmissionRoutes } from "./modules/submissions/routes.js";
 import { registerUserRoutes } from "./modules/users/routes.js";
 import { registerVendorRoutes } from "./modules/vendors/routes.js";
+import { registerMailRoutes } from "./modules/mail/routes.js";
 
 /**
  * Route registration.
@@ -35,6 +36,7 @@ export async function registerRoutes(app: AppInstance): Promise<void> {
   await registerAssetRoutes(app);
   await registerVendorRoutes(app);
   await registerSubmissionRoutes(app);
+  await registerMailRoutes(app);
   await registerFindingRoutes(app);
   await registerIntakeRoutes(app);
   await registerEvidenceRoutes(app);

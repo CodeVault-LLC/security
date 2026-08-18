@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Eye,
+  Mail,
   MonitorCog,
   Moon,
   ShieldCheck,
@@ -17,6 +18,8 @@ import type {
   AuditEvent,
   CaseSummary,
   Invite,
+  GmailAuthorization,
+  MailboxConnection,
   ReportSummary,
   UserSummary,
 } from "@codevault/contracts";
@@ -321,6 +324,7 @@ export function SettingsRoute(): React.JSX.Element {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("MEMBER");
   const [inviteToken, setInviteToken] = useState<string | null>(null);
+  const [trackReplies, setTrackReplies] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const users = useApiQuery<{ items: UserSummary[] }>(
@@ -338,6 +342,24 @@ export function SettingsRoute(): React.JSX.Element {
   const policies = useApiQuery<{ items: AiProviderPolicy[] }>(
     queryKeys.aiPolicies,
     "/v1/ai/policies",
+  );
+
+  const mailConnections = useApiQuery<{ items: MailboxConnection[] }>(
+    queryKeys.mailConnections,
+    "/v1/mail/connections",
+  );
+
+  const connectGmail = useApiMutation<
+    GmailAuthorization,
+    { enableReplyTracking: boolean }
+  >(
+    (body) => ({ path: "/v1/mail/gmail/connect", method: "POST", body }),
+    () => [queryKeys.mailConnections],
+  );
+
+  const disconnectMailbox = useApiMutation<null, { id: string }>(
+    ({ id }) => ({ path: `/v1/mail/connections/${id}`, method: "DELETE" }),
+    () => [queryKeys.mailConnections],
   );
 
   const createInvite = useApiMutation<{ token: string }>(
@@ -403,6 +425,111 @@ export function SettingsRoute(): React.JSX.Element {
                 },
               ]}
             />
+          </CardBody>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Gmail delivery</CardTitle>
+          </CardHeader>
+          <CardBody className="space-y-3 text-[12px]">
+            <p className="text-text-muted">
+              Connect your own mailbox for reviewed vendor submissions.
+              CodeVault never receives your Google password. Reply tracking is
+              optional and requests broader read-only mailbox permission;
+              unrelated message bodies are never fetched.
+            </p>
+            <QueryError query={mailConnections} />
+            {mailConnections.data?.items.map((connection) => (
+              <div
+                key={connection.id}
+                className="flex flex-wrap items-center gap-3 rounded-(--cv-radius) border border-border p-2"
+              >
+                <Mail aria-hidden className="size-4 text-accent" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium">{connection.emailAddress}</p>
+                  <p className="text-text-muted">
+                    {connection.capabilities.includes("TRACK_REPLIES")
+                      ? "Send · Track replies"
+                      : "Send only"}
+                    {` · ${humanise(connection.status)}`}
+                  </p>
+                  {connection.lastSuccessfulSyncAt === null ? null : (
+                    <p className="text-text-muted">
+                      Last sync{" "}
+                      {formatDateTime(connection.lastSuccessfulSyncAt)}
+                    </p>
+                  )}
+                  {connection.watchExpiresAt === null ? null : (
+                    <p className="text-text-muted">
+                      Watch expires {formatDateTime(connection.watchExpiresAt)}
+                    </p>
+                  )}
+                  {connection.errorCategory === null ? null : (
+                    <p className="text-warning">
+                      Needs attention: {humanise(connection.errorCategory)}
+                    </p>
+                  )}
+                </div>
+                <Button
+                  variant="secondary"
+                  disabled={disconnectMailbox.isPending}
+                  onClick={() =>
+                    disconnectMailbox.mutate(
+                      { id: connection.id },
+                      {
+                        onError: (mutationError) =>
+                          setError(mutationError.message),
+                      },
+                    )
+                  }
+                >
+                  Disconnect
+                </Button>
+              </div>
+            ))}
+            <label className="flex items-start gap-2">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={trackReplies}
+                onChange={(event) => setTrackReplies(event.target.checked)}
+              />
+              <span>
+                Track replies to CodeVault-created threads
+                <span className="block text-text-muted">
+                  Requests Google&rsquo;s restricted Gmail read-only scope.
+                  Enable only when your organization has approved it.
+                </span>
+              </span>
+            </label>
+            <div className="flex gap-2">
+              <Button
+                variant="primary"
+                disabled={connectGmail.isPending}
+                onClick={() =>
+                  connectGmail.mutate(
+                    { enableReplyTracking: trackReplies },
+                    {
+                      onSuccess: (authorization) =>
+                        void bridge().app.openExternal(
+                          authorization.authorizationUrl,
+                        ),
+                      onError: (mutationError) =>
+                        setError(mutationError.message),
+                    },
+                  )
+                }
+              >
+                Connect Gmail
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => void mailConnections.refetch()}
+              >
+                Refresh status
+              </Button>
+            </div>
           </CardBody>
         </Card>
 

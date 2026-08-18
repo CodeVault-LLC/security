@@ -62,6 +62,81 @@ function checkVariables(): CheckResult[] {
     });
   }
 
+  const gmailEnabled = ["true", "1"].includes(
+    (process.env.GMAIL_ENABLED ?? "").toLowerCase(),
+  );
+  results.push({
+    name: "Gmail integration",
+    ok: true,
+    detail: gmailEnabled ? "enabled" : "disabled by default",
+  });
+
+  if (gmailEnabled) {
+    for (const name of [
+      "GMAIL_CLIENT_ID",
+      "GMAIL_CLIENT_SECRET",
+      "GMAIL_REDIRECT_URI",
+      "MAIL_TOKEN_KEYRING",
+      "MAIL_ACTIVE_TOKEN_KEY_VERSION",
+    ]) {
+      const value = process.env[name];
+      const present = value !== undefined && value.trim().length > 0;
+      results.push({
+        name,
+        ok: present,
+        detail: present
+          ? name.includes("SECRET") || name.includes("KEYRING")
+            ? "set"
+            : value
+          : "missing — required when Gmail is enabled",
+      });
+    }
+
+    const keyring = process.env.MAIL_TOKEN_KEYRING ?? "";
+    const activeVersion = process.env.MAIL_ACTIVE_TOKEN_KEY_VERSION ?? "";
+    const keys = new Map(
+      keyring.split(",").flatMap((entry) => {
+        const separator = entry.indexOf(":");
+        if (separator < 1) return [];
+        return [
+          [entry.slice(0, separator), entry.slice(separator + 1)] as const,
+        ];
+      }),
+    );
+    const activeKey = keys.get(activeVersion);
+    const activeKeyValid =
+      activeKey !== undefined &&
+      Buffer.from(activeKey, "base64").byteLength === 32;
+    results.push({
+      name: "active Gmail token key",
+      ok: activeKeyValid,
+      detail: activeKeyValid
+        ? `version ${activeVersion} is 32 bytes`
+        : "active version is absent or is not a 32-byte base64 key",
+    });
+
+    const redirect = process.env.GMAIL_REDIRECT_URI;
+    let redirectSafe = false;
+    try {
+      if (redirect !== undefined) {
+        const url = new URL(redirect);
+        redirectSafe =
+          url.protocol === "https:" ||
+          (url.protocol === "http:" &&
+            (url.hostname === "127.0.0.1" || url.hostname === "[::1]"));
+      }
+    } catch {
+      redirectSafe = false;
+    }
+    results.push({
+      name: "Gmail redirect transport",
+      ok: redirectSafe,
+      detail: redirectSafe
+        ? "HTTPS or exact loopback"
+        : "must be HTTPS or exact loopback HTTP",
+    });
+  }
+
   return results;
 }
 

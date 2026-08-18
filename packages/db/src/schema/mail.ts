@@ -104,6 +104,31 @@ export const mailboxSyncEvents = pgTable(
   ],
 );
 
+/** One-time OAuth transactions. PKCE verifiers are encrypted at rest. */
+export const mailOauthStates = pgTable(
+  "mail_oauth_states",
+  {
+    id: primaryId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").$type<"gmail">().notNull(),
+    capabilities: jsonb("capabilities")
+      .$type<("SEND" | "TRACK_REPLIES")[]>()
+      .notNull(),
+    verifierCiphertext: bytea("verifier_ciphertext").notNull(),
+    verifierNonce: bytea("verifier_nonce").notNull(),
+    verifierAuthTag: bytea("verifier_auth_tag").notNull(),
+    keyVersion: integer("key_version").notNull(),
+    redirectUri: text("redirect_uri").notNull(),
+    expiresAt: timestampColumn("expires_at").notNull(),
+    consumedAt: timestampColumn("consumed_at"),
+    createdAt: createdAt(),
+  },
+  (table) => [index("mail_oauth_states_expiry_idx").on(table.expiresAt)],
+);
+
 export type MailboxConnectionRow = typeof mailboxConnections.$inferSelect;
 export type NewMailboxConnectionRow = typeof mailboxConnections.$inferInsert;
 export type MailboxSyncEventRow = typeof mailboxSyncEvents.$inferSelect;
+export type MailOauthStateRow = typeof mailOauthStates.$inferSelect;

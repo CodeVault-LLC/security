@@ -65,6 +65,8 @@ export const GmailAuthorization = Type.Object(
   { additionalProperties: false },
 );
 
+export type GmailAuthorization = Static<typeof GmailAuthorization>;
+
 export const CompleteGmailConnectionRequest = Type.Object(
   {
     code: Type.String({ minLength: 1, maxLength: 4_096 }),

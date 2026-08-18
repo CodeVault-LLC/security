@@ -16,6 +16,8 @@ import { createEventBroker, type EventBroker } from "./services/events.js";
 import { createJobQueue, type JobQueue } from "./services/jobs.js";
 import { loadCaseAccess } from "./services/case-access.js";
 import { createObjectStorage, type ObjectStorage } from "./services/storage.js";
+import { MailProviderRegistry } from "./modules/mail/provider-registry.js";
+import { createGmailProvider } from "./modules/mail/gmail-provider.js";
 import { canReadCase } from "@codevault/core";
 
 import "./plugins/types.js";
@@ -35,6 +37,7 @@ export interface BuildAppOptions {
   events?: EventBroker;
   jobs?: JobQueue;
   audit?: AuditWriter;
+  mailProviders?: MailProviderRegistry;
 }
 
 /** Routes reachable without a session. Everything else requires one. */
@@ -42,6 +45,7 @@ const PUBLIC_ROUTES = new Set([
   "POST:/v1/auth/login",
   "POST:/v1/invites/accept",
   "GET:/health",
+  "GET:/v1/mail/gmail/callback",
 ]);
 
 export async function buildApp(
@@ -89,6 +93,11 @@ export async function buildApp(
   app.decorate("events", events);
   app.decorate("jobs", jobs);
   app.decorate("audit", options.audit ?? createAuditWriter());
+  const mailProviders = options.mailProviders ?? new MailProviderRegistry();
+  if (config.gmail.enabled && mailProviders.get("gmail") === null) {
+    mailProviders.register(createGmailProvider(config.gmail));
+  }
+  app.decorate("mailProviders", mailProviders);
 
   // Event delivery is filtered by the same case rules as the REST API, so a
   // subscriber is never told that a restricted case changed.

@@ -119,6 +119,7 @@ export const queryKeys = {
   aiRuns: (filters: Record<string, unknown>) => ["ai-runs", filters] as const,
   aiPolicies: ["ai-policies"] as const,
   aiProviders: ["ai-providers"] as const,
+  mailConnections: ["mail-connections"] as const,
   activity: (filters?: Record<string, unknown>) =>
     filters === undefined
       ? (["activity"] as const)

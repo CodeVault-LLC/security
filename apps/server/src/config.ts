@@ -6,6 +6,11 @@
  * confusing runtime error during a researcher's upload.
  */
 
+import {
+  parseTokenKeyring,
+  type TokenKeyring,
+} from "./modules/mail/token-crypto.js";
+
 export interface ServerConfig {
   database: {
     connectionString: string;
@@ -43,6 +48,15 @@ export interface ServerConfig {
     githubAdvisoryToken: string | null;
     userAgent: string;
   };
+  gmail:
+    | { enabled: false }
+    | {
+        enabled: true;
+        clientId: string;
+        clientSecret: string;
+        redirectUri: string;
+        tokenKeyring: TokenKeyring;
+      };
 }
 
 class ConfigError extends Error {
@@ -119,6 +133,36 @@ const GIBIBYTE = 1024 * MEGABYTE;
 
 export function loadConfig(env: Environment = process.env): ServerConfig {
   const maxUploadBytes = integer(env, "MAX_UPLOAD_BYTES", 10 * GIBIBYTE);
+  const gmailEnabled = boolean(env, "GMAIL_ENABLED", false);
+  let gmail: ServerConfig["gmail"] = { enabled: false };
+
+  if (gmailEnabled) {
+    const clientId = required(env, "GMAIL_CLIENT_ID");
+    const clientSecret = required(env, "GMAIL_CLIENT_SECRET");
+    const redirectUri = required(env, "GMAIL_REDIRECT_URI");
+    const parsedRedirect = new URL(redirectUri);
+    const isLoopback =
+      parsedRedirect.protocol === "http:" &&
+      (parsedRedirect.hostname === "127.0.0.1" ||
+        parsedRedirect.hostname === "[::1]");
+
+    if (parsedRedirect.protocol !== "https:" && !isLoopback) {
+      throw new ConfigError(
+        "GMAIL_REDIRECT_URI must use HTTPS or an exact loopback HTTP address.",
+      );
+    }
+
+    gmail = {
+      enabled: true,
+      clientId,
+      clientSecret,
+      redirectUri,
+      tokenKeyring: parseTokenKeyring(
+        required(env, "MAIL_TOKEN_KEYRING"),
+        integer(env, "MAIL_ACTIVE_TOKEN_KEY_VERSION", 1),
+      ),
+    };
+  }
 
   return {
     database: {
@@ -163,6 +207,7 @@ export function loadConfig(env: Environment = process.env): ServerConfig {
         optional(env, "PRIOR_ART_USER_AGENT") ??
         "CodeVault/1.0 (security research platform)",
     },
+    gmail,
   };
 }
 

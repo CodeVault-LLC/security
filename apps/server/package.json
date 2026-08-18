@@ -35,6 +35,10 @@
     "./config": "./src/config.ts",
     "./reports": "./src/modules/reports/service.ts",
     "./services/storage": "./src/services/storage.ts",
-    "./services/jobs": "./src/services/jobs.ts"
+    "./services/jobs": "./src/services/jobs.ts",
+    "./mail/provider": "./src/modules/mail/provider.ts",
+    "./mail/provider-registry": "./src/modules/mail/provider-registry.ts",
+    "./mail/gmail-provider": "./src/modules/mail/gmail-provider.ts",
+    "./mail/token-crypto": "./src/modules/mail/token-crypto.ts"
   }
 }

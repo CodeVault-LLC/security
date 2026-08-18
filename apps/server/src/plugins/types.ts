@@ -7,6 +7,7 @@ import type { AuditWriter } from "../services/audit.js";
 import type { EventBroker } from "../services/events.js";
 import type { JobQueue } from "../services/jobs.js";
 import type { ObjectStorage } from "../services/storage.js";
+import type { MailProviderRegistry } from "../modules/mail/provider-registry.js";
 
 /**
  * Fastify augmentation.
@@ -25,6 +26,7 @@ declare module "fastify" {
     events: EventBroker;
     jobs: JobQueue;
     audit: AuditWriter;
+    mailProviders: MailProviderRegistry;
   }
 
   interface FastifyRequest {
