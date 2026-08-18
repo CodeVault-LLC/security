@@ -169,6 +169,7 @@ export async function loadSubmissionDetail(
     routeSnapshot: submission.routeSnapshot as SubmissionRouteSnapshot,
     bodyMarkdown: submission.bodyMarkdown,
     reportExportId: submission.reportExportId,
+    mailboxConnectionId: submission.mailboxConnectionId,
     manualFields: submission.manualFields as Record<string, string>,
     attachments: await loadSubmissionAttachments(app.db, submission),
     currentApproval:
@@ -268,12 +269,14 @@ export async function evaluateSubmission(
           )
           .limit(1);
   const gmailConnections =
-    routeSnapshot.route.type === "EMAIL"
+    routeSnapshot.route.type === "EMAIL" &&
+    submission.mailboxConnectionId !== null
       ? await app.db
           .select({ id: schema.mailboxConnections.id })
           .from(schema.mailboxConnections)
           .where(
             and(
+              eq(schema.mailboxConnections.id, submission.mailboxConnectionId),
               eq(schema.mailboxConnections.provider, "gmail"),
               eq(schema.mailboxConnections.status, "ACTIVE"),
             ),
@@ -531,12 +534,12 @@ export async function verifiedPackageBytes(
   }
 }
 
-export function newPackageArtifact(caseId: string, ref: string) {
+export function newPackageArtifact(caseId: string, ref: string, email = false) {
   const artifactId = uuidv7();
   return {
     artifactId,
     objectKey: generateObjectKey(caseId, artifactId),
-    filename: `${ref.toLowerCase()}-sealed-package.bin`,
+    filename: `${ref.toLowerCase()}-sealed-package.${email ? "eml" : "zip"}`,
   };
 }
 

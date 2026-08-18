@@ -1,4 +1,5 @@
-import { writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { readFile, stat, writeFile } from "node:fs/promises";
 
 import { app, dialog, ipcMain, shell, type BrowserWindow } from "electron";
 
@@ -23,7 +24,12 @@ import type { ProviderRegistry } from "./agents/registry.js";
 import { DEFAULT_ENVIRONMENT_ALLOWLIST } from "./agents/types.js";
 import { hashSelection, runUploads } from "./file-uploads.js";
 import { buildAndSealManualPackage } from "./submissions/manual-package.js";
-import { isExternalUrlAllowed } from "./security.js";
+import { buildAndSealEmailPackage } from "./submissions/package-builder.js";
+import type { SigningKeyStore } from "./crypto/signing-key-store.js";
+import {
+  isExternalUrlAllowed,
+  isProtectedNativeOnlyApiPath,
+} from "./security.js";
 import type { SessionStore } from "./session-store.js";
 
 /**
@@ -43,6 +49,7 @@ export interface IpcDependencies {
   sessionStore: SessionStore;
   apiClient: ApiClient;
   providers: ProviderRegistry;
+  signingKeys: SigningKeyStore;
   /** Cancels an in-flight AI run. */
   registerCancellation: (runId: string, controller: AbortController) => void;
   cancelRun: (runId: string) => void;
@@ -96,7 +103,7 @@ function failure(error: unknown): ApiOutcome<never> {
 }
 
 export function registerIpcHandlers(dependencies: IpcDependencies): void {
-  const { sessionStore, apiClient, providers } = dependencies;
+  const { sessionStore, apiClient, providers, signingKeys } = dependencies;
 
   /** Registers a handler that refuses messages from an untrusted sender. */
   const handle = <T>(
@@ -245,6 +252,17 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       // the main process to fetch an arbitrary path on the server host.
       return failure(new Error("invalid api path"));
     }
+    if (isProtectedNativeOnlyApiPath(request.path)) {
+      return failure(
+        new ApiError(
+          403,
+          "PERMISSION_DENIED",
+          "Sending requires the named native confirmation operation.",
+          null,
+          null,
+        ),
+      );
+    }
 
     try {
       const data = await apiClient.request<unknown>(request.path, {
@@ -346,6 +364,129 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
           }),
         beforeUpload: async (bytes) => {
           await writeFile(destination.filePath!, bytes, { mode: 0o600 });
+        },
+        complete: (body) =>
+          apiClient.request<SubmissionPackage>(
+            `/v1/submissions/${payload}/seal`,
+            { method: "POST", body },
+          ),
+      });
+      return {
+        ok: true as const,
+        data: {
+          saved: true,
+          packageId: result.packageId,
+          sha256: result.sha256,
+        },
+      };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.signingKeysList, async () => signingKeys.list());
+
+  handle(IPC_CHANNELS.signingKeysImport, async (payload) => {
+    if (typeof payload !== "boolean")
+      return failure(new Error("invalid persistence choice"));
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+    const selection = await dialog.showOpenDialog(window, {
+      title: "Import OpenPGP private signing key",
+      properties: ["openFile", "dontAddToRecent"],
+      filters: [
+        { name: "Armored OpenPGP key", extensions: ["asc", "pgp", "key"] },
+      ],
+    });
+    const path = selection.filePaths[0];
+    if (selection.canceled || path === undefined)
+      return { ok: true as const, data: null };
+    try {
+      const info = await stat(path);
+      if (info.size > 2_000_000) throw new Error("key file too large");
+      const summary = await signingKeys.importArmored(
+        await readFile(path, "utf8"),
+        payload,
+      );
+      return { ok: true as const, data: summary };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.signingKeysRemove, async (payload) => {
+    if (
+      typeof payload !== "string" ||
+      !/^(?:[0-9A-F]{40}|[0-9A-F]{64})$/i.test(payload)
+    ) {
+      return failure(new Error("invalid fingerprint"));
+    }
+    try {
+      await signingKeys.remove(payload);
+      return { ok: true as const, data: { ok: true as const } };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.submissionsSeal, async (payload) => {
+    if (
+      typeof payload !== "string" ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(payload)
+    ) {
+      return failure(new Error("invalid submission id"));
+    }
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+    try {
+      const intent = await apiClient.request<SubmissionSealIntent>(
+        `/v1/submissions/${payload}/seal-intent`,
+        { method: "POST" },
+      );
+      const route = intent.manifest.routeSnapshot.route;
+      if (route.type !== "EMAIL" || intent.senderAddress === null) {
+        throw new Error(
+          "Select an active sending mailbox before sealing email.",
+        );
+      }
+      let signingPrivateKey: string | null = null;
+      if (intent.cryptoMode === "SIGNED_AND_ENCRYPTED") {
+        const keys = await signingKeys.list();
+        if (keys.length !== 1)
+          throw new Error("Select exactly one local signing key.");
+        if (keys[0]?.encrypted)
+          throw new Error(
+            "Encrypted signing keys require an interactive passphrase and cannot yet be used.",
+          );
+        signingPrivateKey =
+          (await signingKeys.armored(keys[0]!.fingerprint)) ?? null;
+      }
+      const messageId = `<${randomUUID()}@codevault.local>`;
+      const result = await buildAndSealEmailPackage({
+        intent,
+        senderAddress: intent.senderAddress,
+        messageId,
+        signingPrivateKey,
+        fetchImpl: async (url, init) =>
+          fetch(url, {
+            ...(init?.method === undefined ? {} : { method: init.method }),
+            ...(init?.headers === undefined ? {} : { headers: init.headers }),
+            ...(init?.body === undefined
+              ? {}
+              : { body: Buffer.from(init.body) }),
+          }),
+        confirm: async (summary) => {
+          const confirmation = await dialog.showMessageBox(window, {
+            type: "warning",
+            buttons: ["Seal exact message", "Cancel"],
+            defaultId: 1,
+            cancelId: 1,
+            title: "Seal vendor email",
+            message: "Seal this exact email package?",
+            detail: `From: ${intent.senderAddress}\nTo: ${route.to.join(", ")}\nCC: ${route.cc.join(", ") || "none"}\nSubject: ${intent.subject}\nCrypto: ${intent.cryptoMode}\nAttachments: ${intent.attachments.length}\nSHA-256: ${summary.sha256}`,
+            noLink: true,
+          });
+          return confirmation.response === 0;
         },
         complete: (body) =>
           apiClient.request<SubmissionPackage>(

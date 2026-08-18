@@ -106,6 +106,7 @@ export const SubmissionDetail = Type.Object({
   routeSnapshot: SubmissionRouteSnapshot,
   bodyMarkdown: Markdown,
   reportExportId: Type.Union([Uuid, Type.Null()]),
+  mailboxConnectionId: Type.Union([Uuid, Type.Null()]),
   manualFields: Type.Record(
     Type.String({ pattern: "^[a-z][a-z0-9_]*$" }),
     Type.String({ maxLength: 200_000 }),
@@ -154,6 +155,7 @@ export const UpdateSubmissionRequest = Type.Object(
       ),
     ),
     cryptoMode: Type.Optional(CryptoModeSchema),
+    mailboxConnectionId: Type.Optional(Type.Union([Uuid, Type.Null()])),
     expectedRevision: RevisionField,
   },
   { additionalProperties: false },
@@ -254,6 +256,7 @@ export const SubmissionSealIntent = Type.Object(
     manifest: SubmissionPackageManifest,
     manifestSha256: Sha256,
     uploadUrl: Type.String({ minLength: 1, maxLength: 4_096 }),
+    senderAddress: Type.Union([Type.String({ maxLength: 320 }), Type.Null()]),
   },
   { additionalProperties: false },
 );

@@ -23,6 +23,11 @@ export const APP_ORIGIN = `${APP_PROTOCOL}://app`;
 /** Schemes `shell.openExternal` will accept, after confirmation. */
 export const ALLOWED_EXTERNAL_PROTOCOLS = ["https:", "mailto:"] as const;
 
+/** High-impact operations must pass through named IPC with native review. */
+export function isProtectedNativeOnlyApiPath(path: string): boolean {
+  return /^\/v1\/submissions\/[0-9a-f-]+\/(?:send|seal)$/i.test(path);
+}
+
 /**
  * Content Security Policy.
  *

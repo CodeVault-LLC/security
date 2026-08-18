@@ -190,6 +190,29 @@ tracking pixel that would reveal an embargoed document had been opened.
 *Enforced by* `packages/reporting/src/lint.ts`, `apps/worker/src/jobs/report-pdf.ts`.
 *Tested by* `packages/reporting/src/lint.test.ts`, `apps/server/src/reports.integration.test.ts`.
 
+### 12. Renderer ↔ disclosure sealing and OpenPGP keys
+
+The renderer cannot read private keys, signed artifact URLs, package bytes, or
+call the generic API path that completes a seal or sends a message. It can name
+a submission through a fixed IPC operation. The main process downloads each
+artifact, verifies its server-authenticated size and SHA-256, constructs the
+MIME entity locally, and requires native confirmation before upload. The server
+then independently reads object storage and verifies the final size and digest
+before consuming a short-lived, one-time seal intent.
+
+OpenPGP private keys remain in the main process. Persistent keys are encrypted
+with Electron `safeStorage`; Linux `basic_text` storage is refused. Passphrases
+are never stored. PGP/MIME follows RFC 3156: attachments and body are encrypted
+together, while the subject is visibly and explicitly outside the encrypted
+entity. A stable RFC `Message-ID` is generated before hashing so later Gmail
+reconciliation can prevent duplicate sends.
+
+*Enforced by* `apps/desktop/src/main/crypto/`, `apps/desktop/src/main/submissions/`,
+`apps/desktop/src/main/ipc.ts`, `apps/server/src/modules/submissions/`.
+*Tested by* `apps/desktop/src/main/crypto/openpgp-message.test.ts`,
+`apps/desktop/src/main/submissions/package-builder.test.ts`, and
+`apps/desktop/src/main/security.test.ts`.
+
 ## Accepted risks
 
 - **A researcher can still publish something they should not.** CodeVault

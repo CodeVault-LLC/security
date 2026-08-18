@@ -65,6 +65,7 @@ const intent: SubmissionSealIntent = {
   },
   manifestSha256: "a".repeat(64),
   uploadUrl: "https://objects.example.test/package",
+  senderAddress: null,
 };
 
 describe("manual submission package", () => {

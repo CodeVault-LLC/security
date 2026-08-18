@@ -10,6 +10,7 @@ import { IPC_CHANNELS } from "../preload/contracts.js";
 import { registerAppProtocol, registerProtocolSchemes } from "./protocol.js";
 import { applySessionPolicy } from "./security.js";
 import { createSessionStore } from "./session-store.js";
+import { createSigningKeyStore } from "./crypto/signing-key-store.js";
 import { createMainWindow } from "./windows.js";
 
 /**
@@ -51,6 +52,7 @@ async function bootstrap(): Promise<void> {
   const sessionStore = createSessionStore();
   const apiClient = createApiClient({ sessionStore });
   const providers = createProviderRegistry();
+  const signingKeys = createSigningKeyStore();
 
   const events = createEventBridge({
     sessionStore,
@@ -67,6 +69,7 @@ async function bootstrap(): Promise<void> {
     sessionStore,
     apiClient,
     providers,
+    signingKeys,
     registerCancellation: (runId, controller) => {
       cancellations.set(runId, controller);
     },

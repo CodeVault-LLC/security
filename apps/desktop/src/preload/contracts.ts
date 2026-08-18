@@ -79,6 +79,15 @@ export interface ManualBundleResult {
   sha256: string | null;
 }
 
+export interface SigningKeySummary {
+  fingerprint: string;
+  userIds: string[];
+  createdAt: string;
+  expiresAt: string | null;
+  encrypted: boolean;
+  persistent: boolean;
+}
+
 /**
  * What the renderer may say about a run.
  *
@@ -135,6 +144,14 @@ export interface CodeVaultDesktopApi {
     downloadManualBundle(
       submissionId: string,
     ): Promise<ApiOutcome<ManualBundleResult>>;
+    /** Seals email through a native exact-content confirmation. */
+    seal(submissionId: string): Promise<ApiOutcome<ManualBundleResult>>;
+  };
+
+  signingKeys: {
+    list(): Promise<SigningKeySummary[]>;
+    import(persist: boolean): Promise<ApiOutcome<SigningKeySummary | null>>;
+    remove(fingerprint: string): Promise<ApiOutcome<{ ok: true }>>;
   };
 
   ai: {
@@ -181,6 +198,10 @@ export const IPC_CHANNELS = {
   uploadsStart: "uploads:start",
   uploadsProgress: "uploads:progress",
   submissionsDownloadManualBundle: "submissions:download-manual-bundle",
+  submissionsSeal: "submissions:seal",
+  signingKeysList: "signing-keys:list",
+  signingKeysImport: "signing-keys:import",
+  signingKeysRemove: "signing-keys:remove",
   aiProviders: "ai:providers",
   aiPreviewContext: "ai:preview-context",
   aiRun: "ai:run",

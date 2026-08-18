@@ -99,6 +99,27 @@ const api: CodeVaultDesktopApi = {
       ) as ReturnType<
         CodeVaultDesktopApi["submissions"]["downloadManualBundle"]
       >,
+    seal: (submissionId: string) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.submissionsSeal,
+        submissionId,
+      ) as ReturnType<CodeVaultDesktopApi["submissions"]["seal"]>,
+  },
+
+  signingKeys: {
+    list: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.signingKeysList) as ReturnType<
+        CodeVaultDesktopApi["signingKeys"]["list"]
+      >,
+    import: (persist: boolean) =>
+      ipcRenderer.invoke(IPC_CHANNELS.signingKeysImport, persist) as ReturnType<
+        CodeVaultDesktopApi["signingKeys"]["import"]
+      >,
+    remove: (fingerprint: string) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.signingKeysRemove,
+        fingerprint,
+      ) as ReturnType<CodeVaultDesktopApi["signingKeys"]["remove"]>,
   },
 
   ai: {

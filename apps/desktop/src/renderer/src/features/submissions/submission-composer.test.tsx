@@ -55,6 +55,7 @@ const submission: SubmissionDetail = {
   },
   bodyMarkdown: "Details",
   reportExportId: null,
+  mailboxConnectionId: null,
   manualFields: {},
   attachments: [],
   currentApproval: null,
@@ -93,6 +94,7 @@ describe("submission release gates", () => {
         onReview={vi.fn()}
         onApprove={vi.fn()}
         onDownloadManualBundle={vi.fn()}
+        onSealEmail={vi.fn()}
       />,
     );
     expect(
@@ -107,6 +109,7 @@ describe("submission release gates", () => {
         onReview={vi.fn()}
         onApprove={vi.fn()}
         onDownloadManualBundle={vi.fn()}
+        onSealEmail={vi.fn()}
       />,
     );
     expect(

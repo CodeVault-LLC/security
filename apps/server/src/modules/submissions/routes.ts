@@ -261,6 +261,29 @@ export async function registerSubmissionRoutes(
       const snapshot = existing.routeSnapshot as SubmissionRouteSnapshot;
       const cryptoMode = request.body.cryptoMode ?? existing.cryptoMode;
       assertRouteCrypto(snapshot.route, cryptoMode);
+      if (
+        request.body.mailboxConnectionId !== undefined &&
+        request.body.mailboxConnectionId !== null
+      ) {
+        const [mailbox] = await app.db
+          .select({ id: schema.mailboxConnections.id })
+          .from(schema.mailboxConnections)
+          .where(
+            and(
+              eq(
+                schema.mailboxConnections.id,
+                request.body.mailboxConnectionId,
+              ),
+              eq(schema.mailboxConnections.userId, user.id),
+              eq(schema.mailboxConnections.status, "ACTIVE"),
+            ),
+          )
+          .limit(1);
+        if (mailbox === undefined)
+          throw validationError(
+            "Select one of your active mailbox connections.",
+          );
+      }
 
       await app.db.transaction(async (tx) => {
         const [updated] = await tx
@@ -275,6 +298,9 @@ export async function registerSubmissionRoutes(
             ...(request.body.manualFields === undefined
               ? {}
               : { manualFields: request.body.manualFields }),
+            ...(request.body.mailboxConnectionId === undefined
+              ? {}
+              : { mailboxConnectionId: request.body.mailboxConnectionId }),
             cryptoMode,
             status:
               existing.status === "APPROVED" ? "IN_REVIEW" : existing.status,
@@ -645,10 +671,18 @@ export async function registerSubmissionRoutes(
 
       const built = await buildManifest(app, existing);
       const manifestSha256 = sha256Utf8(canonicalJson(built.manifest));
-      const artifact = newPackageArtifact(existing.caseId, existing.ref);
+      const emailPackage = built.manifest.routeSnapshot.route.type === "EMAIL";
+      const artifact = newPackageArtifact(
+        existing.caseId,
+        existing.ref,
+        emailPackage,
+      );
+      const packageMimeType = emailPackage
+        ? "message/rfc822"
+        : "application/zip";
       const upload = await app.storage.createUpload(
         artifact.objectKey,
-        "application/octet-stream",
+        packageMimeType,
         1,
       );
       if (upload.strategy !== "SINGLE" || upload.url === null)
@@ -667,7 +701,7 @@ export async function registerSubmissionRoutes(
             caseId: existing.caseId,
             filename: artifact.filename,
             objectKey: artifact.objectKey,
-            mimeType: "application/octet-stream",
+            mimeType: packageMimeType,
             sizeBytes: 0,
             sha256: "0".repeat(64),
             artifactKind: "DOCUMENT",
@@ -717,6 +751,23 @@ export async function registerSubmissionRoutes(
           return { ...item, downloadUrl: download.url };
         }),
       );
+      const [mailbox] =
+        existing.mailboxConnectionId === null
+          ? []
+          : await app.db
+              .select({ emailAddress: schema.mailboxConnections.emailAddress })
+              .from(schema.mailboxConnections)
+              .where(
+                and(
+                  eq(
+                    schema.mailboxConnections.id,
+                    existing.mailboxConnectionId,
+                  ),
+                  eq(schema.mailboxConnections.userId, user.id),
+                  eq(schema.mailboxConnections.status, "ACTIVE"),
+                ),
+              )
+              .limit(1);
       return {
         id: intentId,
         submissionId: existing.id,
@@ -730,6 +781,7 @@ export async function registerSubmissionRoutes(
         manifest: built.manifest,
         manifestSha256,
         uploadUrl: upload.url,
+        senderAddress: mailbox?.emailAddress ?? null,
       };
     },
   );

@@ -20,6 +20,7 @@ export function PackageReview({
   onReview,
   onApprove,
   onDownloadManualBundle,
+  onSealEmail,
 }: {
   submission: SubmissionDetail;
   validation: SubmissionValidationResult | undefined;
@@ -27,6 +28,7 @@ export function PackageReview({
   onReview: () => void;
   onApprove: () => void;
   onDownloadManualBundle: () => void;
+  onSealEmail: () => void;
 }): React.JSX.Element {
   const blocking = validation?.blocking ?? true;
   const route = submission.routeSnapshot.route;
@@ -108,6 +110,17 @@ export function PackageReview({
           >
             <Download className="size-3" aria-hidden />
             Download sealed bundle
+          </Button>
+        ) : submission.status === "APPROVED" && route.type === "EMAIL" ? (
+          <Button
+            size="sm"
+            variant="primary"
+            disabled={blocking}
+            loading={busy}
+            onClick={onSealEmail}
+          >
+            <LockKeyhole className="size-3" aria-hidden />
+            Seal exact email
           </Button>
         ) : (
           <p className="text-[12px] text-text-muted">
