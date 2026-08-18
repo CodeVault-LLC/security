@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Activity,
   BarChart3,
+  Building2,
   Boxes,
   FileText,
   Home,
@@ -55,6 +56,11 @@ const PRIMARY_ITEMS: NavigationItem[] = [
     to: "/assets",
     label: "Assets",
     icon: <Boxes aria-hidden className="size-4" />,
+  },
+  {
+    to: "/vendors",
+    label: "Vendors",
+    icon: <Building2 aria-hidden className="size-4" />,
   },
 ];
 

@@ -54,6 +54,12 @@ const ATTENTION_LABELS: Record<AttentionItem["kind"], string> = {
   PRIOR_ART_NOT_RUN: "Prior art not checked",
   FAILED_BACKGROUND_JOB: "Background job failed",
   PENDING_AI_PROPOSALS: "AI proposals pending",
+  SUBMISSION_NEEDS_REVIEW: "Submission needs review",
+  VENDOR_REPLY_NEEDS_REVIEW: "Vendor reply needs review",
+  VENDOR_ACKNOWLEDGEMENT_OVERDUE: "Vendor acknowledgement overdue",
+  VENDOR_UPDATE_OVERDUE: "Vendor update overdue",
+  GMAIL_RECONNECT_REQUIRED: "Gmail connection needs attention",
+  SUBMISSION_SEND_FAILED: "Submission delivery failed",
 };
 
 const ROUTE_FOR_ENTITY: Record<string, (id: string) => string> = {

@@ -22,6 +22,7 @@ import {
   SettingsRoute,
 } from "./routes/misc.js";
 import { ReportDetailRoute } from "./routes/report-detail.js";
+import { VendorDetailRoute, VendorsRoute } from "./routes/vendors.js";
 
 /**
  * Routing.
@@ -94,6 +95,22 @@ const assetDetailRoute = createRoute({
   },
 });
 
+const vendorsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/vendors",
+  component: VendorsRoute,
+});
+
+const vendorDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/vendors/$vendorId",
+  component: function VendorDetailPage() {
+    const { vendorId } = useParams({ from: "/vendors/$vendorId" });
+
+    return <VendorDetailRoute vendorId={vendorId} />;
+  },
+});
+
 const reportsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/reports",
@@ -148,6 +165,8 @@ const routeTree = rootRoute.addChildren([
   findingDetailRoute,
   assetsRoute,
   assetDetailRoute,
+  vendorsRoute,
+  vendorDetailRoute,
   reportsRoute,
   reportDetailRoute,
   disclosureRoute,
