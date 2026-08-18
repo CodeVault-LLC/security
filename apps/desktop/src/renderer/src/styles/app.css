@@ -38,6 +38,53 @@
 }
 
 /*
+ * Product wordmark.
+ *
+ * This is intentionally not a directional gradient. Uneven radial colour
+ * fields sit over a solid accent base, so cyan, blue and indigo surface in
+ * scattered parts of the glyphs instead of travelling from one edge to the
+ * other. The exact shape scales with the word rather than with the window.
+ */
+.cv-brand-security {
+  color: var(--cv-accent);
+  background-color: var(--cv-brand-blue);
+  background-image:
+    radial-gradient(
+      circle at 9% 72%,
+      var(--cv-brand-cyan) 0 5%,
+      transparent 25%
+    ),
+    radial-gradient(
+      ellipse 22% 115% at 38% 115%,
+      var(--cv-brand-indigo) 0 13%,
+      transparent 66%
+    ),
+    radial-gradient(
+      circle at 63% 18%,
+      var(--cv-brand-cyan) 0 7%,
+      transparent 28%
+    ),
+    radial-gradient(
+      ellipse 18% 78% at 92% 56%,
+      var(--cv-brand-indigo) 0 11%,
+      transparent 54%
+    );
+  background-position: center;
+  background-size: 100% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+@media (forced-colors: active) {
+  .cv-brand-security {
+    color: CanvasText;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+/*
  * CodeMirror's colours are not set here.
  *
  * Its base theme is injected scoped to a generated class, so a plain

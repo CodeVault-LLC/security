@@ -59,7 +59,7 @@ export function describeStorageBackend(): StorageBackendStatus {
       backend,
       reason:
         "No system keyring is available, so the session would be stored with a " +
-        "well-known key. CodeVault will keep you signed in for this session only.",
+        "well-known key. CodeVault Security will keep you signed in for this session only.",
     };
   }
 

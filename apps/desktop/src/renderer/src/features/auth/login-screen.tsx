@@ -1,10 +1,10 @@
-import { ShieldCheck } from "lucide-react";
 import { useState } from "react";
 
 import { Button, Input, Label } from "@codevault/ui";
 
 import { bridge } from "../../lib/bridge.js";
 import { useSession } from "../../lib/session.js";
+import { AuthHeader } from "./auth-header.js";
 import { InviteOnboarding } from "./invite-onboarding.js";
 import { MigratedEnrollment } from "./migrated-enrollment.js";
 import { MfaChallenge } from "./mfa-challenge.js";
@@ -59,7 +59,7 @@ export function LoginScreen(): React.JSX.Element {
             window.localStorage.setItem(DEFAULT_SERVER_KEY, normalizedServer);
             signIn(outcome.data.user, outcome.data.storageWarning);
           } catch {
-            setError("The CodeVault server could not be reached.");
+            setError("The CodeVault Security server could not be reached.");
           } finally {
             setBusy(false);
           }
@@ -107,7 +107,7 @@ export function LoginScreen(): React.JSX.Element {
       setPassword("");
       setMode("MFA");
     } catch {
-      setError("The CodeVault server could not be reached.");
+      setError("The CodeVault Security server could not be reached.");
     } finally {
       setBusy(false);
     }
@@ -119,16 +119,8 @@ export function LoginScreen(): React.JSX.Element {
         onSubmit={(event) => void submit(event)}
         className="w-[380px] rounded-(--cv-radius-lg) border border-border bg-surface p-5"
       >
-        <div className="mb-5 flex items-center gap-2">
-          <ShieldCheck aria-hidden className="size-5 text-accent" />
-          <div>
-            <h1 className="text-[15px] font-semibold leading-tight">
-              CodeVault
-            </h1>
-            <p className="text-[11px] text-text-muted">
-              Protected organization access
-            </p>
-          </div>
+        <div className="mb-5">
+          <AuthHeader />
         </div>
         <div className="space-y-3">
           <div>
@@ -189,8 +181,7 @@ export function LoginScreen(): React.JSX.Element {
           I have an organization invitation
         </button>
         <p className="mt-4 border-t border-border pt-3 text-[11px] leading-relaxed text-text-muted">
-          Every account is invitation-only and protected by an authenticator.
-          There is no public registration.
+          Authorized access only. Activity is monitored and audited.
         </p>
       </form>
     </div>

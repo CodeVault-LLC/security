@@ -1,9 +1,10 @@
 import { useState } from "react";
 
-import { Button, Input, Label } from "@codevault/ui";
+import { Button, Label } from "@codevault/ui";
 
 import type { EnrollmentSetup } from "../../../../preload/contracts.js";
 import { bridge } from "../../lib/bridge.js";
+import { TotpInput } from "./totp-input.js";
 
 export function MigratedEnrollment({
   setup,
@@ -73,18 +74,13 @@ export function MigratedEnrollment({
         >
           {setup.manualSecret}
         </code>
-        <Label htmlFor="migration-totp" className="mt-4 block">
-          Authenticator code
-        </Label>
-        <Input
+        <TotpInput
           id="migration-totp"
-          className="mt-1"
+          label="Authenticator code"
           value={totp}
-          onChange={(event) =>
-            setTotp(event.target.value.replace(/\D/gu, "").slice(0, 6))
-          }
-          inputMode="numeric"
-          autoComplete="one-time-code"
+          onChange={setTotp}
+          disabled={busy}
+          className="mt-4"
         />
         {error === null ? null : (
           <p role="alert" className="mt-3 text-[12px] text-danger">

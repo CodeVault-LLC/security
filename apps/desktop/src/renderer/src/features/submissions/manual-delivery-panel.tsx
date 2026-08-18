@@ -38,8 +38,8 @@ export function ManualDeliveryPanel({
       </CardHeader>
       <CardBody className="space-y-3">
         <p className="break-all text-[12px] text-text-muted">
-          CodeVault does not contact this portal. Upload the saved bundle
-          yourself at {route.destinationUrl}, then record what happened.
+          CodeVault Security does not contact this portal. Upload the saved
+          bundle yourself at {route.destinationUrl}, then record what happened.
         </p>
         <div>
           <Label htmlFor="vendor-reference">Vendor reference (optional)</Label>

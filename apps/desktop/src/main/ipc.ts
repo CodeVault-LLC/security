@@ -152,7 +152,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
         defaultId: 1,
         cancelId: 1,
         title: "Connect to organization server",
-        message: `Connect CodeVault to ${serverUrl}?`,
+        message: `Connect CodeVault Security to ${serverUrl}?`,
         detail:
           "Only approve the server address supplied by your organization administrator.",
         noLink: true,

@@ -77,7 +77,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         throw new ApiError(
           0,
           "PROVIDER_UNAVAILABLE",
-          "No CodeVault server is configured.",
+          "No CodeVault Security server is configured.",
           null,
           null,
         );
@@ -87,7 +87,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         throw new ApiError(
           0,
           "VALIDATION",
-          "The CodeVault server URL is not allowed.",
+          "The CodeVault Security server URL is not allowed.",
           null,
           null,
         );
@@ -145,7 +145,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
           throw new ApiError(
             0,
             "PROVIDER_UNAVAILABLE",
-            "The request to the CodeVault server timed out.",
+            "The request to the CodeVault Security server timed out.",
             null,
             null,
           );
@@ -154,7 +154,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         throw new ApiError(
           0,
           "PROVIDER_UNAVAILABLE",
-          "The CodeVault server could not be reached.",
+          "The CodeVault Security server could not be reached.",
           null,
           null,
         );

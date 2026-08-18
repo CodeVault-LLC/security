@@ -313,9 +313,9 @@ export function PersonalMailRoute(): React.JSX.Element {
         <CardBody className="space-y-3 text-[12px]">
           <p className="text-text-muted">
             Connect your own mailbox for reviewed vendor submissions. CodeVault
-            never receives your Google password. Reply tracking is optional and
-            requests broader read-only mailbox permission; unrelated message
-            bodies are never fetched.
+            Security never receives your Google password. Reply tracking is
+            optional and requests broader read-only mailbox permission;
+            unrelated message bodies are never fetched.
           </p>
           <QueryError query={mailConnections} />
           {mailConnections.data?.items.map((connection) => (
@@ -372,7 +372,7 @@ export function PersonalMailRoute(): React.JSX.Element {
               onChange={(event) => setTrackReplies(event.target.checked)}
             />
             <span>
-              Track replies to CodeVault-created threads
+              Track replies to CodeVault Security-created threads
               <span className="block text-text-muted">
                 Requests Google&rsquo;s restricted Gmail read-only scope. Enable
                 only when your organization has approved it.

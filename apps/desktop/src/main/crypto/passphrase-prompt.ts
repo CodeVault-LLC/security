@@ -21,7 +21,7 @@ const PROMPT_HTML = `<!doctype html>
 </head>
 <body>
   <h1>Unlock local OpenPGP key</h1>
-  <p>The passphrase is used once in memory. It is never stored or sent to CodeVault.</p>
+  <p>The passphrase is used once in memory. It is never stored or sent to CodeVault Security.</p>
   <form id="prompt-form">
     <label for="passphrase">Private-key passphrase</label>
     <input id="passphrase" type="password" autocomplete="off" spellcheck="false" autofocus>

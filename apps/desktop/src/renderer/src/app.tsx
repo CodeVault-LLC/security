@@ -71,12 +71,12 @@ export function App(): React.JSX.Element {
       <div className="flex h-full items-center justify-center p-6 text-center">
         <div className="max-w-md">
           <h1 className="text-[15px] font-semibold">
-            The CodeVault desktop bridge is unavailable
+            The CodeVault Security desktop bridge is unavailable
           </h1>
           <p className="mt-1 text-[12px] text-text-muted">
             This window is running outside the application shell, so it has no
             access to the server, the AI providers or the filesystem. Start
-            CodeVault from the desktop application.
+            CodeVault Security from the desktop application.
           </p>
         </div>
       </div>

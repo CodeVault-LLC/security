@@ -157,7 +157,7 @@ export function PriorArtPanel({
         {latest === undefined ? (
           <EmptyState
             title="No prior-art check has been run"
-            description="Search CodeVault's own findings and the external advisory databases for anything describing the same issue."
+            description="Search this workspace's findings and the external advisory databases for anything describing the same issue."
           />
         ) : (
           <CardBody className="space-y-3">
@@ -319,8 +319,8 @@ export function PriorArtPanel({
                   Your conclusion
                 </h3>
                 <p className="mb-2 text-[12px] text-text-muted">
-                  The AI comparison above is advisory. What CodeVault records is
-                  the conclusion you put your name to.
+                  The AI comparison above is advisory. What CodeVault Security
+                  records is the conclusion you put your name to.
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {HUMAN_CONCLUSIONS.map((option) => (

@@ -1,8 +1,9 @@
-# CodeVault
+# CodeVault Security
 
-A security research, evidence and coordinated-disclosure platform for people who
-find vulnerabilities in real things: software components, applications, APIs,
-devices, firmware, hardware, services, hosts and cloud resources.
+CodeVault Security is a security research, evidence and coordinated-disclosure
+platform for people who find vulnerabilities in real things: software
+components, applications, APIs, devices, firmware, hardware, services, hosts
+and cloud resources.
 
 It is deliberately not a vulnerability-management suite. There is no scanner
 ingestion, no questionnaire engine, no workflow designer and no severity

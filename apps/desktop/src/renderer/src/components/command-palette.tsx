@@ -88,7 +88,7 @@ function PaletteContents({
     <Command.Dialog
       open={open}
       onOpenChange={onOpenChange}
-      label="CodeVault command palette"
+      label="CodeVault Security command palette"
       // The palette filters nothing locally: ranking is the server's job, and
       // it knows about identifiers, hashes and CVEs that a fuzzy string match
       // would bury under title similarity.

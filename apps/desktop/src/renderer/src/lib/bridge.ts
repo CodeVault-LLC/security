@@ -17,7 +17,7 @@ declare global {
 export class BridgeUnavailableError extends Error {
   constructor() {
     super(
-      "The CodeVault desktop bridge is unavailable. " +
+      "The CodeVault Security desktop bridge is unavailable. " +
         "The renderer is running outside the application shell.",
     );
 

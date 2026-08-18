@@ -1,10 +1,15 @@
 import { useState } from "react";
+import { Check } from "lucide-react";
 
 import type { InviteInspection } from "@codevault/contracts";
 import { Button, Input, Label } from "@codevault/ui";
 
 import type { EnrollmentSetup } from "../../../../preload/contracts.js";
 import { bridge } from "../../lib/bridge.js";
+import { AuthHeader } from "./auth-header.js";
+import { TotpInput } from "./totp-input.js";
+
+const PHASES = ["TOKEN", "PROFILE", "TOTP", "RECOVERY"] as const;
 
 export function InviteOnboarding(props: {
   serverUrl: string;
@@ -23,6 +28,7 @@ export function InviteOnboarding(props: {
   const [recoveryCodes, setRecoveryCodes] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const phaseIndex = PHASES.indexOf(phase);
 
   const run = async (operation: () => Promise<void>): Promise<void> => {
     setBusy(true);
@@ -39,7 +45,26 @@ export function InviteOnboarding(props: {
   return (
     <div className="flex h-full items-center justify-center bg-background p-6">
       <div className="w-[460px] rounded-(--cv-radius-lg) border border-border bg-surface p-5">
-        <h1 className="text-[15px] font-semibold">Join your organization</h1>
+        <AuthHeader />
+        <div className="mt-5 border-t border-border pt-4">
+          <div className="mb-4 flex items-center gap-1.5" aria-hidden>
+            {PHASES.map((step, index) => (
+              <span
+                key={step}
+                className={`h-1 flex-1 rounded-full ${index <= phaseIndex ? "bg-accent" : "bg-surface-muted"}`}
+              />
+            ))}
+          </div>
+          <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-accent">
+            Invitation setup · Step {phaseIndex + 1} of {PHASES.length}
+          </p>
+          <h2 className="mt-1 text-[15px] font-semibold">
+            {phase === "TOKEN" ? "Join your organization" : null}
+            {phase === "PROFILE" ? "Create your profile" : null}
+            {phase === "TOTP" ? "Protect your account" : null}
+            {phase === "RECOVERY" ? "Save recovery codes" : null}
+          </h2>
+        </div>
         {phase === "TOKEN" ? (
           <form
             onSubmit={(event) => {
@@ -79,7 +104,7 @@ export function InviteOnboarding(props: {
               className="mt-4 w-full"
               disabled={busy || token.length < 32}
             >
-              Inspect invitation
+              Continue
             </Button>
           </form>
         ) : null}
@@ -107,10 +132,18 @@ export function InviteOnboarding(props: {
               });
             }}
           >
-            <div className="mt-3 rounded border border-border bg-surface-muted p-3 text-[12px]">
-              <strong>{inspection.organizationName}</strong>
-              <br />
-              {inspection.email} · {inspection.role}
+            <div className="mt-3 flex items-start gap-2.5 rounded-(--cv-radius) border border-border bg-surface-muted p-3 text-[12px]">
+              <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">
+                <Check aria-hidden className="size-3" />
+              </span>
+              <div>
+                <strong className="text-text">
+                  {inspection.organizationName}
+                </strong>
+                <p className="mt-0.5 text-text-muted">
+                  {inspection.email} · {inspection.role}
+                </p>
+              </div>
             </div>
             <div className="mt-3">
               <Label htmlFor="display-name">Display name</Label>
@@ -182,19 +215,14 @@ export function InviteOnboarding(props: {
                 {setup.manualSecret}
               </code>
             </div>
-            <div className="mt-3">
-              <Label htmlFor="enroll-totp">Six-digit code</Label>
-              <Input
-                id="enroll-totp"
-                value={totp}
-                onChange={(event) =>
-                  setTotp(event.target.value.replace(/\D/gu, "").slice(0, 6))
-                }
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                className="mt-1 font-mono tracking-[0.3em]"
-              />
-            </div>
+            <TotpInput
+              id="enroll-totp"
+              label="Six-digit code"
+              value={totp}
+              onChange={setTotp}
+              disabled={busy}
+              className="mt-3"
+            />
             <Button
               type="submit"
               variant="primary"
@@ -228,14 +256,17 @@ export function InviteOnboarding(props: {
           </div>
         ) : null}
         {error === null ? null : (
-          <p role="alert" className="mt-3 text-[12px] text-danger">
+          <p
+            role="alert"
+            className="mt-3 rounded-(--cv-radius) border border-danger/40 bg-danger/10 px-2 py-1.5 text-[12px] text-danger"
+          >
             {error}
           </p>
         )}
         {phase === "TOKEN" ? (
           <button
             type="button"
-            className="mt-3 w-full text-[12px] text-text-muted"
+            className="mt-3 w-full text-[12px] text-text-muted hover:text-text"
             onClick={props.onBack}
           >
             Back to sign in

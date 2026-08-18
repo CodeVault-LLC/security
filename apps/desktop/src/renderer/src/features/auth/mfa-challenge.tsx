@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { Button, Input, Label } from "@codevault/ui";
+import { Button } from "@codevault/ui";
+
+import { TotpInput } from "./totp-input.js";
 
 export function MfaChallenge(props: {
   email: string;
@@ -25,20 +27,15 @@ export function MfaChallenge(props: {
           Enter the current six-digit code for {props.email}. A code can be
           accepted only once.
         </p>
-        <div className="mt-4">
-          <Label htmlFor="totp">Authentication code</Label>
-          <Input
-            id="totp"
-            value={totp}
-            onChange={(event) =>
-              setTotp(event.target.value.replace(/\D/gu, "").slice(0, 6))
-            }
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            className="mt-1 font-mono tracking-[0.3em]"
-            autoFocus
-          />
-        </div>
+        <TotpInput
+          id="totp"
+          label="Authentication code"
+          value={totp}
+          onChange={setTotp}
+          autoFocus
+          disabled={props.busy}
+          className="mt-4"
+        />
         {props.error === null ? null : (
           <p role="alert" className="mt-3 text-[12px] text-danger">
             {props.error}

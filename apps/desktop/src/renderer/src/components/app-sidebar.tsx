@@ -20,6 +20,7 @@ import type { ReactNode } from "react";
 import { cn } from "@codevault/ui";
 
 import { useSession } from "../lib/session.js";
+import { BrandWordmark } from "./brand-wordmark.js";
 
 /**
  * The global sidebar.
@@ -113,10 +114,8 @@ export function AppSidebar({
 
   return (
     <nav className="flex h-full w-52 shrink-0 flex-col border-r border-border bg-surface">
-      <div className="cv-drag-region flex h-11 items-center gap-2 px-3">
-        <span className="text-[13px] font-semibold tracking-tight">
-          CodeVault
-        </span>
+      <div className="cv-drag-region flex h-11 items-center px-3">
+        <BrandWordmark compact />
       </div>
 
       <div className="cv-no-drag px-2 pb-2">

@@ -93,6 +93,11 @@
   --cv-accent-hover: oklch(46% 0.17 255);
   --cv-focus: oklch(60% 0.18 255);
 
+  /* --- Brand colour fields --------------------------------------------- */
+  --cv-brand-blue: oklch(55% 0.19 255);
+  --cv-brand-cyan: oklch(66% 0.15 215);
+  --cv-brand-indigo: oklch(51% 0.2 285);
+
   /*
    * Selected text.
    *
@@ -172,6 +177,10 @@
     --cv-accent-hover: oklch(76% 0.14 250);
     --cv-focus: oklch(72% 0.16 250);
 
+    --cv-brand-blue: oklch(72% 0.17 255);
+    --cv-brand-cyan: oklch(81% 0.14 210);
+    --cv-brand-indigo: oklch(70% 0.19 290);
+
     --cv-success: oklch(70% 0.15 155);
     --cv-warning: oklch(78% 0.15 78);
     --cv-danger: oklch(68% 0.19 25);
@@ -207,6 +216,10 @@
   --cv-accent-contrast: oklch(17% 0.01 255);
   --cv-accent-hover: oklch(76% 0.14 250);
   --cv-focus: oklch(72% 0.16 250);
+
+  --cv-brand-blue: oklch(72% 0.17 255);
+  --cv-brand-cyan: oklch(81% 0.14 210);
+  --cv-brand-indigo: oklch(70% 0.19 290);
 
   --cv-success: oklch(70% 0.15 155);
   --cv-warning: oklch(78% 0.15 78);

@@ -1,11 +1,11 @@
-# CodeVault desktop packaging.
+# CodeVault Security desktop packaging.
 #
 # Signing credentials come from the environment on the CI runner and are never
 # committed. Each platform is built on its own runner: one operating system
 # cannot properly sign and notarise for the others.
 
 appId: dev.codevault.desktop
-productName: CodeVault
+productName: CodeVault Security
 copyright: Copyright © 2026 CodeVault
 
 directories:
@@ -72,7 +72,7 @@ linux:
   category: Development
   synopsis: Security research and coordinated disclosure
   description: >
-    CodeVault is a security research, finding-management, evidence and
+    CodeVault Security is a security research, finding-management, evidence and
     coordinated-disclosure platform. AI drafts; humans own truth.
 
 rpm:
