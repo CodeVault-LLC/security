@@ -8,4 +8,7 @@ export * from "./disclosure.js";
 export * from "./evidence.js";
 export * from "./findings.js";
 export * from "./intake.js";
+export * from "./mail.js";
 export * from "./reports.js";
+export * from "./submissions.js";
+export * from "./vendors.js";

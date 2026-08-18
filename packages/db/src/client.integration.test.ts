@@ -90,6 +90,28 @@ describeIntegration("database", () => {
     expect(reference).toMatch(new RegExp(`^FIND-${year}-\\d{4}$`));
   });
 
+  it("allocates flat vendor and submission references", async () => {
+    const vendorReference = await allocateReference(handle.db, "vendor");
+    const submissionReference = await allocateReference(
+      handle.db,
+      "submission",
+    );
+
+    expect(vendorReference).toMatch(/^VND-\d{6}$/);
+    expect(submissionReference).toMatch(/^SUB-\d{6}$/);
+  });
+
+  it("backfills every non-empty legacy vendor name to a vendor ID", async () => {
+    const result = await handle.db.execute<{ count: string }>(sql`
+      SELECT count(*)::text AS count
+      FROM assets
+      WHERE nullif(btrim(legacy_vendor_name), '') IS NOT NULL
+        AND vendor_id IS NULL
+    `);
+
+    expect(result.rows[0]?.count).toBe("0");
+  });
+
   it("refuses to update or delete an audit event", async () => {
     const id = uuidv7();
 
