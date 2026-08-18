@@ -237,7 +237,7 @@ export const securityNotifications = pgTable(
       .$type<Record<string, string | number | boolean | null>>()
       .notNull()
       .default({}),
-    occurredAt: createdAt(),
+    occurredAt: timestampColumn("occurred_at").notNull().defaultNow(),
     readAt: timestampColumn("read_at"),
   },
   (table) => [

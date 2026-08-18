@@ -16,6 +16,27 @@ export const LoginRequest = Type.Object({
 
 export type LoginRequest = Static<typeof LoginRequest>;
 
+export const LoginStartResponse = Type.Object({
+  challengeToken: Type.String({ minLength: 32 }),
+  challenge: Type.Union([
+    Type.Literal("MFA_REQUIRED"),
+    Type.Literal("ENROLLMENT_REQUIRED"),
+  ]),
+  expiresAt: Timestamp,
+});
+export type LoginStartResponse = Static<typeof LoginStartResponse>;
+
+export const LoginCompleteRequest = Type.Object({
+  challengeToken: Type.String({ minLength: 32, maxLength: 512 }),
+  totp: Type.String({ pattern: "^[0-9]{6}$" }),
+});
+export type LoginCompleteRequest = Static<typeof LoginCompleteRequest>;
+
+export const StepUpRequest = Type.Object({
+  totp: Type.String({ pattern: "^[0-9]{6}$" }),
+});
+export type StepUpRequest = Static<typeof StepUpRequest>;
+
 export const SessionUser = Type.Object({
   id: Uuid,
   email: Type.String({ format: "email" }),
@@ -94,6 +115,51 @@ export const AcceptInviteRequest = Type.Object({
 });
 
 export type AcceptInviteRequest = Static<typeof AcceptInviteRequest>;
+
+export const InviteTokenRequest = Type.Object({
+  token: Type.String({ minLength: 32, maxLength: 512 }),
+});
+export const InviteInspection = Type.Object({
+  organizationName: Type.String(),
+  organizationAvatarId: Type.Union([Uuid, Type.Null()]),
+  email: Type.String({ format: "email" }),
+  role: UserRoleSchema,
+  expiresAt: Timestamp,
+});
+export const StartInviteEnrollmentRequest = Type.Intersect([
+  InviteTokenRequest,
+  Type.Object({
+    displayName: Type.String({ minLength: 2, maxLength: 120 }),
+    password: Type.String({ minLength: 12, maxLength: 512 }),
+  }),
+]);
+export const TotpEnrollmentResponse = Type.Object({
+  enrollmentToken: Type.String({ minLength: 32 }),
+  provisioningUri: Type.String(),
+  manualSecret: Type.String(),
+  expiresAt: Timestamp,
+});
+export const ConfirmInviteEnrollmentRequest = Type.Object({
+  enrollmentToken: Type.String({ minLength: 32, maxLength: 512 }),
+  totp: Type.String({ pattern: "^[0-9]{6}$" }),
+});
+export const RecoveryCodeBundle = Type.Object({
+  recoveryCodes: Type.Array(Type.String(), { minItems: 10, maxItems: 10 }),
+});
+
+export const RecoveryStartRequest = Type.Object({
+  email: Type.String({ format: "email", maxLength: 320 }),
+  password: Type.String({ minLength: 12, maxLength: 512 }),
+  recoveryCode: Type.String({ minLength: 16, maxLength: 128 }),
+});
+export const RecoveryConfirmRequest = Type.Object({
+  enrollmentToken: Type.String({ minLength: 32, maxLength: 512 }),
+  totp: Type.String({ pattern: "^[0-9]{6}$" }),
+});
+export const RecoveryCompleteResponse = Type.Intersect([
+  LoginResponse,
+  RecoveryCodeBundle,
+]);
 
 export const UserSummary = Type.Object({
   id: Uuid,

@@ -40,8 +40,13 @@ export interface BuildAppOptions {
 
 /** Routes reachable without a session. Everything else requires one. */
 const PUBLIC_ROUTES = new Set([
-  "POST:/v1/auth/login",
-  "POST:/v1/invites/accept",
+  "POST:/v1/auth/login/start",
+  "POST:/v1/auth/login/complete",
+  "POST:/v1/invitations/inspect",
+  "POST:/v1/invitations/enrollment/start",
+  "POST:/v1/invitations/enrollment/confirm",
+  "POST:/v1/auth/recovery/start",
+  "POST:/v1/auth/recovery/confirm",
   "GET:/health",
 ]);
 
@@ -200,9 +205,7 @@ export async function buildApp(
   app.addHook("onResponse", async (request) => {
     const principal = request.principal;
 
-    if (principal !== null && request.method !== "GET") {
-      // Only write-path requests refresh the timestamp, so a polling client
-      // does not turn every session into a write on every request.
+    if (principal !== null) {
       await touchSession(app.db, principal.session.id).catch(() => undefined);
     }
   });

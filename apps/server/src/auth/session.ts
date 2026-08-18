@@ -57,7 +57,7 @@ export async function createSession(
   userId: string,
   ttlHours: number,
   userAgent: string | null,
-  mfaVerifiedAt: Date = new Date(),
+  mfaVerifiedAt: Date,
 ): Promise<CreatedSession> {
   const token = generateOpaqueToken();
   const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
@@ -160,9 +160,12 @@ export async function resolveSession(
   }
 
   const idleAnchor = Date.parse(row.sessionLastSeenAt ?? row.sessionCreatedAt);
+  const createdAt = Date.parse(row.sessionCreatedAt);
 
   if (
     !Number.isFinite(idleAnchor) ||
+    !Number.isFinite(createdAt) ||
+    Date.now() - createdAt > row.sessionAbsoluteHours * 60 * 60_000 ||
     Date.now() - idleAnchor > row.sessionIdleMinutes * 60_000
   ) {
     return null;
@@ -208,7 +211,12 @@ export async function touchSession(
   await db
     .update(schema.sessions)
     .set({ lastSeenAt: sql`now()` })
-    .where(eq(schema.sessions.id, sessionId));
+    .where(
+      and(
+        eq(schema.sessions.id, sessionId),
+        sql`(${schema.sessions.lastSeenAt} IS NULL OR ${schema.sessions.lastSeenAt} < now() - interval '5 minutes')`,
+      ),
+    );
 }
 
 export async function revokeSession(

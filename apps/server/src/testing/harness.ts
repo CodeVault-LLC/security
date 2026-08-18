@@ -8,6 +8,7 @@ import { createDatabase, schema, type DatabaseHandle } from "@codevault/db";
 import { buildApp } from "../app.js";
 import { hashPassword } from "../auth/password.js";
 import { hashToken } from "../auth/tokens.js";
+import { createTotpEnrollment } from "../auth/totp.js";
 import { loadConfig, type ServerConfig } from "../config.js";
 import { createEventBroker } from "../services/events.js";
 import type { JobQueue } from "../services/jobs.js";
@@ -57,6 +58,8 @@ export interface TestUser {
   organizationId: string;
   token: string;
   headers: Record<string, string>;
+  totpSecret: string;
+  recoveryCodes: string[];
 }
 
 export const TEST_PASSWORD = "correct-horse-battery-staple";
@@ -258,6 +261,10 @@ export async function createHarness(): Promise<TestHarness> {
       const password = options.password ?? TEST_PASSWORD;
       const email = options.email ?? `user-${uuidv7()}@codevault.test`;
       const role = options.role ?? "MEMBER";
+      const enrollment = createTotpEnrollment("CodeVault Test", email);
+      const recoveryCodes = Array.from({ length: 10 }, () =>
+        randomBytes(16).toString("base64url"),
+      );
 
       const created = await dbHandle.db.transaction(async (tx) => {
         const [account] = await tx
@@ -280,6 +287,24 @@ export async function createHarness(): Promise<TestHarness> {
           role,
         });
 
+        const credentialId = uuidv7();
+        const envelope = config.auth.mfaKeyring.encrypt(
+          enrollment.manualSecret,
+          `totp:${credentialId}:${account.id}`,
+        );
+        await tx.insert(schema.totpCredentials).values({
+          id: credentialId,
+          userId: account.id,
+          ...envelope,
+        });
+        await tx.insert(schema.mfaRecoveryCodes).values(
+          recoveryCodes.map((code) => ({
+            userId: account.id,
+            keyId: config.auth.mfaKeyring.activeKeyId,
+            digest: config.auth.mfaKeyring.digestRecoveryCode(code),
+          })),
+        );
+
         return account;
       });
 
@@ -293,6 +318,8 @@ export async function createHarness(): Promise<TestHarness> {
         organizationId,
         token,
         headers: { authorization: `Bearer ${token}` },
+        totpSecret: enrollment.manualSecret,
+        recoveryCodes,
       };
     },
 
@@ -309,3 +336,4 @@ export async function createHarness(): Promise<TestHarness> {
 export async function clearLoginAttempts(handle: TestHarness): Promise<void> {
   await handle.dbHandle.db.execute(sql`DELETE FROM login_attempts`);
 }
+import { randomBytes } from "node:crypto";
