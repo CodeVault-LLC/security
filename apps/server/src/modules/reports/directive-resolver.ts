@@ -124,18 +124,28 @@ export function createDirectiveResolver(
 
       if (kind === "asset") {
         const rows = await db
-          .select()
+          .select({ asset: schema.assets, vendorName: schema.vendors.name })
           .from(schema.assets)
+          .leftJoin(
+            schema.vendors,
+            eq(schema.vendors.id, schema.assets.vendorId),
+          )
           .where(eq(schema.assets.ref, argument))
           .limit(1);
 
-        const asset = rows[0];
+        const row = rows[0];
 
-        if (asset === undefined) {
+        if (row === undefined) {
           return null;
         }
 
-        const label = [asset.vendor, asset.name, asset.version]
+        const { asset, vendorName } = row;
+
+        const label = [
+          vendorName ?? asset.legacyVendorName,
+          asset.name,
+          asset.version,
+        ]
           .filter((part): part is string => part !== null && part.length > 0)
           .join(" ");
 

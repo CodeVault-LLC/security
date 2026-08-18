@@ -114,15 +114,17 @@ async function prepareFindingRun(input: PrepareInput): Promise<PreparedRun> {
     .select({
       asset: schema.assets,
       primary: schema.findingAssets.primary,
+      vendorName: schema.vendors.name,
     })
     .from(schema.findingAssets)
     .innerJoin(
       schema.assets,
       eq(schema.assets.id, schema.findingAssets.assetId),
     )
+    .leftJoin(schema.vendors, eq(schema.vendors.id, schema.assets.vendorId))
     .where(eq(schema.findingAssets.findingId, finding.id));
 
-  for (const { asset, primary } of assets) {
+  for (const { asset, primary, vendorName } of assets) {
     const identifiers = await db
       .select({
         scheme: schema.assetIdentifiers.scheme,
@@ -140,7 +142,7 @@ async function prepareFindingRun(input: PrepareInput): Promise<PreparedRun> {
       visibility: "PUBLIC",
       text:
         `Name: ${asset.name}\nKind: ${asset.kind}\n` +
-        `Vendor: ${asset.vendor ?? "unknown"}\nVersion: ${asset.version ?? "unknown"}\n` +
+        `Vendor: ${vendorName ?? asset.legacyVendorName ?? "unknown"}\nVersion: ${asset.version ?? "unknown"}\n` +
         `Identifiers: ${
           identifiers.length === 0
             ? "none recorded"

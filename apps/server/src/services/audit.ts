@@ -36,15 +36,49 @@ export interface AuditWriter {
  * A state change is worth recording; the secret that changed is not.
  */
 const REDACTED_FIELDS = new Set([
+  "accesstoken",
+  "armoredkey",
+  "authorization",
+  "clientsecret",
+  "cookie",
+  "mimeraw",
+  "oauthcode",
+  "passphrase",
   "password",
-  "passwordHash",
-  "password_hash",
-  "token",
-  "tokenHash",
-  "token_hash",
+  "passwordhash",
+  "privatekey",
+  "rawbody",
+  "refreshtoken",
   "secret",
-  "secretAccessKey",
+  "secretaccesskey",
+  "setcookie",
+  "token",
+  "tokenhash",
 ]);
+
+function normalizedFieldName(field: string): string {
+  return field.toLocaleLowerCase("en-US").replace(/[^a-z0-9]/g, "");
+}
+
+function redactAuditValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(redactAuditValue);
+  }
+
+  if (typeof value !== "object" || value === null) {
+    return value;
+  }
+
+  const result: Record<string, unknown> = {};
+
+  for (const [key, nestedValue] of Object.entries(value)) {
+    result[key] = REDACTED_FIELDS.has(normalizedFieldName(key))
+      ? "[redacted]"
+      : redactAuditValue(nestedValue);
+  }
+
+  return result;
+}
 
 export function redactAuditPayload(
   payload: Record<string, unknown> | null | undefined,
@@ -56,7 +90,9 @@ export function redactAuditPayload(
   const result: Record<string, unknown> = {};
 
   for (const [key, value] of Object.entries(payload)) {
-    result[key] = REDACTED_FIELDS.has(key) ? "[redacted]" : value;
+    result[key] = REDACTED_FIELDS.has(normalizedFieldName(key))
+      ? "[redacted]"
+      : redactAuditValue(value);
   }
 
   return result;

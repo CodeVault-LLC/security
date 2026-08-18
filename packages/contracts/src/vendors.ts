@@ -206,16 +206,42 @@ export const VendorPublicKey = Type.Object(
 
 export type VendorPublicKey = Static<typeof VendorPublicKey>;
 
-export const VendorRoute = Type.Intersect([
-  Type.Object({
-    id: Uuid,
-    vendorId: Uuid,
-    active: Type.Boolean(),
-    createdAt: Timestamp,
-    updatedAt: Timestamp,
-    revision: RevisionField,
-  }),
-  CreateVendorRouteRequest,
+const VendorRouteRecordProperties = {
+  id: Uuid,
+  vendorId: Uuid,
+  active: Type.Boolean(),
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+  revision: RevisionField,
+};
+
+/**
+ * Keep each route variant flat. Intersecting a strict object with a union makes
+ * the union's `additionalProperties: false` reject the record metadata in
+ * JSON-schema serializers even though TypeScript can represent the type.
+ */
+export const VendorRoute = Type.Union([
+  Type.Object(
+    {
+      ...VendorRouteRecordProperties,
+      ...RequiredEncryptionEmailRoute.properties,
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      ...VendorRouteRecordProperties,
+      ...NonRequiredEncryptionEmailRoute.properties,
+    },
+    { additionalProperties: false },
+  ),
+  Type.Object(
+    {
+      ...VendorRouteRecordProperties,
+      ...ManualRouteRequirements.properties,
+    },
+    { additionalProperties: false },
+  ),
 ]);
 
 export type VendorRoute = Static<typeof VendorRoute>;
@@ -308,6 +334,7 @@ export const CreateVendorPublicKeyRequest = Type.Object(
     expectedFingerprint: Type.String({
       pattern: "^(?:[0-9A-Fa-f]{40}|[0-9A-Fa-f]{64})$",
     }),
+    supersedesKeyId: Type.Optional(Uuid),
   },
   { additionalProperties: false },
 );

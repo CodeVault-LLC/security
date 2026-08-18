@@ -171,7 +171,11 @@ export async function registerSearchRoutes(app: AppInstance): Promise<void> {
           matched_identifier: boolean;
         }>(sql`
           SELECT a.id, a.ref, a.name,
-                 concat_ws(' · ', a.vendor, a.version) AS snippet,
+                 concat_ws(
+                   ' · ',
+                   coalesce(v.name, a.legacy_vendor_name),
+                   a.version
+                 ) AS snippet,
                  a.updated_at,
                  EXISTS (
                    SELECT 1 FROM asset_identifiers ai
@@ -183,13 +187,20 @@ export async function registerSearchRoutes(app: AppInstance): Promise<void> {
                      SELECT 1 FROM asset_identifiers ai
                      WHERE ai.asset_id = a.id AND ai.value = ${term}
                    ) THEN ${IDENTIFIER_SCORE}
-                   ELSE ts_rank(a.search_vector, ${tsQuery}) + similarity(a.name, ${term})
+                   ELSE ts_rank(a.search_vector, ${tsQuery})
+                     + greatest(
+                         similarity(a.name, ${term}),
+                         similarity(coalesce(v.name, a.legacy_vendor_name, ''), ${term})
+                       )
                  END AS rank
           FROM assets a
+          LEFT JOIN vendors v ON v.id = a.vendor_id
           WHERE upper(a.ref) = upper(${term})
              OR a.search_vector @@ ${tsQuery}
              OR a.name ILIKE ${pattern}
+             OR v.name ILIKE ${pattern}
              OR similarity(a.name, ${term}) > 0.3
+             OR similarity(coalesce(v.name, a.legacy_vendor_name, ''), ${term}) > 0.3
              OR EXISTS (
                SELECT 1 FROM asset_identifiers ai
                WHERE ai.asset_id = a.id AND ai.value = ${term}

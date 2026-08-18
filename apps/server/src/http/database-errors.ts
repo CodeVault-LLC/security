@@ -43,6 +43,21 @@ const CONSTRAINT_MESSAGES: Readonly<Record<string, string>> = {
     "That identifier is already recorded on this asset.",
   asset_identifiers_primary_key: "This asset already has a primary identifier.",
   asset_versions_unique: "That version is already recorded.",
+  assets_vendor_id_fk: "That vendor does not exist.",
+  vendors_normalized_name_key: "A vendor with that name already exists.",
+  vendors_slug_key: "A vendor with that stable identifier already exists.",
+  vendors_name_not_blank: "Vendor names cannot be blank.",
+  vendors_normalized_name_not_blank: "Vendor names cannot be blank.",
+  vendors_source_https: "Vendor source links must use HTTPS.",
+  vendors_website_https: "Vendor website links must use HTTPS.",
+  vendor_routes_name_key: "That vendor already has a route with this name.",
+  vendor_routes_requirements_type_check:
+    "The route requirements do not match the selected route type.",
+  vendor_public_keys_fingerprint_key:
+    "That OpenPGP key is already recorded for this vendor.",
+  vendor_public_keys_fingerprint_check: "The OpenPGP fingerprint is not valid.",
+  vendor_public_keys_verification_shape:
+    "Public-key verification needs both a verifier and a timestamp.",
   users_email_key: "An account already exists for that address.",
   reports_case_audience_key:
     "This case already has a report for that audience.",
