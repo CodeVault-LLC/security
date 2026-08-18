@@ -55,17 +55,19 @@ const ATTENTION_LABELS: Record<AttentionItem["kind"], string> = {
   FAILED_BACKGROUND_JOB: "Background job failed",
   PENDING_AI_PROPOSALS: "AI proposals pending",
   SUBMISSION_NEEDS_REVIEW: "Submission needs review",
-  VENDOR_REPLY_NEEDS_REVIEW: "Vendor reply needs review",
-  VENDOR_ACKNOWLEDGEMENT_OVERDUE: "Vendor acknowledgement overdue",
-  VENDOR_UPDATE_OVERDUE: "Vendor update overdue",
-  GMAIL_RECONNECT_REQUIRED: "Gmail connection needs attention",
-  SUBMISSION_SEND_FAILED: "Submission delivery failed",
+  VENDOR_REPLY_NEEDS_REVIEW: "Review vendor reply",
+  VENDOR_INFORMATION_REQUEST_PENDING: "Draft requested information",
+  VENDOR_ACKNOWLEDGEMENT_OVERDUE: "Draft acknowledgement follow-up",
+  VENDOR_UPDATE_OVERDUE: "Draft vendor follow-up",
+  GMAIL_RECONNECT_REQUIRED: "Reconnect Gmail",
+  SUBMISSION_SEND_FAILED: "Resolve delivery status",
 };
 
 const ROUTE_FOR_ENTITY: Record<string, (id: string) => string> = {
   finding: (id) => `/findings/${id}`,
   case: (id) => `/cases/${id}`,
   report: (id) => `/reports/${id}`,
+  submission: (id) => `/submissions/${id}`,
   prior_art_check: (id) => `/findings/${id}`,
 };
 

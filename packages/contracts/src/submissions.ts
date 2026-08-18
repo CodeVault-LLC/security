@@ -117,6 +117,12 @@ export const SubmissionDetail = Type.Object({
   plannedNextContactAt: Type.Union([Timestamp, Type.Null()]),
   agreedDisclosureAt: Type.Union([Timestamp, Type.Null()]),
   vendorReference: Type.Union([Type.String({ maxLength: 300 }), Type.Null()]),
+  coordinationNotes: Type.Union([
+    Type.String({ maxLength: 20_000 }),
+    Type.Null(),
+  ]),
+  snoozedUntil: Type.Union([Timestamp, Type.Null()]),
+  snoozeReason: Type.Union([Type.String({ maxLength: 1_000 }), Type.Null()]),
   latestPackage: Type.Union([
     Type.Object(
       {
@@ -133,6 +139,27 @@ export const SubmissionDetail = Type.Object({
 });
 
 export type SubmissionDetail = Static<typeof SubmissionDetail>;
+
+export const UpdateSubmissionLifecycleRequest = Type.Object(
+  {
+    coordinationState: CoordinationStateSchema,
+    plannedNextContactAt: Type.Union([Timestamp, Type.Null()]),
+    agreedDisclosureAt: Type.Union([Timestamp, Type.Null()]),
+    vendorReference: Type.Union([Type.String({ maxLength: 300 }), Type.Null()]),
+    coordinationNotes: Type.Union([
+      Type.String({ maxLength: 20_000 }),
+      Type.Null(),
+    ]),
+    snoozedUntil: Type.Union([Timestamp, Type.Null()]),
+    snoozeReason: Type.Union([Type.String({ maxLength: 1_000 }), Type.Null()]),
+    expectedRevision: RevisionField,
+  },
+  { additionalProperties: false },
+);
+
+export type UpdateSubmissionLifecycleRequest = Static<
+  typeof UpdateSubmissionLifecycleRequest
+>;
 
 export const CreateSubmissionRequest = Type.Object(
   {

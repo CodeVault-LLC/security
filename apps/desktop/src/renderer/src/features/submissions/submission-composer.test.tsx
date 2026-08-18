@@ -63,6 +63,9 @@ const submission: SubmissionDetail = {
   plannedNextContactAt: null,
   agreedDisclosureAt: null,
   vendorReference: null,
+  coordinationNotes: null,
+  snoozedUntil: null,
+  snoozeReason: null,
   latestPackage: null,
 };
 

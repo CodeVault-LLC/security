@@ -44,6 +44,7 @@ const REDACTED_FIELDS = new Set([
   "clientsecret",
   "ciphertext",
   "cookie",
+  "coordinationnotes",
   "manifest",
   "manualfields",
   "mimeraw",

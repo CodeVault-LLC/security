@@ -193,6 +193,9 @@ export async function loadSubmissionDetail(
     plannedNextContactAt: submission.plannedNextContactAt,
     agreedDisclosureAt: submission.agreedDisclosureAt,
     vendorReference: submission.vendorReference,
+    coordinationNotes: submission.coordinationNotes,
+    snoozedUntil: submission.snoozedUntil,
+    snoozeReason: submission.snoozeReason,
     latestPackage:
       latestPackage === undefined
         ? null

@@ -20,6 +20,7 @@ import {
 
 import { AttachmentSelector } from "../features/submissions/attachment-selector.js";
 import { ManualDeliveryPanel } from "../features/submissions/manual-delivery-panel.js";
+import { LifecyclePanel } from "../features/submissions/lifecycle-panel.js";
 import { PackageReview } from "../features/submissions/package-review.js";
 import { SubmissionComposer } from "../features/submissions/submission-composer.js";
 import { SubmissionValidator } from "../features/submissions/submission-validator.js";
@@ -114,6 +115,26 @@ export function SubmissionDetailRoute({
     }),
     invalidate,
   );
+  const lifecycle = useApiMutation<
+    SubmissionDetail,
+    {
+      coordinationState: SubmissionDetail["coordinationState"];
+      plannedNextContactAt: string | null;
+      agreedDisclosureAt: string | null;
+      vendorReference: string | null;
+      coordinationNotes: string | null;
+      snoozedUntil: string | null;
+      snoozeReason: string | null;
+      expectedRevision: number;
+    }
+  >(
+    (body) => ({
+      path: `/v1/submissions/${submissionId}/lifecycle`,
+      method: "PATCH",
+      body,
+    }),
+    invalidate,
+  );
 
   if (detail.isLoading) return <LoadingState label="Loading submission…" />;
   if (detail.error !== null || detail.data === undefined) {
@@ -132,7 +153,8 @@ export function SubmissionDetailRoute({
     attachments.isPending ||
     review.isPending ||
     approve.isPending ||
-    record.isPending;
+    record.isPending ||
+    lifecycle.isPending;
 
   const downloadManualBundle = async (): Promise<void> => {
     setError(null);
@@ -200,6 +222,20 @@ export function SubmissionDetailRoute({
           </CardBody>
         </Card>
         <div className="space-y-4">
+          <LifecyclePanel
+            key={`lifecycle:${submission.revision}`}
+            submission={submission}
+            canEdit={canWrite(user)}
+            saving={lifecycle.isPending}
+            onSave={(body) =>
+              lifecycle.mutate(
+                { ...body, expectedRevision: submission.revision },
+                {
+                  onError: (mutationError) => setError(mutationError.message),
+                },
+              )
+            }
+          />
           <AttachmentSelector
             key={`attachments:${submission.revision}`}
             submission={submission}
