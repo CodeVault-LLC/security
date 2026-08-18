@@ -71,7 +71,7 @@ export async function registerFindingRoutes(app: AppInstance): Promise<void> {
       const size = pageSize(request.query.limit);
       const cursor = decodeCursor(request.query.cursor);
       const filters: SQL[] = [
-        sql`${schema.findings.caseId} IN ${readableCaseIdsSubquery(user.id)}`,
+        sql`${schema.findings.caseId} IN ${readableCaseIdsSubquery(user.organizationId)}`,
       ];
 
       if (request.query.caseId !== undefined) {
@@ -250,7 +250,7 @@ export async function registerFindingRoutes(app: AppInstance): Promise<void> {
       await requireCaseWrite(app.db, user, body.caseId);
 
       const findingId = await app.db.transaction(async (tx) => {
-        const ref = await allocateReference(tx, "finding");
+        const ref = await allocateReference(tx, user.organizationId, "finding");
         const [row] = await tx
           .insert(schema.findings)
           .values({
@@ -820,7 +820,11 @@ export async function registerFindingRoutes(app: AppInstance): Promise<void> {
       }
 
       const row = await app.db.transaction(async (tx) => {
-        const ref = await allocateReference(tx, "reference");
+        const ref = await allocateReference(
+          tx,
+          user.organizationId,
+          "reference",
+        );
         const [inserted] = await tx
           .insert(schema.externalReferences)
           .values({

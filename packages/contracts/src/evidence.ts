@@ -83,8 +83,10 @@ export const Artifact = Type.Object({
   visibility: ContentVisibilitySchema,
   status: Type.Union([
     Type.Literal("PENDING"),
+    Type.Literal("VERIFYING"),
     Type.Literal("STORED"),
     Type.Literal("QUARANTINED"),
+    Type.Literal("REJECTED"),
     Type.Literal("DELETED"),
   ]),
   uploadedBy: ActorSummary,

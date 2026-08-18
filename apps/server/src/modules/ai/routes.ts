@@ -82,9 +82,14 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
     "/v1/ai/policies",
     { schema: { response: { 200: PolicyListResponse } } },
     async (request) => {
-      actingUser(request);
+      const user = actingUser(request);
 
-      const rows = await app.db.select().from(schema.aiProviderPolicies);
+      const rows = await app.db
+        .select()
+        .from(schema.aiProviderPolicies)
+        .where(
+          eq(schema.aiProviderPolicies.organizationId, user.organizationId),
+        );
 
       return { items: rows.map(toPolicy) };
     },
@@ -108,6 +113,7 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
       const [row] = await app.db
         .insert(schema.aiProviderPolicies)
         .values({
+          organizationId: admin.organizationId,
           providerId,
           enabled: body.enabled ?? false,
           allowedVisibility: body.allowedVisibility ?? [],
@@ -125,7 +131,10 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
           updatedBy: admin.id,
         })
         .onConflictDoUpdate({
-          target: schema.aiProviderPolicies.providerId,
+          target: [
+            schema.aiProviderPolicies.organizationId,
+            schema.aiProviderPolicies.providerId,
+          ],
           set: {
             ...(body.enabled === undefined ? {} : { enabled: body.enabled }),
             ...(body.allowedVisibility === undefined
@@ -230,7 +239,7 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
       }
 
       const providerId = body.providerId ?? DEFAULT_PROVIDER_ID;
-      const policy = await loadPolicy(app, providerId);
+      const policy = await loadPolicy(app, user.organizationId, providerId);
 
       if (!policy.enabled) {
         throw new DomainError(
@@ -348,7 +357,7 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
       const user = requireAuthor(request);
       const body = request.body;
       const providerId = body.providerId ?? DEFAULT_PROVIDER_ID;
-      const policy = await loadPolicy(app, providerId);
+      const policy = await loadPolicy(app, user.organizationId, providerId);
 
       let prepared;
       let profile;
@@ -767,12 +776,18 @@ interface LoadedPolicy extends ProviderProfilePolicy {
 
 async function loadPolicy(
   app: AppInstance,
+  organizationId: string,
   providerId: AiProviderId,
 ): Promise<LoadedPolicy> {
   const rows = await app.db
     .select()
     .from(schema.aiProviderPolicies)
-    .where(eq(schema.aiProviderPolicies.providerId, providerId))
+    .where(
+      and(
+        eq(schema.aiProviderPolicies.organizationId, organizationId),
+        eq(schema.aiProviderPolicies.providerId, providerId),
+      ),
+    )
     .limit(1);
 
   const row = rows[0];

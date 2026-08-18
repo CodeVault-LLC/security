@@ -55,7 +55,7 @@ export const organizationMemberships = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     role: text("role").$type<UserRole>().notNull(),
-    joinedAt: createdAt(),
+    joinedAt: timestampColumn("joined_at").notNull().defaultNow(),
   },
   (table) => [
     primaryKey({ columns: [table.organizationId, table.userId] }),

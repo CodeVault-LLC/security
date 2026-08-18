@@ -97,6 +97,15 @@ export async function generateReportPdf(
 
     const artifactId = uuidv7();
     const objectKey = generateObjectKey(data.caseId, artifactId);
+    const [researchCase] = await db
+      .select({ organizationId: schema.cases.organizationId })
+      .from(schema.cases)
+      .where(eq(schema.cases.id, data.caseId))
+      .limit(1);
+
+    if (researchCase === undefined) {
+      throw new Error("The report case no longer exists.");
+    }
 
     await context.storage.putObject(objectKey, pdf.bytes, "application/pdf");
 
@@ -133,6 +142,7 @@ export async function generateReportPdf(
         .where(eq(schema.reportExports.id, data.exportId));
 
       await tx.insert(schema.auditEvents).values({
+        organizationId: researchCase.organizationId,
         action: "report.exported",
         entityType: "report_export",
         entityId: data.exportId,

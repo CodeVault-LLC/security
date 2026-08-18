@@ -41,7 +41,7 @@ export async function registerPocRoutes(app: AppInstance): Promise<void> {
       await requireCaseWrite(app.db, user, finding.caseId);
 
       const pocId = await app.db.transaction(async (tx) => {
-        const ref = await allocateReference(tx, "poc");
+        const ref = await allocateReference(tx, user.organizationId, "poc");
         const [row] = await tx
           .insert(schema.pocs)
           .values({

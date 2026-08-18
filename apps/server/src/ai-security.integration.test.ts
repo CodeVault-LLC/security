@@ -47,6 +47,7 @@ describeIntegration("AI context filtering", () => {
     await harness.dbHandle.db
       .insert(schema.aiProviderPolicies)
       .values({
+        organizationId: harness.organizationId,
         providerId: "claude-code",
         enabled: true,
         allowedVisibility: ["INTERNAL", "VENDOR", "PUBLIC"],
@@ -57,7 +58,10 @@ describeIntegration("AI context filtering", () => {
         defaultModel: "claude-opus-5",
       })
       .onConflictDoUpdate({
-        target: schema.aiProviderPolicies.providerId,
+        target: [
+          schema.aiProviderPolicies.organizationId,
+          schema.aiProviderPolicies.providerId,
+        ],
         set: {
           enabled: true,
           allowedVisibility: ["INTERNAL", "VENDOR", "PUBLIC"],
@@ -339,6 +343,7 @@ describeIntegration("AI proposals", () => {
     await harness.dbHandle.db
       .insert(schema.aiProviderPolicies)
       .values({
+        organizationId: harness.organizationId,
         providerId: "claude-code",
         enabled: true,
         allowedVisibility: ["INTERNAL", "VENDOR", "PUBLIC"],
@@ -349,7 +354,10 @@ describeIntegration("AI proposals", () => {
         defaultModel: "claude-opus-5",
       })
       .onConflictDoUpdate({
-        target: schema.aiProviderPolicies.providerId,
+        target: [
+          schema.aiProviderPolicies.organizationId,
+          schema.aiProviderPolicies.providerId,
+        ],
         set: {
           enabled: true,
           allowedModels: ["claude-opus-5"],

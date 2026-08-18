@@ -1,5 +1,5 @@
 import type { AppInstance } from "../../http/app-instance.js";
-import { and, desc, eq, inArray, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, lt, or, sql, type SQL } from "drizzle-orm";
 
 import {
   AddCaseMemberRequest,
@@ -61,7 +61,7 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
       const size = pageSize(request.query.limit);
       const cursor = decodeCursor(request.query.cursor);
 
-      const visibility = await visibilityCondition(app, user.id);
+      const visibility = visibilityCondition(user.organizationId);
       const filters: SQL[] = [visibility];
 
       if (request.query.status !== undefined) {
@@ -152,10 +152,11 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
       }
 
       const created = await app.db.transaction(async (tx) => {
-        const ref = await allocateReference(tx, "case");
+        const ref = await allocateReference(tx, user.organizationId, "case");
         const [row] = await tx
           .insert(schema.cases)
           .values({
+            organizationId: user.organizationId,
             ref,
             title: body.title,
             summary: body.summary ?? null,
@@ -601,30 +602,10 @@ function toCaseSummary(row: CaseRowWithOwner): CaseSummary {
 /**
  * SQL condition limiting a list query to cases the user may read.
  *
- * Unrestricted cases are visible to everyone; restricted ones only to their
- * owner and explicit members.
+ * Every active member can read every case in their organization.
  */
-async function visibilityCondition(
-  app: AppInstance,
-  userId: string,
-): Promise<SQL> {
-  const memberships = await app.db
-    .select({ caseId: schema.caseMembers.caseId })
-    .from(schema.caseMembers)
-    .where(eq(schema.caseMembers.userId, userId));
-
-  const memberCaseIds = memberships.map((row) => row.caseId);
-
-  const clauses: SQL[] = [
-    eq(schema.cases.restricted, false),
-    eq(schema.cases.ownerId, userId),
-  ];
-
-  if (memberCaseIds.length > 0) {
-    clauses.push(inArray(schema.cases.id, memberCaseIds));
-  }
-
-  return or(...clauses) as SQL;
+function visibilityCondition(organizationId: string): SQL {
+  return eq(schema.cases.organizationId, organizationId);
 }
 
 async function loadCaseDetail(

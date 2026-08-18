@@ -194,7 +194,7 @@ export async function registerIntakeRoutes(app: AppInstance): Promise<void> {
       const findingId = await app.db.transaction(async (tx) => {
         const locked = await lockPending(tx, access.item.id);
         assertRevision(locked, request.body.expectedRevision, "intake item");
-        const ref = await allocateReference(tx, "finding");
+        const ref = await allocateReference(tx, user.organizationId, "finding");
         const draft = locked.draft;
         const [finding] = await tx
           .insert(schema.findings)

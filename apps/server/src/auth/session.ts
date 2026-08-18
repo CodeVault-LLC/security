@@ -28,6 +28,20 @@ export interface AuthenticatedPrincipal {
     id: string;
     expiresAt: string;
     createdAt: string;
+    lastSeenAt: string | null;
+    mfaVerifiedAt: string;
+    mfaMethod: "TOTP";
+  };
+  organization: {
+    id: string;
+    name: string;
+    policy: {
+      inviteTtlHours: number;
+      sessionIdleMinutes: number;
+      sessionAbsoluteHours: number;
+      recentMfaMinutes: number;
+      mfaRequired: true;
+    };
   };
 }
 
@@ -43,6 +57,7 @@ export async function createSession(
   userId: string,
   ttlHours: number,
   userAgent: string | null,
+  mfaVerifiedAt: Date = new Date(),
 ): Promise<CreatedSession> {
   const token = generateOpaqueToken();
   const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
@@ -53,6 +68,8 @@ export async function createSession(
       userId,
       tokenHash: hashToken(token),
       expiresAt: expiresAt.toISOString(),
+      mfaVerifiedAt: mfaVerifiedAt.toISOString(),
+      mfaMethod: "TOTP",
       ...(userAgent === null ? {} : { userAgent }),
     })
     .returning({
@@ -86,16 +103,46 @@ export async function resolveSession(
       sessionId: schema.sessions.id,
       sessionExpiresAt: schema.sessions.expiresAt,
       sessionCreatedAt: schema.sessions.createdAt,
+      sessionLastSeenAt: schema.sessions.lastSeenAt,
+      mfaVerifiedAt: schema.sessions.mfaVerifiedAt,
+      mfaMethod: schema.sessions.mfaMethod,
       userId: schema.users.id,
       email: schema.users.email,
       displayName: schema.users.displayName,
-      role: schema.users.role,
+      role: schema.organizationMemberships.role,
       disabled: schema.users.disabled,
       userCreatedAt: schema.users.createdAt,
       lastLoginAt: schema.users.lastLoginAt,
+      organizationId: schema.organizations.id,
+      organizationName: schema.organizations.name,
+      inviteTtlHours: schema.organizationSecurityPolicies.inviteTtlHours,
+      sessionIdleMinutes:
+        schema.organizationSecurityPolicies.sessionIdleMinutes,
+      sessionAbsoluteHours:
+        schema.organizationSecurityPolicies.sessionAbsoluteHours,
+      recentMfaMinutes: schema.organizationSecurityPolicies.recentMfaMinutes,
+      mfaRequired: schema.organizationSecurityPolicies.mfaRequired,
     })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
+    .innerJoin(
+      schema.organizationMemberships,
+      eq(schema.organizationMemberships.userId, schema.users.id),
+    )
+    .innerJoin(
+      schema.organizations,
+      eq(
+        schema.organizations.id,
+        schema.organizationMemberships.organizationId,
+      ),
+    )
+    .innerJoin(
+      schema.organizationSecurityPolicies,
+      eq(
+        schema.organizationSecurityPolicies.organizationId,
+        schema.organizations.id,
+      ),
+    )
     .where(
       and(
         eq(schema.sessions.tokenHash, tokenHash),
@@ -109,6 +156,15 @@ export async function resolveSession(
   const row = rows[0];
 
   if (row === undefined) {
+    return null;
+  }
+
+  const idleAnchor = Date.parse(row.sessionLastSeenAt ?? row.sessionCreatedAt);
+
+  if (
+    !Number.isFinite(idleAnchor) ||
+    Date.now() - idleAnchor > row.sessionIdleMinutes * 60_000
+  ) {
     return null;
   }
 
@@ -126,6 +182,20 @@ export async function resolveSession(
       id: row.sessionId,
       expiresAt: row.sessionExpiresAt,
       createdAt: row.sessionCreatedAt,
+      lastSeenAt: row.sessionLastSeenAt,
+      mfaVerifiedAt: row.mfaVerifiedAt,
+      mfaMethod: row.mfaMethod,
+    },
+    organization: {
+      id: row.organizationId,
+      name: row.organizationName,
+      policy: {
+        inviteTtlHours: row.inviteTtlHours,
+        sessionIdleMinutes: row.sessionIdleMinutes,
+        sessionAbsoluteHours: row.sessionAbsoluteHours,
+        recentMfaMinutes: row.recentMfaMinutes,
+        mfaRequired: row.mfaRequired as true,
+      },
     },
   };
 }

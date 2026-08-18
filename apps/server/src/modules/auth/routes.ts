@@ -85,8 +85,21 @@ export async function registerAuthRoutes(app: AppInstance): Promise<void> {
       }
 
       const rows = await app.db
-        .select()
+        .select({
+          id: schema.users.id,
+          email: schema.users.email,
+          displayName: schema.users.displayName,
+          passwordHash: schema.users.passwordHash,
+          disabled: schema.users.disabled,
+          createdAt: schema.users.createdAt,
+          lastLoginAt: schema.users.lastLoginAt,
+          role: schema.organizationMemberships.role,
+        })
         .from(schema.users)
+        .innerJoin(
+          schema.organizationMemberships,
+          eq(schema.organizationMemberships.userId, schema.users.id),
+        )
         .where(sql`lower(${schema.users.email}) = lower(${email})`)
         .limit(1);
 
@@ -290,7 +303,6 @@ export async function registerAuthRoutes(app: AppInstance): Promise<void> {
             email: invite.email,
             displayName,
             passwordHash,
-            role: invite.role,
           })
           .returning({ id: schema.users.id });
 
@@ -300,6 +312,12 @@ export async function registerAuthRoutes(app: AppInstance): Promise<void> {
             "Could not create the account.",
           );
         }
+
+        await tx.insert(schema.organizationMemberships).values({
+          organizationId: invite.organizationId,
+          userId: created.id,
+          role: invite.role,
+        });
 
         await tx
           .update(schema.invites)

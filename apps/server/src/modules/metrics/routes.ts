@@ -177,7 +177,7 @@ export async function registerMetricsRoutes(app: AppInstance): Promise<void> {
     },
     async (request) => {
       const user = actingUser(request);
-      const scope = readableCaseIdsSubquery(user.id);
+      const scope = readableCaseIdsSubquery(user.organizationId);
       const window = request.query.window ?? "90d";
       const bucket = WINDOW_BUCKETS[window];
       const interval = windowInterval(window);
@@ -433,7 +433,7 @@ export async function registerMetricsRoutes(app: AppInstance): Promise<void> {
     { schema: { response: { 200: AssetMetricsResponse } } },
     async (request) => {
       const user = actingUser(request);
-      const scope = readableCaseIdsSubquery(user.id);
+      const scope = readableCaseIdsSubquery(user.organizationId);
 
       /*
        * Findings per asset kind.
@@ -517,7 +517,7 @@ export async function registerMetricsRoutes(app: AppInstance): Promise<void> {
     },
     async (request) => {
       const user = actingUser(request);
-      const scope = readableCaseIdsSubquery(user.id);
+      const scope = readableCaseIdsSubquery(user.organizationId);
       const assetId = request.params.id;
       const bucket: MetricBucket = "week";
 

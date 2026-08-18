@@ -36,7 +36,7 @@ export async function registerDashboardRoutes(app: AppInstance): Promise<void> {
     { schema: { response: { 200: DashboardResponse } } },
     async (request) => {
       const user = actingUser(request);
-      const scope = readableCaseIdsSubquery(user.id);
+      const scope = readableCaseIdsSubquery(user.organizationId);
       const attention: AttentionItem[] = [];
 
       const disclosureDue = await app.db.execute<{
@@ -415,7 +415,7 @@ export async function registerDashboardRoutes(app: AppInstance): Promise<void> {
       const user = actingUser(request);
       const size = pageSize(request.query.limit);
       const cursor = decodeCursor(request.query.cursor);
-      const scope = readableCaseIdsSubquery(user.id);
+      const scope = readableCaseIdsSubquery(user.organizationId);
 
       const rows = await app.db.execute<{
         id: string;
@@ -436,7 +436,8 @@ export async function registerDashboardRoutes(app: AppInstance): Promise<void> {
         SELECT a.*, u.id AS actor_id, u.display_name AS actor_name, u.email AS actor_email
         FROM audit_events a
         LEFT JOIN users u ON u.id = a.actor_id
-        WHERE (a.case_id IS NULL OR a.case_id IN ${scope})
+        WHERE a.organization_id = ${user.organizationId}
+          AND (a.case_id IS NULL OR a.case_id IN ${scope})
           ${request.query.caseId === undefined ? sql`` : sql`AND a.case_id = ${request.query.caseId}`}
           ${request.query.entityType === undefined ? sql`` : sql`AND a.entity_type = ${request.query.entityType}`}
           ${request.query.entityId === undefined ? sql`` : sql`AND a.entity_id = ${request.query.entityId}`}

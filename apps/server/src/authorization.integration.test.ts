@@ -11,10 +11,9 @@ import {
 /**
  * Authorization.
  *
- * Restricted cases are the reason this file exists. A researcher working an
- * embargoed zero-day has to be able to rely on the allow-list being the whole
- * story — including against an administrator, and including the fact that the
- * case exists at all.
+ * Every account is cleared into the single organization, so every active
+ * member can read the entire research corpus. Case membership still controls
+ * explicit write grants and downgrades.
  */
 
 const describeIntegration = process.env.DATABASE_URL ? describe : describe.skip;
@@ -72,29 +71,27 @@ describeIntegration("case access", () => {
     expect(response.statusCode).toBe(200);
   });
 
-  it("hides a restricted case from a member who is not on it", async () => {
+  it("lets an organization member read a restricted case", async () => {
     const response = await harness.app.inject({
       method: "GET",
       url: `/v1/cases/${restrictedCase.id}`,
       headers: outsider.headers,
     });
 
-    // Reported as missing, not forbidden: confirming it exists is itself a
-    // disclosure when the case is an embargoed zero-day.
-    expect(response.statusCode).toBe(404);
+    expect(response.statusCode).toBe(200);
   });
 
-  it("hides a restricted case from an administrator who is not on it", async () => {
+  it("lets an administrator read a restricted case", async () => {
     const response = await harness.app.inject({
       method: "GET",
       url: `/v1/cases/${restrictedCase.id}`,
       headers: admin.headers,
     });
 
-    expect(response.statusCode).toBe(404);
+    expect(response.statusCode).toBe(200);
   });
 
-  it("keeps a restricted case out of the list for outsiders", async () => {
+  it("includes restricted cases in every member's list", async () => {
     const response = await harness.app.inject({
       method: "GET",
       url: "/v1/cases?limit=200",
@@ -105,7 +102,7 @@ describeIntegration("case access", () => {
     const references = body.items.map((item) => item.id);
 
     expect(references).toContain(openCase.id);
-    expect(references).not.toContain(restrictedCase.id);
+    expect(references).toContain(restrictedCase.id);
   });
 
   it("grants access once a member is added", async () => {
@@ -168,7 +165,7 @@ describeIntegration("case access", () => {
     expect(response.statusCode).toBe(200);
   });
 
-  it("hides findings in a restricted case from outsiders", async () => {
+  it("shows restricted-case findings to organization members", async () => {
     const stranger = await harness.createUser({ role: "MEMBER" });
 
     const created = await harness.app.inject({
@@ -189,7 +186,7 @@ describeIntegration("case access", () => {
       headers: stranger.headers,
     });
 
-    expect(direct.statusCode).toBe(404);
+    expect(direct.statusCode).toBe(200);
 
     const list = await harness.app.inject({
       method: "GET",
@@ -201,10 +198,10 @@ describeIntegration("case access", () => {
       .json<{ items: FindingDetail[] }>()
       .items.map((it) => it.id);
 
-    expect(ids).not.toContain(finding.id);
+    expect(ids).toContain(finding.id);
   });
 
-  it("hides a restricted case's findings from global search", async () => {
+  it("includes a restricted case's findings in organization search", async () => {
     const stranger = await harness.createUser({ role: "MEMBER" });
     const marker = `ZeroDayMarker${Date.now()}`;
 
@@ -229,7 +226,7 @@ describeIntegration("case access", () => {
       group.hits.map((hit) => hit.title),
     );
 
-    expect(titles.join(" ")).not.toContain(marker);
+    expect(titles.join(" ")).toContain(marker);
   });
 
   it("refuses to let a non-owner member change membership", async () => {

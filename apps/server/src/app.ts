@@ -4,7 +4,8 @@ import type { TypeBoxTypeProvider } from "@fastify/type-provider-typebox";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import { uuidv7 } from "@codevault/core/crypto";
-import { createDatabase, type DatabaseHandle } from "@codevault/db";
+import { createDatabase, schema, type DatabaseHandle } from "@codevault/db";
+import { eq } from "drizzle-orm";
 
 import { bearerTokenFrom } from "./auth/tokens.js";
 import { resolveSession, touchSession } from "./auth/session.js";
@@ -103,17 +104,33 @@ export async function buildApp(
       return false;
     }
 
-    const rows = await dbHandle.db.query.users.findFirst({
-      where: (users, { eq }) => eq(users.id, userId),
-      columns: { id: true, role: true, disabled: true },
-    });
+    const [rows] = await dbHandle.db
+      .select({
+        id: schema.users.id,
+        organizationId: schema.organizationMemberships.organizationId,
+        role: schema.organizationMemberships.role,
+        disabled: schema.users.disabled,
+      })
+      .from(schema.users)
+      .innerJoin(
+        schema.organizationMemberships,
+        eq(schema.organizationMemberships.userId, schema.users.id),
+      )
+      .where(eq(schema.users.id, userId))
+      .limit(1);
 
     if (rows === undefined) {
       return false;
     }
 
     return canReadCase(
-      { id: rows.id, role: rows.role, disabled: rows.disabled },
+      {
+        id: rows.id,
+        userId: rows.id,
+        organizationId: rows.organizationId,
+        role: rows.role,
+        disabled: rows.disabled,
+      },
       record.context,
     );
   });

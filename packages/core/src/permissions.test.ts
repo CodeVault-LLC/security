@@ -16,7 +16,13 @@ import {
 const OWNER_ID = "owner-1";
 
 function user(role: ActingUser["role"], id = `${role}-1`): ActingUser {
-  return { id, role, disabled: false };
+  return {
+    id,
+    userId: id,
+    organizationId: "organization-1",
+    role,
+    disabled: false,
+  };
 }
 
 function caseContext(
@@ -24,6 +30,7 @@ function caseContext(
 ): CaseAccessContext {
   return {
     ownerId: OWNER_ID,
+    organizationId: "organization-1",
     restricted: false,
     members: new Map<string, CaseAccess>(),
     ...overrides,
@@ -55,9 +62,19 @@ describe("restricted cases", () => {
     ]),
   });
 
-  it("hides the case from users outside the allow-list", () => {
-    expect(canReadCase(user("MEMBER", "outsider-1"), context)).toBe(false);
-    expect(canReadCase(user("ADMIN", "admin-1"), context)).toBe(false);
+  it("lets every active organization member read the case", () => {
+    expect(canReadCase(user("MEMBER", "outsider-1"), context)).toBe(true);
+    expect(canReadCase(user("ADMIN", "admin-1"), context)).toBe(true);
+    expect(canReadCase(user("VIEWER", "viewer-1"), context)).toBe(true);
+  });
+
+  it("does not let an actor from another organization read the case", () => {
+    expect(
+      canReadCase(
+        { ...user("ADMIN", "foreign-admin"), organizationId: "other-org" },
+        context,
+      ),
+    ).toBe(false);
   });
 
   it("grants the owner full access without a membership row", () => {
@@ -73,9 +90,13 @@ describe("restricted cases", () => {
   });
 
   it("honours write membership", () => {
-    const writer = user("VIEWER", "writer-1");
+    const writer = user("MEMBER", "writer-1");
 
     expect(canWriteCase(writer, context)).toBe(true);
+  });
+
+  it("keeps a viewer globally read-only despite a write membership", () => {
+    expect(canWriteCase(user("VIEWER", "writer-1"), context)).toBe(false);
   });
 });
 
@@ -90,7 +111,13 @@ describe("explicit read membership on an open case", () => {
 });
 
 describe("disabled users", () => {
-  const disabled: ActingUser = { id: "admin-1", role: "ADMIN", disabled: true };
+  const disabled: ActingUser = {
+    id: "admin-1",
+    userId: "admin-1",
+    organizationId: "organization-1",
+    role: "ADMIN",
+    disabled: true,
+  };
 
   it("loses every permission", () => {
     expect(canReadCase(disabled, caseContext())).toBe(false);
@@ -117,10 +144,10 @@ describe("case membership management", () => {
     expect(canManageCaseMembers(user("MEMBER"), context)).toBe(false);
   });
 
-  it("is denied to an admin locked out of a restricted case", () => {
-    const context = caseContext({ restricted: true });
-
-    expect(canManageCaseMembers(user("ADMIN"), context)).toBe(false);
+  it("remains available to an organization admin on a restricted case", () => {
+    expect(
+      canManageCaseMembers(user("ADMIN"), caseContext({ restricted: true })),
+    ).toBe(true);
   });
 });
 

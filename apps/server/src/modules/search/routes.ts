@@ -35,7 +35,7 @@ export async function registerSearchRoutes(app: AppInstance): Promise<void> {
       const term = request.query.q.trim();
       const limit = request.query.limit ?? 30;
       const requestedGroups = request.query.groups;
-      const scope = readableCaseIdsSubquery(user.id);
+      const scope = readableCaseIdsSubquery(user.organizationId);
 
       const wanted = (group: SearchGroup): boolean =>
         requestedGroups === undefined || requestedGroups.includes(group);

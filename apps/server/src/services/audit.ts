@@ -1,5 +1,6 @@
 import type { Database } from "@codevault/db";
 import { schema } from "@codevault/db";
+import { eq } from "drizzle-orm";
 
 /**
  * Audit writer.
@@ -10,6 +11,7 @@ import { schema } from "@codevault/db";
  */
 
 export interface AuditContext {
+  organizationId?: string;
   actorId: string | null;
   sessionId: string | null;
   requestId: string | null;
@@ -65,7 +67,43 @@ export function redactAuditPayload(
 export function createAuditWriter(): AuditWriter {
   return {
     async write(db, context, entry) {
+      let organizationId = context.organizationId;
+
+      if (organizationId === undefined && entry.caseId !== undefined) {
+        const [researchCase] = await db
+          .select({ organizationId: schema.cases.organizationId })
+          .from(schema.cases)
+          .where(eq(schema.cases.id, entry.caseId ?? ""))
+          .limit(1);
+        organizationId = researchCase?.organizationId;
+      }
+
+      if (organizationId === undefined && context.actorId !== null) {
+        const [membership] = await db
+          .select({
+            organizationId: schema.organizationMemberships.organizationId,
+          })
+          .from(schema.organizationMemberships)
+          .where(eq(schema.organizationMemberships.userId, context.actorId))
+          .limit(1);
+        organizationId = membership?.organizationId;
+      }
+
+      if (organizationId === undefined) {
+        const [organization] = await db
+          .select({ id: schema.organizations.id })
+          .from(schema.organizations)
+          .limit(1);
+        organizationId = organization?.id;
+      }
+
+      // Before first bootstrap there is no security boundary to own an event.
+      if (organizationId === undefined) {
+        return;
+      }
+
       await db.insert(schema.auditEvents).values({
+        organizationId,
         action: entry.action,
         entityType: entry.entityType,
         entityId: entry.entityId,

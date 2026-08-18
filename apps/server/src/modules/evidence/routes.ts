@@ -400,7 +400,11 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
       await requireCaseWrite(app.db, user, body.caseId);
 
       const evidenceId = await app.db.transaction(async (tx) => {
-        const ref = await allocateReference(tx, "evidence");
+        const ref = await allocateReference(
+          tx,
+          user.organizationId,
+          "evidence",
+        );
         const [row] = await tx
           .insert(schema.evidence)
           .values({

@@ -23,6 +23,7 @@ import { schema } from "@codevault/db";
 
 export interface CaseAccessRecord {
   caseId: string;
+  organizationId: string;
   ref: string;
   title: string;
   restricted: boolean;
@@ -38,6 +39,7 @@ export async function loadCaseAccess(
   const rows = await db
     .select({
       id: schema.cases.id,
+      organizationId: schema.cases.organizationId,
       ref: schema.cases.ref,
       title: schema.cases.title,
       ownerId: schema.cases.ownerId,
@@ -68,6 +70,7 @@ export async function loadCaseAccess(
 
   return {
     caseId: record.id,
+    organizationId: record.organizationId,
     ref: record.ref,
     title: record.title,
     restricted: record.restricted,
@@ -75,6 +78,7 @@ export async function loadCaseAccess(
     disclosureEnabled: record.disclosureEnabled,
     context: {
       ownerId: record.ownerId,
+      organizationId: record.organizationId,
       restricted: record.restricted,
       members,
     },
@@ -84,9 +88,7 @@ export async function loadCaseAccess(
 /**
  * Loads a case the user may read, or throws.
  *
- * A case the caller cannot see is reported as missing rather than forbidden:
- * confirming that `CASE-2026-0004` exists is itself a disclosure when the case
- * is an embargoed zero-day.
+ * A case in another organization is reported as missing rather than forbidden.
  */
 export async function requireCaseRead(
   db: Database,
@@ -117,34 +119,19 @@ export async function requireCaseWrite(
 }
 
 /**
- * The set of case IDs a user may read.
- *
- * Used by list and search queries. Unrestricted cases are visible to everyone,
- * so the filter only has to enumerate the restricted ones the user is on.
+ * Organization membership grants read access to every case in that
+ * organization. The shape remains compatible with existing callers while
+ * they migrate from allow-list filtering.
  */
 export async function readableCaseFilter(
   db: Database,
   user: ActingUser,
 ): Promise<{ allRestrictedVisible: boolean; visibleRestrictedIds: string[] }> {
-  const memberships = await db
-    .select({ caseId: schema.caseMembers.caseId })
-    .from(schema.caseMembers)
-    .where(eq(schema.caseMembers.userId, user.id));
-
-  const owned = await db
-    .select({ id: schema.cases.id })
-    .from(schema.cases)
-    .where(eq(schema.cases.ownerId, user.id));
-
-  const visible = new Set<string>([
-    ...memberships.map((row) => row.caseId),
-    ...owned.map((row) => row.id),
-  ]);
+  void db;
+  void user;
 
   return {
-    // No role grants blanket access to restricted cases, administrators
-    // included; the allow-list is the whole point of the flag.
-    allRestrictedVisible: false,
-    visibleRestrictedIds: [...visible],
+    allRestrictedVisible: true,
+    visibleRestrictedIds: [],
   };
 }

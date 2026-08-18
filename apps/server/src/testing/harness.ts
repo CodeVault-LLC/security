@@ -34,6 +34,7 @@ export interface TestHarness {
   storage: FakeStorage;
   jobs: FakeJobQueue;
   config: ServerConfig;
+  organizationId: string;
   /** Creates a user and returns a usable bearer token. */
   createUser(options?: CreateUserOptions): Promise<TestUser>;
   /** Issues a session for an existing user. */
@@ -53,6 +54,7 @@ export interface TestUser {
   email: string;
   password: string;
   role: UserRole;
+  organizationId: string;
   token: string;
   headers: Record<string, string>;
 }
@@ -184,6 +186,36 @@ export async function createHarness(): Promise<TestHarness> {
   const dbHandle = createDatabase({ connectionString });
   const storage = createFakeStorage();
   const jobs = createFakeJobQueue();
+  const [existingOrganization] = await dbHandle.db
+    .select({ id: schema.organizations.id })
+    .from(schema.organizations)
+    .limit(1);
+  const organizationId = existingOrganization?.id ?? uuidv7();
+
+  if (existingOrganization === undefined) {
+    const harnessAdministratorId = uuidv7();
+
+    await dbHandle.db.transaction(async (tx) => {
+      await tx.insert(schema.organizations).values({
+        id: organizationId,
+        name: "CodeVault Test Organization",
+      });
+      await tx
+        .insert(schema.organizationSecurityPolicies)
+        .values({ organizationId });
+      await tx.insert(schema.users).values({
+        id: harnessAdministratorId,
+        email: `harness-admin-${harnessAdministratorId}@codevault.test`,
+        displayName: "Harness Administrator",
+        passwordHash: await hashPassword(TEST_PASSWORD),
+      });
+      await tx.insert(schema.organizationMemberships).values({
+        organizationId,
+        userId: harnessAdministratorId,
+        role: "ADMIN",
+      });
+    });
+  }
 
   const app = await buildApp({
     config,
@@ -206,6 +238,8 @@ export async function createHarness(): Promise<TestHarness> {
       userId,
       tokenHash: hashToken(token),
       expiresAt: expiresAt.toISOString(),
+      mfaVerifiedAt: new Date().toISOString(),
+      mfaMethod: "TOTP",
     });
 
     return token;
@@ -217,26 +251,36 @@ export async function createHarness(): Promise<TestHarness> {
     storage,
     jobs,
     config,
+    organizationId,
 
     async createUser(options: CreateUserOptions = {}): Promise<TestUser> {
       const password = options.password ?? TEST_PASSWORD;
       const email = options.email ?? `user-${uuidv7()}@codevault.test`;
       const role = options.role ?? "MEMBER";
 
-      const [created] = await dbHandle.db
-        .insert(schema.users)
-        .values({
-          email,
-          displayName: `Test ${role}`,
-          passwordHash: await hashPassword(password),
-          role,
-          disabled: options.disabled ?? false,
-        })
-        .returning({ id: schema.users.id });
+      const created = await dbHandle.db.transaction(async (tx) => {
+        const [account] = await tx
+          .insert(schema.users)
+          .values({
+            email,
+            displayName: `Test ${role}`,
+            passwordHash: await hashPassword(password),
+            disabled: options.disabled ?? false,
+          })
+          .returning({ id: schema.users.id });
 
-      if (created === undefined) {
-        throw new Error("Could not create the test user.");
-      }
+        if (account === undefined) {
+          throw new Error("Could not create the test user.");
+        }
+
+        await tx.insert(schema.organizationMemberships).values({
+          organizationId,
+          userId: account.id,
+          role,
+        });
+
+        return account;
+      });
 
       const token = await issueSession(created.id);
 
@@ -245,6 +289,7 @@ export async function createHarness(): Promise<TestHarness> {
         email,
         password,
         role,
+        organizationId,
         token,
         headers: { authorization: `Bearer ${token}` },
       };

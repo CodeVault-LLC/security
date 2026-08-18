@@ -1,3 +1,8 @@
+import {
+  canAdministerOrganization,
+  type OrganizationActor,
+} from "./organization.js";
+
 /**
  * Authorization rules.
  *
@@ -14,15 +19,16 @@ export const CASE_ACCESS_LEVELS = ["READ", "WRITE"] as const;
 
 export type CaseAccess = (typeof CASE_ACCESS_LEVELS)[number];
 
-export interface ActingUser {
+export interface ActingUser extends OrganizationActor {
+  /** Compatibility alias for case ownership columns. */
   id: string;
-  role: UserRole;
-  disabled: boolean;
 }
 
 export interface CaseAccessContext {
   /** Case owner, who always retains write access to their own case. */
   ownerId: string;
+  /** The organization that owns the case. */
+  organizationId: string;
   /**
    * Restricted cases are visible only to explicitly listed members (and to
    * their owner). Unrestricted cases fall back to global role permissions.
@@ -53,26 +59,7 @@ export function canReadCase(
   user: ActingUser,
   context: CaseAccessContext,
 ): boolean {
-  if (!isActive(user)) {
-    return false;
-  }
-
-  if (user.id === context.ownerId) {
-    return true;
-  }
-
-  if (context.members.has(user.id)) {
-    return true;
-  }
-
-  if (context.restricted) {
-    // A restricted case is invisible to everyone outside its allow-list,
-    // administrators included: the point of the flag is to shrink the set of
-    // people who can read an embargoed zero-day, not to document intent.
-    return false;
-  }
-
-  return true;
+  return isActive(user) && user.organizationId === context.organizationId;
 }
 
 export function canWriteCase(
@@ -80,6 +67,10 @@ export function canWriteCase(
   context: CaseAccessContext,
 ): boolean {
   if (!canReadCase(user, context)) {
+    return false;
+  }
+
+  if (!canWriteAnything(user)) {
     return false;
   }
 
@@ -104,7 +95,7 @@ export function canWriteCase(
 
 /** Only administrators manage users, invitations and system settings. */
 export function canAdministerWorkspace(user: ActingUser): boolean {
-  return isAdmin(user);
+  return canAdministerOrganization(user);
 }
 
 /**
@@ -125,7 +116,7 @@ export function canManageCaseMembers(
   user: ActingUser,
   context: CaseAccessContext,
 ): boolean {
-  if (!isActive(user)) {
+  if (!canReadCase(user, context)) {
     return false;
   }
 
