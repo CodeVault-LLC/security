@@ -60,7 +60,14 @@ export const artifacts = pgTable(
       .notNull()
       .default("INTERNAL"),
     status: text("status")
-      .$type<"PENDING" | "STORED" | "QUARANTINED" | "DELETED">()
+      .$type<
+        | "PENDING"
+        | "VERIFYING"
+        | "STORED"
+        | "QUARANTINED"
+        | "REJECTED"
+        | "DELETED"
+      >()
       .notNull()
       .default("PENDING"),
     /** Multipart upload ID while an upload is in flight. */

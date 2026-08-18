@@ -6,6 +6,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   text,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -15,6 +16,7 @@ import type { ContentVisibility } from "@codevault/core";
 import { users } from "./auth.js";
 import { cases } from "./cases.js";
 import { createdAt, primaryId, timestampColumn, updatedAt } from "./columns.js";
+import { organizations } from "./organizations.js";
 
 /**
  * AI tables.
@@ -143,46 +145,48 @@ export const aiProposals = pgTable(
  * than permits. Forgetting to configure something must not be the same as
  * approving it.
  */
-export const aiProviderPolicies = pgTable("ai_provider_policies", {
-  providerId: text("provider_id").primaryKey(),
-  enabled: boolean("enabled").notNull().default(false),
-  allowedVisibility: jsonb("allowed_visibility")
-    .$type<ContentVisibility[]>()
-    .notNull()
-    .default([]),
-  allowRestrictedCases: boolean("allow_restricted_cases")
-    .notNull()
-    .default(false),
-  retainFullPrompts: boolean("retain_full_prompts").notNull().default(false),
-  /** Models this provider may run. Empty means no run can be prepared. */
-  allowedModels: jsonb("allowed_models")
-    .$type<string[]>()
-    .notNull()
-    .default([]),
-  /** Effort levels a researcher may select. Empty means no run can be prepared. */
-  allowedEfforts: jsonb("allowed_efforts")
-    .$type<string[]>()
-    .notNull()
-    .default([]),
-  defaultModel: text("default_model"),
-  /** Settings scopes the provider may load. Ignored when isolated. */
-  settingSources: jsonb("setting_sources")
-    .$type<string[]>()
-    .notNull()
-    .default(["user"]),
-  /**
-   * Run with no hooks, plugins or project-file discovery.
-   *
-   * Off by default because it requires API-key authentication: an isolated
-   * provider never reads OAuth credentials or the keychain, so turning it on
-   * for a workspace signed in with a subscription would disable AI entirely.
-   */
-  isolated: boolean("isolated").notNull().default(false),
-  maxBudgetUsd: numeric("max_budget_usd", { precision: 8, scale: 4 }),
-  updatedBy: uuid("updated_by").references(() => users.id),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+export const aiProviderPolicies = pgTable(
+  "ai_provider_policies",
+  {
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull(),
+    enabled: boolean("enabled").notNull().default(false),
+    allowedVisibility: jsonb("allowed_visibility")
+      .$type<ContentVisibility[]>()
+      .notNull()
+      .default([]),
+    allowRestrictedCases: boolean("allow_restricted_cases")
+      .notNull()
+      .default(false),
+    retainFullPrompts: boolean("retain_full_prompts").notNull().default(false),
+    /** Models this provider may run. Empty means no run can be prepared. */
+    allowedModels: jsonb("allowed_models")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    /** Effort levels a researcher may select. Empty means no run can be prepared. */
+    allowedEfforts: jsonb("allowed_efforts")
+      .$type<string[]>()
+      .notNull()
+      .default([]),
+    defaultModel: text("default_model"),
+    /** Settings scopes the provider may load. Ignored when isolated. */
+    settingSources: jsonb("setting_sources")
+      .$type<string[]>()
+      .notNull()
+      .default(["user"]),
+    isolated: boolean("isolated").notNull().default(false),
+    maxBudgetUsd: numeric("max_budget_usd", { precision: 8, scale: 4 }),
+    updatedBy: uuid("updated_by").references(() => users.id),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.organizationId, table.providerId] }),
+  ],
+);
 
 export const aiRunsRelations = relations(aiRuns, ({ one, many }) => ({
   case: one(cases, { fields: [aiRuns.caseId], references: [cases.id] }),

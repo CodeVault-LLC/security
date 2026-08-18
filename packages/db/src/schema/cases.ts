@@ -13,6 +13,7 @@ import {
 import type { CaseAccess, CaseProfile, CaseStatus } from "@codevault/core";
 
 import { users } from "./auth.js";
+import { organizations } from "./organizations.js";
 import {
   createdAt,
   metadata,
@@ -35,6 +36,9 @@ export const cases = pgTable(
   "cases",
   {
     id: primaryId(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
     /** Human reference such as `CASE-2026-0001`. Never a primary key. */
     ref: text("ref").notNull(),
     title: text("title").notNull(),
@@ -58,6 +62,7 @@ export const cases = pgTable(
     uniqueIndex("cases_ref_key").on(table.ref),
     index("cases_owner_idx").on(table.ownerId),
     index("cases_status_idx").on(table.status),
+    index("cases_organization_idx").on(table.organizationId),
   ],
 );
 
@@ -161,12 +166,19 @@ export const casePolicyPacks = pgTable(
 export const referenceSequences = pgTable(
   "reference_sequences",
   {
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
     kind: text("kind").notNull(),
     /** Zero for flat sequences such as assets and evidence. */
     year: integer("year").notNull(),
     value: integer("value").notNull().default(0),
   },
-  (table) => [primaryKey({ columns: [table.kind, table.year] })],
+  (table) => [
+    primaryKey({
+      columns: [table.organizationId, table.kind, table.year],
+    }),
+  ],
 );
 
 export const casesRelations = relations(cases, ({ one, many }) => ({

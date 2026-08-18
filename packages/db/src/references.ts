@@ -19,15 +19,16 @@ import type { Database } from "./client.js";
 
 export async function allocateReference(
   db: Database,
+  organizationId: string,
   kind: ReferenceKind,
   now: Date = new Date(),
 ): Promise<string> {
   const year = isYearScopedReference(kind) ? now.getUTCFullYear() : 0;
 
   const result = await db.execute<{ value: number }>(sql`
-    INSERT INTO reference_sequences (kind, year, value)
-    VALUES (${kind}, ${year}, 1)
-    ON CONFLICT (kind, year)
+    INSERT INTO reference_sequences (organization_id, kind, year, value)
+    VALUES (${organizationId}, ${kind}, ${year}, 1)
+    ON CONFLICT (organization_id, kind, year)
     DO UPDATE SET value = reference_sequences.value + 1
     RETURNING value
   `);

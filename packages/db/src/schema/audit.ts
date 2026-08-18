@@ -2,6 +2,7 @@ import { index, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
 
 import { users } from "./auth.js";
 import { createdAt, primaryId } from "./columns.js";
+import { organizations } from "./organizations.js";
 
 /**
  * Audit log.
@@ -16,6 +17,9 @@ export const auditEvents = pgTable(
   "audit_events",
   {
     id: primaryId(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
     /** Dotted action such as `finding.state_changed` or `report.exported`. */
     action: text("action").notNull(),
     entityType: text("entity_type").notNull(),
@@ -39,6 +43,10 @@ export const auditEvents = pgTable(
     index("audit_events_case_idx").on(table.caseId, table.occurredAt),
     index("audit_events_actor_idx").on(table.actorId, table.occurredAt),
     index("audit_events_action_idx").on(table.action, table.occurredAt),
+    index("audit_events_organization_idx").on(
+      table.organizationId,
+      table.occurredAt,
+    ),
   ],
 );
 
