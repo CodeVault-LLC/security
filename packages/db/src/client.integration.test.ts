@@ -231,6 +231,96 @@ describeIntegration("database", () => {
     });
   });
 
+  it("serializes administrators racing to remove each other", async () => {
+    await withTemporaryDatabase(async (pool) => {
+      await applyMigrationFiles(pool, [
+        "0001_initial_schema.sql",
+        "0002_ai_run_profiles.sql",
+        "0003_ai_intake.sql",
+        "0004_organization_security_mfa.sql",
+        "0005_serialize_final_admin_check.sql",
+      ]);
+
+      const organization = uuidv7();
+      const firstAdmin = uuidv7();
+      const secondAdmin = uuidv7();
+
+      await pool.query("BEGIN");
+      try {
+        await pool.query(
+          `INSERT INTO organizations (id, name) VALUES ($1, 'Race Test')`,
+          [organization],
+        );
+        await pool.query(
+          `INSERT INTO organization_security_policies (organization_id)
+           VALUES ($1)`,
+          [organization],
+        );
+        for (const [id, email] of [
+          [firstAdmin, "race-first@codevault.test"],
+          [secondAdmin, "race-second@codevault.test"],
+        ]) {
+          await pool.query(
+            `INSERT INTO users (id, email, display_name, password_hash)
+             VALUES ($1, $2, 'Race Administrator', 'not-a-real-hash')`,
+            [id, email],
+          );
+          await pool.query(
+            `INSERT INTO organization_memberships
+               (organization_id, user_id, role)
+             VALUES ($1, $2, 'ADMIN')`,
+            [organization, id],
+          );
+        }
+        await pool.query("COMMIT");
+      } catch (error) {
+        await pool.query("ROLLBACK");
+        throw error;
+      }
+
+      const first = await pool.connect();
+      const second = await pool.connect();
+      try {
+        await Promise.all([first.query("BEGIN"), second.query("BEGIN")]);
+        await Promise.all([
+          first.query(
+            `UPDATE organization_memberships SET role = 'MEMBER'
+             WHERE organization_id = $1 AND user_id = $2`,
+            [organization, secondAdmin],
+          ),
+          second.query(`UPDATE users SET disabled = true WHERE id = $1`, [
+            firstAdmin,
+          ]),
+        ]);
+
+        const commits = await Promise.allSettled([
+          first.query("COMMIT"),
+          second.query("COMMIT"),
+        ]);
+        expect(
+          commits.filter((result) => result.status === "fulfilled"),
+        ).toHaveLength(1);
+        expect(
+          commits.filter((result) => result.status === "rejected"),
+        ).toHaveLength(1);
+
+        const active = await pool.query<{ count: string }>(
+          `SELECT count(*)::text AS count
+           FROM organization_memberships AS membership
+           JOIN users AS account ON account.id = membership.user_id
+           WHERE membership.organization_id = $1
+             AND membership.role = 'ADMIN'
+             AND account.disabled = false`,
+          [organization],
+        );
+        expect(active.rows[0]?.count).toBe("1");
+      } finally {
+        first.release();
+        second.release();
+      }
+    });
+  });
+
   it("backfills one organization and transfers every existing role", async () => {
     await withTemporaryDatabase(async (pool) => {
       await applyMigrationFiles(pool, [
@@ -296,13 +386,28 @@ describeIntegration("database", () => {
   });
 
   it("requires every organization to retain an active administrator", async () => {
+    const before = await handle.db.execute<{ count: string }>(sql`
+      SELECT count(*)::text AS count
+      FROM organization_memberships AS membership
+      JOIN users AS account ON account.id = membership.user_id
+      WHERE membership.organization_id = ${organizationId}
+        AND membership.role = 'ADMIN'
+        AND account.disabled = false
+    `);
     let failure: unknown;
 
     try {
       await handle.db.transaction(async (tx) => {
-        await tx.execute(
-          sql`UPDATE users SET disabled = true WHERE id = ${administratorId}`,
-        );
+        await tx.execute(sql`
+          UPDATE users
+          SET disabled = true
+          WHERE id IN (
+            SELECT membership.user_id
+            FROM organization_memberships AS membership
+            WHERE membership.organization_id = ${organizationId}
+              AND membership.role = 'ADMIN'
+          )
+        `);
       });
     } catch (error: unknown) {
       failure = error;
@@ -321,6 +426,6 @@ describeIntegration("database", () => {
         AND membership.role = 'ADMIN'
         AND account.disabled = false
     `);
-    expect(activeAdministrators.rows[0]?.count).toBe("1");
+    expect(activeAdministrators.rows[0]?.count).toBe(before.rows[0]?.count);
   });
 });
