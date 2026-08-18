@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 
 import { uuidv7 } from "@codevault/core/crypto";
 import { allocateReference, createDatabase, schema } from "@codevault/db";
+import { seedBuiltIns } from "../apps/server/src/startup/seed.js";
 
 /**
  * Development seed.
@@ -36,6 +37,8 @@ async function main(): Promise<void> {
   const handle = createDatabase({ connectionString });
 
   try {
+    await seedBuiltIns(handle.db);
+
     const admins = await handle.db
       .select({ id: schema.users.id, email: schema.users.email })
       .from(schema.users)
@@ -69,6 +72,58 @@ async function main(): Promise<void> {
     }
 
     await handle.db.transaction(async (tx) => {
+      const ensureVendor = async (
+        slug: string,
+        name: string,
+        websiteUrl: string | null,
+      ): Promise<string> => {
+        const normalizedName = name.toLocaleLowerCase("en-US");
+        const [existingVendor] = await tx
+          .select({ id: schema.vendors.id })
+          .from(schema.vendors)
+          .where(sql`${schema.vendors.normalizedName} = ${normalizedName}`)
+          .limit(1);
+
+        if (existingVendor !== undefined) {
+          return existingVendor.id;
+        }
+
+        const ref = await allocateReference(tx, "vendor");
+        const [createdVendor] = await tx
+          .insert(schema.vendors)
+          .values({
+            ref,
+            slug,
+            name,
+            normalizedName,
+            websiteUrl,
+            createdBy: owner.id,
+          })
+          .returning({ id: schema.vendors.id });
+
+        if (createdVendor === undefined) {
+          throw new Error(`Could not create seed vendor ${name}.`);
+        }
+
+        return createdVendor.id;
+      };
+
+      const wpmuVendorId = await ensureVendor(
+        "wpmu-dev",
+        "WPMU DEV",
+        "https://wpmudev.com/",
+      );
+      const acmeVendorId = await ensureVendor(
+        "acme-networks",
+        "Acme Networks",
+        "https://acme.invalid/",
+      );
+      const internalVendorId = await ensureVendor(
+        "internal-test-services",
+        "Internal Test Services",
+        null,
+      );
+
       // --- A software component, the everyday case ------------------------
       const pluginCaseRef = await allocateReference(tx, "case");
       const [pluginCase] = await tx
@@ -96,7 +151,7 @@ async function main(): Promise<void> {
           ref: pluginAssetRef,
           name: "Hummingbird Performance",
           kind: "SOFTWARE_COMPONENT",
-          vendor: "WPMU DEV",
+          vendorId: wpmuVendorId,
           version: "3.4.1",
           normalizedVendor: "wpmu dev",
           normalizedProduct: "hummingbird performance",
@@ -230,7 +285,7 @@ async function main(): Promise<void> {
           ref: deviceRef,
           name: "Acme RT-1200",
           kind: "DEVICE",
-          vendor: "Acme Networks",
+          vendorId: acmeVendorId,
           version: "Rev B",
           normalizedVendor: "acme networks",
           normalizedProduct: "acme rt 1200",
@@ -246,7 +301,7 @@ async function main(): Promise<void> {
           ref: firmwareRef,
           name: "RT-1200 firmware",
           kind: "FIRMWARE",
-          vendor: "Acme Networks",
+          vendorId: acmeVendorId,
           version: "2.8.4",
           normalizedVendor: "acme networks",
           normalizedProduct: "rt 1200 firmware",
@@ -321,8 +376,8 @@ async function main(): Promise<void> {
             ref: apiAssetRef,
             name: "Partner Export API",
             kind: "API",
-            vendor: "Internal",
-            normalizedVendor: "internal",
+            vendorId: internalVendorId,
+            normalizedVendor: "internal test services",
             normalizedProduct: "partner export api",
             createdBy: owner.id,
             metadata: { seed: SEED_MARKER },
