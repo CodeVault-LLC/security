@@ -51,7 +51,7 @@ import type {
 import {
   actingUser,
   principalOf,
-  requireAdmin,
+  requireOrganizationAdminWithRecentMfa,
   requireAuthor,
 } from "../../http/guards.js";
 import {
@@ -105,7 +105,7 @@ export async function registerAiRoutes(app: AppInstance): Promise<void> {
       },
     },
     async (request) => {
-      const admin = requireAdmin(request);
+      const admin = requireOrganizationAdminWithRecentMfa(request);
       const principal = principalOf(request);
       const { providerId } = request.params;
       const body = request.body;

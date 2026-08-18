@@ -18,7 +18,10 @@ import { Type } from "@sinclair/typebox";
 
 import { revokeAllSessionsForUser } from "../../auth/session.js";
 import { hashToken } from "../../auth/tokens.js";
-import { principalOf, requireAdmin } from "../../http/guards.js";
+import {
+  principalOf,
+  requireOrganizationAdminWithRecentMfa,
+} from "../../http/guards.js";
 
 /**
  * User and invitation administration.
@@ -76,7 +79,7 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
       },
     },
     async (request) => {
-      const admin = requireAdmin(request);
+      const admin = requireOrganizationAdminWithRecentMfa(request);
       const { id } = request.params;
       const changes = request.body;
 
@@ -211,10 +214,10 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
   );
 
   app.get(
-    "/v1/invites",
+    "/v1/organization/invitations",
     { schema: { response: { 200: InviteListResponse } } },
     async (request) => {
-      const admin = requireAdmin(request);
+      const principal = principalOf(request);
 
       const rows = await app.db
         .select({
@@ -231,7 +234,7 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
         })
         .from(schema.invites)
         .innerJoin(schema.users, eq(schema.users.id, schema.invites.createdBy))
-        .where(eq(schema.invites.organizationId, admin.organizationId))
+        .where(eq(schema.invites.organizationId, principal.organization.id))
         .orderBy(desc(schema.invites.createdAt))
         .limit(200);
 
@@ -255,7 +258,7 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
   );
 
   app.post(
-    "/v1/invites",
+    "/v1/organization/invitations",
     {
       schema: {
         body: CreateInviteRequest,
@@ -263,7 +266,7 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
       },
     },
     async (request) => {
-      const admin = requireAdmin(request);
+      const admin = requireOrganizationAdminWithRecentMfa(request);
       const principal = principalOf(request);
       const { email, role } = request.body;
       const expiresInDays =
@@ -342,7 +345,7 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
   );
 
   app.delete(
-    "/v1/invites/:id",
+    "/v1/organization/invitations/:id",
     {
       schema: {
         params: IdParam,
@@ -350,7 +353,7 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
       },
     },
     async (request) => {
-      const admin = requireAdmin(request);
+      const admin = requireOrganizationAdminWithRecentMfa(request);
       const principal = principalOf(request);
       const { id } = request.params;
 

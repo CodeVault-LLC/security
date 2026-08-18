@@ -1,6 +1,7 @@
 import {
   canAdministerOrganization,
   canWriteAnything,
+  DomainError,
   hasRecentMfa,
   permissionDenied,
   type ActingUser,
@@ -66,10 +67,21 @@ export function requireRecentMfa(request: FastifyRequest): ActingUser {
       principal.organization.policy.recentMfaMinutes,
     )
   ) {
-    throw permissionDenied("Recent multi-factor authentication is required.");
+    throw new DomainError(
+      "MFA_REAUTH_REQUIRED",
+      "Recent multi-factor authentication is required.",
+    );
   }
 
   return actingUser(request);
+}
+
+export function requireOrganizationAdminWithRecentMfa(
+  request: FastifyRequest,
+): ActingUser {
+  const admin = requireOrganizationAdmin(request);
+  requireRecentMfa(request);
+  return admin;
 }
 
 /** Blocks viewers from any mutation before per-case rules are consulted. */
