@@ -13,6 +13,9 @@ import type {
   DraftTextOutput,
   DraftTitleOutput,
   PolishSectionOutput,
+  SubmissionFollowUpDraftOutput,
+  SubmissionInitialDraftOutput,
+  SubmissionReplyClassificationOutput,
 } from "./schemas.js";
 
 /**
@@ -224,6 +227,38 @@ function patchFor(action: AiActionId, output: unknown): ProposalDraft {
       return {
         patch: { contentMarkdown: typed.markdown },
         rationaleMarkdown: renderPolishRationale(typed),
+      };
+    }
+
+    case "SUBMISSION_DRAFT_INITIAL": {
+      const typed = output as SubmissionInitialDraftOutput;
+      return {
+        patch: { subject: typed.subject, bodyMarkdown: typed.bodyMarkdown },
+        rationaleMarkdown:
+          typed.rationale + renderList("Sources used", typed.sourceRefs),
+      };
+    }
+
+    case "SUBMISSION_DRAFT_FOLLOW_UP": {
+      const typed = output as SubmissionFollowUpDraftOutput;
+      return {
+        patch: { bodyMarkdown: typed.bodyMarkdown },
+        rationaleMarkdown:
+          typed.rationale +
+          renderList("Sources used", typed.sourceRefs) +
+          renderList("Questions to verify", typed.questions),
+      };
+    }
+
+    case "SUBMISSION_CLASSIFY_REPLY": {
+      const typed = output as SubmissionReplyClassificationOutput;
+      const first = typed.rankings[0];
+      if (first === undefined) {
+        throw new AiOutputError("Reply classification returned no ranking.");
+      }
+      return {
+        patch: { classification: first.classification },
+        rationaleMarkdown: typed.rationale,
       };
     }
 

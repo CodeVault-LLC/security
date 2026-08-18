@@ -4,6 +4,7 @@ import type { SubmissionDetail } from "@codevault/contracts";
 import { Button, Input, Label } from "@codevault/ui";
 
 import { MarkdownField } from "../markdown/markdown-field.js";
+import { SubmissionAiToolbar } from "./submission-ai-toolbar.js";
 
 export function SubmissionComposer({
   submission,
@@ -30,6 +31,7 @@ export function SubmissionComposer({
 
   return (
     <div className="space-y-3">
+      <SubmissionAiToolbar submission={submission} />
       {route.type === "EMAIL" ? (
         <div>
           <Label htmlFor="submission-subject">Subject</Label>

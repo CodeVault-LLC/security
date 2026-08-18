@@ -207,3 +207,81 @@ export const PolishSectionOutput = Type.Object({
 });
 
 export type PolishSectionOutput = Static<typeof PolishSectionOutput>;
+
+const SubmissionSourceRefs = Type.Array(Type.String({ maxLength: 100 }), {
+  maxItems: 50,
+});
+
+export const SubmissionInitialDraftOutput = Type.Object({
+  subject: Type.String({
+    minLength: 1,
+    maxLength: 300,
+    pattern: "^[^\\r\\n]*$",
+  }),
+  bodyMarkdown: Type.String({ minLength: 1, maxLength: 100_000 }),
+  sourceRefs: SubmissionSourceRefs,
+  rationale: Type.String({ maxLength: 5_000 }),
+});
+export type SubmissionInitialDraftOutput = Static<
+  typeof SubmissionInitialDraftOutput
+>;
+
+export const SubmissionFollowUpDraftOutput = Type.Object({
+  bodyMarkdown: Type.String({ minLength: 1, maxLength: 100_000 }),
+  questions: Type.Array(Type.String({ maxLength: 1_000 }), { maxItems: 20 }),
+  sourceRefs: SubmissionSourceRefs,
+  rationale: Type.String({ maxLength: 5_000 }),
+});
+export type SubmissionFollowUpDraftOutput = Static<
+  typeof SubmissionFollowUpDraftOutput
+>;
+
+const ReplyClassification = Type.Union(
+  [
+    "UNREVIEWED",
+    "AUTO_REPLY",
+    "ACKNOWLEDGEMENT",
+    "REQUEST_FOR_INFORMATION",
+    "STATUS_UPDATE",
+    "FIX_AVAILABLE",
+    "REJECTION",
+    "OTHER",
+  ].map((value) => Type.Literal(value)),
+);
+
+export const SubmissionReplyClassificationOutput = Type.Object({
+  rankings: Type.Array(
+    Type.Object({
+      classification: ReplyClassification,
+      confidence: Type.Union([
+        Type.Literal("LOW"),
+        Type.Literal("MEDIUM"),
+        Type.Literal("HIGH"),
+      ]),
+      evidence: Type.Array(Type.String({ maxLength: 500 }), { maxItems: 10 }),
+    }),
+    { minItems: 1, maxItems: 8 },
+  ),
+  rationale: Type.String({ maxLength: 5_000 }),
+});
+export type SubmissionReplyClassificationOutput = Static<
+  typeof SubmissionReplyClassificationOutput
+>;
+
+export const SubmissionThreadSummaryOutput = Type.Object({
+  datedFacts: Type.Array(
+    Type.Object({
+      date: Type.Union([Type.String({ format: "date-time" }), Type.Null()]),
+      fact: Type.String({ maxLength: 1_000 }),
+      sourceRefs: SubmissionSourceRefs,
+    }),
+    { maxItems: 100 },
+  ),
+  openQuestions: Type.Array(Type.String({ maxLength: 1_000 }), {
+    maxItems: 50,
+  }),
+  rationale: Type.String({ maxLength: 5_000 }),
+});
+export type SubmissionThreadSummaryOutput = Static<
+  typeof SubmissionThreadSummaryOutput
+>;
