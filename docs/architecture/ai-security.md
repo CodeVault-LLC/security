@@ -121,6 +121,15 @@ Enforced by `AI_FORBIDDEN_PATCH_FIELDS`, under every action:
 `remediationState`, `visibility`, `reviewState`, `approvedBy`, `approvedAt`,
 `status`, `revision`, `ownerId`, `caseId`.
 
+For disclosure work, AI may propose a first draft, a follow-up draft, or a
+message classification. It never chooses or edits recipients, sender identity,
+route, public-key version, attachment set, approval, delivery state,
+correspondence facts, deadlines, or lifecycle state. A follow-up remains a
+normal editable draft and the external-send confirmation is still mandatory.
+Inbound MIME is treated as hostile context: HTML is reduced to inert bounded
+text before any proposal can see it, and encrypted content is unavailable until
+a researcher decrypts it locally and explicitly saves reviewed plaintext.
+
 Two consequences worth stating plainly:
 
 - **A model cannot mark a finding novel.** `HUMAN_CONFIRMED_NOVEL` is recorded

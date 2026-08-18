@@ -1,6 +1,11 @@
 import { URL } from "node:url";
 
-import type { BrowserWindow, Session, WebContents } from "electron";
+import type {
+  BrowserWindow,
+  Session,
+  WebContents,
+  WebPreferences,
+} from "electron";
 
 /**
  * Electron security policy.
@@ -22,6 +27,20 @@ export const APP_ORIGIN = `${APP_PROTOCOL}://app`;
 
 /** Schemes `shell.openExternal` will accept, after confirmation. */
 export const ALLOWED_EXTERNAL_PROTOCOLS = ["https:", "mailto:"] as const;
+
+/** The isolated passphrase modal has no bridge, network, storage, or DevTools. */
+export const PASSPHRASE_PROMPT_WEB_PREFERENCES = {
+  nodeIntegration: false,
+  nodeIntegrationInWorker: false,
+  nodeIntegrationInSubFrames: false,
+  contextIsolation: true,
+  sandbox: true,
+  webSecurity: true,
+  allowRunningInsecureContent: false,
+  devTools: false,
+  webviewTag: false,
+  spellcheck: false,
+} as const satisfies WebPreferences;
 
 /** High-impact operations must pass through named IPC with native review. */
 export function isProtectedNativeOnlyApiPath(path: string): boolean {

@@ -29,7 +29,11 @@ import { hashSelection, runUploads } from "./file-uploads.js";
 import { buildAndSealManualPackage } from "./submissions/manual-package.js";
 import { buildAndSealEmailPackage } from "./submissions/package-builder.js";
 import type { SigningKeyStore } from "./crypto/signing-key-store.js";
-import { decryptPgpMimeMessage } from "./crypto/openpgp-message.js";
+import {
+  decryptPgpMimeMessage,
+  unlockPrivateKey,
+} from "./crypto/openpgp-message.js";
+import { promptPrivateKeyPassphrase } from "./crypto/passphrase-prompt.js";
 import {
   isExternalUrlAllowed,
   isProtectedNativeOnlyApiPath,
@@ -54,6 +58,7 @@ export interface IpcDependencies {
   apiClient: ApiClient;
   providers: ProviderRegistry;
   signingKeys: SigningKeyStore;
+  promptPassphrase?: (window: BrowserWindow) => Promise<string | null>;
   /** Cancels an in-flight AI run. */
   registerCancellation: (runId: string, controller: AbortController) => void;
   cancelRun: (runId: string) => void;
@@ -108,6 +113,8 @@ function failure(error: unknown): ApiOutcome<never> {
 
 export function registerIpcHandlers(dependencies: IpcDependencies): void {
   const { sessionStore, apiClient, providers, signingKeys } = dependencies;
+  const promptPassphrase =
+    dependencies.promptPassphrase ?? promptPrivateKeyPassphrase;
 
   /** Registers a handler that refuses messages from an untrusted sender. */
   const handle = <T>(
@@ -454,23 +461,32 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
         );
       }
       let signingPrivateKey: string | null = null;
+      let unlockedSigningPrivateKey: Awaited<
+        ReturnType<typeof unlockPrivateKey>
+      > | null = null;
       if (intent.cryptoMode === "SIGNED_AND_ENCRYPTED") {
         const keys = await signingKeys.list();
         if (keys.length !== 1)
           throw new Error("Select exactly one local signing key.");
-        if (keys[0]?.encrypted)
-          throw new Error(
-            "Encrypted signing keys require an interactive passphrase and cannot yet be used.",
-          );
         signingPrivateKey =
           (await signingKeys.armored(keys[0]!.fingerprint)) ?? null;
+        if (signingPrivateKey === null)
+          throw new Error("The selected signing key is unavailable.");
+        if (keys[0]!.encrypted) {
+          const passphrase = await promptPassphrase(window);
+          if (passphrase === null) throw new Error("Key unlock cancelled.");
+          unlockedSigningPrivateKey = await unlockPrivateKey(
+            signingPrivateKey,
+            passphrase,
+          );
+        }
       }
       const messageId = `<${randomUUID()}@codevault.local>`;
       const result = await buildAndSealEmailPackage({
         intent,
         senderAddress: intent.senderAddress,
         messageId,
-        signingPrivateKey,
+        signingPrivateKey: unlockedSigningPrivateKey ?? signingPrivateKey,
         fetchImpl: async (url, init) =>
           fetch(url, {
             ...(init?.method === undefined ? {} : { method: init.method }),
@@ -589,14 +605,16 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       const keys = await signingKeys.list();
       if (keys.length !== 1)
         throw new Error("Select exactly one local private key.");
-      if (keys[0]!.encrypted) {
-        throw new Error(
-          "Encrypted private keys require an interactive passphrase and cannot yet be used.",
-        );
-      }
       const armoredKey = await signingKeys.armored(keys[0]!.fingerprint);
       if (armoredKey === null)
         throw new Error("The selected private key is unavailable.");
+      let privateKey: string | Awaited<ReturnType<typeof unlockPrivateKey>> =
+        armoredKey;
+      if (keys[0]!.encrypted) {
+        const passphrase = await promptPassphrase(window);
+        if (passphrase === null) throw new Error("Key unlock cancelled.");
+        privateKey = await unlockPrivateKey(armoredKey, passphrase);
+      }
       const response = await fetch(intent.downloadUrl, {
         signal: AbortSignal.timeout(30_000),
       });
@@ -611,7 +629,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
           "The encrypted message failed its digest or size check.",
         );
       }
-      const opened = await decryptPgpMimeMessage(bytes, armoredKey);
+      const opened = await decryptPgpMimeMessage(bytes, privateKey);
       return {
         ok: true as const,
         data: { messageId: payload, ...opened },

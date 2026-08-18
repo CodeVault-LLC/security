@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 
+import type { CreateVendorRouteRequest } from "@codevault/contracts";
 import { uuidv7 } from "@codevault/core/crypto";
 import { allocateReference, createDatabase, schema } from "@codevault/db";
 import { seedBuiltIns } from "../apps/server/src/startup/seed.js";
@@ -123,6 +124,91 @@ async function main(): Promise<void> {
         "Internal Test Services",
         null,
       );
+
+      const ensureRoute = async (
+        vendorId: string,
+        route: CreateVendorRouteRequest,
+      ): Promise<{ id: string; revision: number }> => {
+        const [existingRoute] = await tx
+          .select({
+            id: schema.vendorRoutes.id,
+            revision: schema.vendorRoutes.revision,
+          })
+          .from(schema.vendorRoutes)
+          .where(
+            sql`${schema.vendorRoutes.vendorId} = ${vendorId} AND ${schema.vendorRoutes.name} = ${route.name}`,
+          )
+          .limit(1);
+        if (existingRoute !== undefined) return existingRoute;
+        const [createdRoute] = await tx
+          .insert(schema.vendorRoutes)
+          .values({
+            vendorId,
+            name: route.name,
+            type: route.type,
+            requirements: route as unknown as Record<string, unknown>,
+            sourceUrl: route.sourceUrl,
+            sourceReviewedAt: route.sourceReviewedAt,
+            createdBy: owner.id,
+          })
+          .returning({
+            id: schema.vendorRoutes.id,
+            revision: schema.vendorRoutes.revision,
+          });
+        if (createdRoute === undefined)
+          throw new Error(`Could not create seed route ${route.name}.`);
+        return createdRoute;
+      };
+
+      const wpmuRouteRequirements: CreateVendorRouteRequest = {
+        name: "Maintainer security form (test fixture)",
+        type: "MANUAL",
+        destinationUrl: "https://wpmudev.example/security-report",
+        fieldMappings: [
+          {
+            key: "plugin_slug",
+            label: "Plugin slug",
+            required: true,
+            format: "TEXT",
+            submissionField: "affected_product",
+            helpText: null,
+          },
+          {
+            key: "reproduction",
+            label: "Reproduction steps",
+            required: true,
+            format: "MULTILINE_TEXT",
+            submissionField: "reproduction",
+            helpText: null,
+          },
+        ],
+        acceptedExtensions: [".pdf", ".txt", ".zip"],
+        maximumFileBytes: 20 * 1024 * 1024,
+        maximumFileCount: 5,
+        acknowledgementBusinessDays: 7,
+        updateCadenceDays: 30,
+        instructions: "Development fixture only. Do not submit externally.",
+        sourceUrl: "https://wpmudev.example/security",
+        sourceReviewedAt: "2026-08-18T00:00:00.000Z",
+      };
+      const wpmuRoute = await ensureRoute(wpmuVendorId, wpmuRouteRequirements);
+
+      const acmeRouteRequirements: CreateVendorRouteRequest = {
+        name: "PSIRT email (test fixture)",
+        type: "EMAIL",
+        to: ["security@acme.invalid"],
+        cc: [],
+        subjectTemplate: "[TEST ONLY] Security report {caseRef}",
+        encryptionPolicy: "OPTIONAL",
+        publicKeyId: null,
+        maximumAttachmentBytes: 20 * 1024 * 1024,
+        acknowledgementBusinessDays: 3,
+        updateCadenceDays: 14,
+        requiredFields: ["affected_product", "reproduction", "impact"],
+        sourceUrl: "https://acme.invalid/security",
+        sourceReviewedAt: "2026-08-18T00:00:00.000Z",
+      };
+      const acmeRoute = await ensureRoute(acmeVendorId, acmeRouteRequirements);
 
       // --- A software component, the everyday case ------------------------
       const pluginCaseRef = await allocateReference(tx, "case");
@@ -258,6 +344,61 @@ async function main(): Promise<void> {
         recordedBy: owner.id,
       });
 
+      const pluginSubmissionRef = await allocateReference(tx, "submission");
+      const [pluginSubmission] = await tx
+        .insert(schema.submissions)
+        .values({
+          ref: pluginSubmissionRef,
+          caseId: pluginCase.id,
+          vendorId: wpmuVendorId,
+          routeId: wpmuRoute.id,
+          routeSnapshot: {
+            routeId: wpmuRoute.id,
+            routeRevision: wpmuRoute.revision,
+            vendorId: wpmuVendorId,
+            capturedAt: new Date().toISOString(),
+            route: wpmuRouteRequirements,
+          },
+          status: "IN_REVIEW",
+          coordinationState: "PREPARING",
+          cryptoMode: "PLAIN",
+          subject: "Hummingbird cache purge vulnerability",
+          bodyMarkdown:
+            "A reviewed draft for the plugin maintainer. This fixture is never sent automatically.",
+          manualFields: {
+            plugin_slug: "hummingbird-performance",
+            reproduction:
+              "Install 3.4.1, authenticate as no user, then request the fixture endpoint.",
+          },
+          plannedNextContactAt: new Date(
+            Date.now() + 3 * 86_400_000,
+          ).toISOString(),
+          coordinationNotes:
+            "Review recipient and attachments before approval.",
+          createdBy: owner.id,
+          lastEditedBy: owner.id,
+        })
+        .returning({
+          id: schema.submissions.id,
+          revision: schema.submissions.revision,
+        });
+      if (pluginSubmission !== undefined) {
+        await tx.insert(schema.submissionRevisions).values({
+          submissionId: pluginSubmission.id,
+          revision: pluginSubmission.revision,
+          subject: "Hummingbird cache purge vulnerability",
+          bodyMarkdown:
+            "A reviewed draft for the plugin maintainer. This fixture is never sent automatically.",
+          manualFields: {
+            plugin_slug: "hummingbird-performance",
+            reproduction:
+              "Install 3.4.1, authenticate as no user, then request the fixture endpoint.",
+          },
+          cryptoMode: "PLAIN",
+          authoredBy: owner.id,
+        });
+      }
+
       // --- A device and its firmware, the shape a web-only model breaks on -
       const deviceCaseRef = await allocateReference(tx, "case");
       const [deviceCase] = await tx
@@ -353,6 +494,54 @@ async function main(): Promise<void> {
           { findingId: rce.id, assetId: firmware.id, primary: true },
           { findingId: rce.id, assetId: device.id, primary: false },
         ]);
+      }
+
+      const acmeSubmissionRef = await allocateReference(tx, "submission");
+      const [acmeSubmission] = await tx
+        .insert(schema.submissions)
+        .values({
+          ref: acmeSubmissionRef,
+          caseId: deviceCase.id,
+          vendorId: acmeVendorId,
+          routeId: acmeRoute.id,
+          routeSnapshot: {
+            routeId: acmeRoute.id,
+            routeRevision: acmeRoute.revision,
+            vendorId: acmeVendorId,
+            capturedAt: new Date().toISOString(),
+            route: acmeRouteRequirements,
+          },
+          status: "DRAFT",
+          coordinationState: "NEEDS_INFORMATION",
+          cryptoMode: "ENCRYPTED",
+          subject: "[TEST ONLY] RT-1200 command injection",
+          bodyMarkdown:
+            "Critical test fixture. Confirm a verified test key before sealing this draft.",
+          manualFields: {},
+          agreedDisclosureAt: new Date(
+            Date.now() + 21 * 86_400_000,
+          ).toISOString(),
+          vendorReference: "ACME-PSIRT-TEST-1042",
+          coordinationNotes:
+            "Restricted zero-day example; use only fake recipients and locally verified keys.",
+          createdBy: owner.id,
+          lastEditedBy: owner.id,
+        })
+        .returning({
+          id: schema.submissions.id,
+          revision: schema.submissions.revision,
+        });
+      if (acmeSubmission !== undefined) {
+        await tx.insert(schema.submissionRevisions).values({
+          submissionId: acmeSubmission.id,
+          revision: acmeSubmission.revision,
+          subject: "[TEST ONLY] RT-1200 command injection",
+          bodyMarkdown:
+            "Critical test fixture. Confirm a verified test key before sealing this draft.",
+          manualFields: {},
+          cryptoMode: "ENCRYPTED",
+          authoredBy: owner.id,
+        });
       }
 
       // --- A service, for the API-shaped case ------------------------------

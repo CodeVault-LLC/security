@@ -53,4 +53,37 @@ describe("Gmail configuration", () => {
       }),
     ).toThrow("HTTPS");
   });
+
+  test("refuses fake Gmail endpoints outside the test environment", () => {
+    expect(() =>
+      loadConfig({
+        ...base,
+        NODE_ENV: "production",
+        GMAIL_ENABLED: "true",
+        GMAIL_CLIENT_ID: "client",
+        GMAIL_CLIENT_SECRET: "secret",
+        GMAIL_REDIRECT_URI: "https://codevault.example/callback",
+        MAIL_TOKEN_KEYRING: `1:${randomBytes(32).toString("base64")}`,
+        MAIL_ACTIVE_TOKEN_KEY_VERSION: "1",
+        GMAIL_E2E_BASE_URL: "http://127.0.0.1:4444",
+      }),
+    ).toThrow("test-only");
+  });
+
+  test("permits an exact loopback fake only in the test environment", () => {
+    const config = loadConfig({
+      ...base,
+      NODE_ENV: "test",
+      GMAIL_ENABLED: "true",
+      GMAIL_CLIENT_ID: "client",
+      GMAIL_CLIENT_SECRET: "secret",
+      GMAIL_REDIRECT_URI: "http://127.0.0.1:4310/v1/mail/gmail/callback",
+      MAIL_TOKEN_KEYRING: `1:${randomBytes(32).toString("base64")}`,
+      MAIL_ACTIVE_TOKEN_KEY_VERSION: "1",
+      GMAIL_E2E_BASE_URL: "http://127.0.0.1:4444",
+    });
+    expect(config.gmail.enabled && config.gmail.endpoints?.gmailApi).toBe(
+      "http://127.0.0.1:4444/gmail/v1",
+    );
+  });
 });

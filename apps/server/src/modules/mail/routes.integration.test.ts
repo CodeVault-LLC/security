@@ -16,6 +16,7 @@ describe("Gmail connection routes", () => {
       clientSecret: "test-secret",
       redirectUri: "https://codevault.test/v1/mail/gmail/callback",
       tokenKeyring: { activeVersion: 1, keys: new Map([[1, randomBytes(32)]]) },
+      endpoints: null,
       pubsub: null,
     };
     harness.app.mailProviders.register({

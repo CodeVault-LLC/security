@@ -9,12 +9,27 @@ import type {
   SentMessage,
 } from "./provider.js";
 
+export interface GmailProviderEndpoints {
+  token: string;
+  revoke: string;
+  userInfo: string;
+  gmailApi: string;
+}
+
 interface GmailProviderConfig {
   clientId: string;
   clientSecret: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  endpoints?: GmailProviderEndpoints | null;
 }
+
+const GOOGLE_ENDPOINTS: GmailProviderEndpoints = {
+  token: "https://oauth2.googleapis.com/token",
+  revoke: "https://oauth2.googleapis.com/revoke",
+  userInfo: "https://openidconnect.googleapis.com/v1/userinfo",
+  gmailApi: "https://gmail.googleapis.com/gmail/v1",
+};
 
 function base64UrlDecode(value: string): Uint8Array {
   return new Uint8Array(Buffer.from(value, "base64url"));
@@ -30,6 +45,9 @@ function asObject(value: unknown): Record<string, unknown> {
 export function createGmailProvider(config: GmailProviderConfig): MailProvider {
   const requestFetch = config.fetch ?? fetch;
   const timeoutMs = config.timeoutMs ?? 15_000;
+  const endpoints = config.endpoints ?? GOOGLE_ENDPOINTS;
+  const gmailUrl = (path: string): string =>
+    `${endpoints.gmailApi.replace(/\/$/, "")}${path}`;
 
   async function request(
     url: string,
@@ -76,7 +94,7 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
   }
 
   async function tokenRequest(body: URLSearchParams): Promise<OAuthTokens> {
-    const data = await request("https://oauth2.googleapis.com/token", {
+    const data = await request(endpoints.token, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body,
@@ -124,10 +142,7 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
     },
 
     async getIdentity(accessToken): Promise<MailIdentity> {
-      const data = await authenticated(
-        accessToken,
-        "https://openidconnect.googleapis.com/v1/userinfo",
-      );
+      const data = await authenticated(accessToken, endpoints.userInfo);
       if (
         typeof data.sub !== "string" ||
         typeof data.email !== "string" ||
@@ -147,7 +162,7 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
     async listSendAs(accessToken): Promise<SendAsAddress[]> {
       const data = await authenticated(
         accessToken,
-        "https://gmail.googleapis.com/gmail/v1/users/me/settings/sendAs",
+        gmailUrl("/users/me/settings/sendAs"),
       );
       const entries = Array.isArray(data.sendAs) ? data.sendAs : [];
       return entries.flatMap((value) => {
@@ -171,7 +186,7 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
     async send(accessToken, rawMessage, threadId): Promise<SentMessage> {
       const data = await authenticated(
         accessToken,
-        "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+        gmailUrl("/users/me/messages/send"),
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -193,9 +208,7 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
       if (!/^<[^<>\r\n]+>$/.test(rfcMessageId)) {
         throw new Error("Invalid RFC Message-ID.");
       }
-      const url = new URL(
-        "https://gmail.googleapis.com/gmail/v1/users/me/messages",
-      );
+      const url = new URL(gmailUrl("/users/me/messages"));
       url.searchParams.set("q", `rfc822msgid:${rfcMessageId}`);
       url.searchParams.set("maxResults", "2");
       const data = await authenticated(accessToken, url.toString());
@@ -213,9 +226,7 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
       startHistoryId,
       pageToken,
     ): Promise<MailHistoryPage> {
-      const url = new URL(
-        "https://gmail.googleapis.com/gmail/v1/users/me/history",
-      );
+      const url = new URL(gmailUrl("/users/me/history"));
       url.searchParams.set("startHistoryId", startHistoryId);
       url.searchParams.set("historyTypes", "messageAdded");
       if (pageToken !== undefined) url.searchParams.set("pageToken", pageToken);
@@ -245,7 +256,7 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
       messageId,
     ): Promise<ProviderMessageMetadata> {
       const url = new URL(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}`,
+        gmailUrl(`/users/me/messages/${encodeURIComponent(messageId)}`),
       );
       url.searchParams.set("format", "metadata");
       const data = await authenticated(accessToken, url.toString());
@@ -273,7 +284,7 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
 
     async getMessageRaw(accessToken, messageId): Promise<Uint8Array> {
       const url = new URL(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageId)}`,
+        gmailUrl(`/users/me/messages/${encodeURIComponent(messageId)}`),
       );
       url.searchParams.set("format", "raw");
       const data = await authenticated(accessToken, url.toString());
@@ -285,7 +296,7 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
     async getProfileHistoryId(accessToken): Promise<string> {
       const data = await authenticated(
         accessToken,
-        "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+        gmailUrl("/users/me/profile"),
       );
       if (typeof data.historyId !== "string") {
         throw new Error("Gmail omitted the profile history cursor.");
@@ -295,7 +306,7 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
 
     async getThreadMessageIds(accessToken, threadId): Promise<string[]> {
       const url = new URL(
-        `https://gmail.googleapis.com/gmail/v1/users/me/threads/${encodeURIComponent(threadId)}`,
+        gmailUrl(`/users/me/threads/${encodeURIComponent(threadId)}`),
       );
       url.searchParams.set("format", "minimal");
       const data = await authenticated(accessToken, url.toString());
@@ -309,7 +320,7 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
     async startWatch(accessToken, topicName) {
       const data = await authenticated(
         accessToken,
-        "https://gmail.googleapis.com/gmail/v1/users/me/watch",
+        gmailUrl("/users/me/watch"),
         {
           method: "POST",
           headers: { "content-type": "application/json" },
@@ -328,16 +339,14 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
     },
 
     async stopWatch(accessToken) {
-      await authenticated(
-        accessToken,
-        "https://gmail.googleapis.com/gmail/v1/users/me/stop",
-        { method: "POST" },
-      );
+      await authenticated(accessToken, gmailUrl("/users/me/stop"), {
+        method: "POST",
+      });
     },
 
     async revoke(refreshToken) {
       const response = await requestFetch(
-        `https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(refreshToken)}`,
+        `${endpoints.revoke}?token=${encodeURIComponent(refreshToken)}`,
         {
           method: "POST",
           headers: { "content-type": "application/x-www-form-urlencoded" },

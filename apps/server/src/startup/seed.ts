@@ -15,7 +15,7 @@ interface BuiltInVendor {
   routes: CreateVendorRouteRequest[];
 }
 
-const REVIEWED_AT = "2026-08-18T00:00:00.000Z";
+export const VENDOR_SEEDS_REVIEWED_AT = "2026-08-18T00:00:00.000Z";
 
 /**
  * Conservative starter data from official disclosure pages.
@@ -23,14 +23,14 @@ const REVIEWED_AT = "2026-08-18T00:00:00.000Z";
  * No public key is seeded: an encryption key is only trustworthy after its
  * fingerprint has been checked through an independent channel by a user.
  */
-const BUILT_IN_VENDORS: BuiltInVendor[] = [
+export const BUILT_IN_VENDORS: BuiltInVendor[] = [
   {
     slug: "tp-link",
     name: "TP-Link",
     normalizedName: "tp-link",
     websiteUrl: "https://www.tp-link.com/",
     sourceUrl: "https://www.tp-link.com/uk/press/security-advisory/",
-    sourceReviewedAt: REVIEWED_AT,
+    sourceReviewedAt: VENDOR_SEEDS_REVIEWED_AT,
     routes: [
       {
         name: "Product Security email",
@@ -56,7 +56,7 @@ const BUILT_IN_VENDORS: BuiltInVendor[] = [
           "disclosure_expectations",
         ],
         sourceUrl: "https://www.tp-link.com/uk/press/security-advisory/",
-        sourceReviewedAt: REVIEWED_AT,
+        sourceReviewedAt: VENDOR_SEEDS_REVIEWED_AT,
       },
     ],
   },
@@ -67,7 +67,7 @@ const BUILT_IN_VENDORS: BuiltInVendor[] = [
     websiteUrl: "https://wordpress.org/",
     sourceUrl:
       "https://make.wordpress.org/core/handbook/testing/reporting-security-vulnerabilities/",
-    sourceReviewedAt: REVIEWED_AT,
+    sourceReviewedAt: VENDOR_SEEDS_REVIEWED_AT,
     routes: [
       {
         name: "WordPress HackerOne submission",
@@ -117,7 +117,7 @@ const BUILT_IN_VENDORS: BuiltInVendor[] = [
           "Submit through the official WordPress HackerOne program. Do not disclose the issue publicly while it is being investigated. Portal limits and response times take precedence over these workspace reminders.",
         sourceUrl:
           "https://make.wordpress.org/core/handbook/testing/reporting-security-vulnerabilities/",
-        sourceReviewedAt: REVIEWED_AT,
+        sourceReviewedAt: VENDOR_SEEDS_REVIEWED_AT,
       },
     ],
   },

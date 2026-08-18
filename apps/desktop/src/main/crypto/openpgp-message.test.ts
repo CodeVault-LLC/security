@@ -12,12 +12,14 @@ import {
 import {
   buildPgpMimeMessage,
   decryptPgpMimeMessage,
+  unlockPrivateKey,
 } from "./openpgp-message.js";
 
 let vendorPublicKey: string;
 let vendorPrivateKey: string;
 let researcherPublicKey: string;
 let researcherPrivateKey: string;
+let encryptedResearcherPrivateKey: string;
 
 beforeAll(async () => {
   const vendor = await generateKey({
@@ -36,6 +38,14 @@ beforeAll(async () => {
   });
   researcherPublicKey = researcher.publicKey;
   researcherPrivateKey = researcher.privateKey;
+  const encryptedResearcher = await generateKey({
+    type: "ecc",
+    curve: "curve25519Legacy",
+    userIDs: [{ name: "Encrypted Researcher", email: "secure@codevault.test" }],
+    passphrase: "correct test passphrase",
+    format: "armored",
+  });
+  encryptedResearcherPrivateKey = encryptedResearcher.privateKey;
 });
 
 describe("PGP/MIME sealing", () => {
@@ -129,5 +139,16 @@ describe("PGP/MIME sealing", () => {
     expect(raw).toContain(
       "References: <initial@codevault.local> <vendor-reply@vendor.test>",
     );
+  });
+
+  it("unlocks an encrypted private key in memory and rejects a wrong passphrase", async () => {
+    const unlocked = await unlockPrivateKey(
+      encryptedResearcherPrivateKey,
+      "correct test passphrase",
+    );
+    expect(unlocked.isDecrypted()).toBe(true);
+    await expect(
+      unlockPrivateKey(encryptedResearcherPrivateKey, "wrong passphrase"),
+    ).rejects.toThrow("not accepted");
   });
 });

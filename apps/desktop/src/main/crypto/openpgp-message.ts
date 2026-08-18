@@ -5,6 +5,7 @@ import { simpleParser } from "mailparser";
 import {
   createMessage,
   decrypt,
+  decryptKey,
   encrypt,
   readKey,
   readPrivateKey,
@@ -27,7 +28,7 @@ export interface DecryptedPgpMimeMessage {
 /** Decrypts one RFC 3156 payload locally and returns text only, never HTML. */
 export async function decryptPgpMimeMessage(
   raw: Uint8Array,
-  armoredPrivateKey: string,
+  privateKey: string | PrivateKey,
 ): Promise<DecryptedPgpMimeMessage> {
   if (raw.byteLength > 100 * 1024 * 1024) {
     throw new Error("Encrypted message is too large to decrypt safely.");
@@ -49,7 +50,10 @@ export async function decryptPgpMimeMessage(
     message: await readMessage({
       armoredMessage: text.slice(begin, end + endMarker.length),
     }),
-    decryptionKeys: await readPrivateKey({ armoredKey: armoredPrivateKey }),
+    decryptionKeys:
+      typeof privateKey === "string"
+        ? await readPrivateKey({ armoredKey: privateKey })
+        : privateKey,
     format: "binary",
   });
   const parsed = await simpleParser(Buffer.from(opened.data), {
@@ -63,6 +67,23 @@ export async function decryptPgpMimeMessage(
     bodyText: (parsed.text ?? "").trim().slice(0, 1_000_000),
     attachmentCount: parsed.attachments.length,
   };
+}
+
+/** Unlocks an armored private key without retaining or returning a passphrase. */
+export async function unlockPrivateKey(
+  armoredPrivateKey: string,
+  passphrase?: string,
+): Promise<PrivateKey> {
+  const privateKey = await readPrivateKey({ armoredKey: armoredPrivateKey });
+  if (privateKey.isDecrypted()) return privateKey;
+  if (passphrase === undefined || passphrase.length === 0) {
+    throw new Error("This OpenPGP private key requires a passphrase.");
+  }
+  try {
+    return await decryptKey({ privateKey, passphrase });
+  } catch {
+    throw new Error("The OpenPGP private-key passphrase was not accepted.");
+  }
 }
 
 export interface BuildPgpMimeInput {

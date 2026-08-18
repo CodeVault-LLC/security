@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
 import type { SubmissionSealIntent } from "@codevault/contracts";
+import type { PrivateKey } from "openpgp";
 
 import { buildPgpMimeMessage } from "../crypto/openpgp-message.js";
 interface CompleteSealRequest {
@@ -14,7 +15,7 @@ export interface BuildEmailPackageOptions {
   intent: SubmissionSealIntent;
   senderAddress: string;
   messageId: string;
-  signingPrivateKey?: string | null;
+  signingPrivateKey?: string | PrivateKey | null;
   fetchImpl: (
     input: string,
     init?: {

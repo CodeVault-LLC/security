@@ -135,6 +135,37 @@ function checkVariables(): CheckResult[] {
         ? "HTTPS or exact loopback"
         : "must be HTTPS or exact loopback HTTP",
     });
+
+    const pubsubNames = [
+      "GMAIL_PUBSUB_TOPIC",
+      "GMAIL_PUBSUB_AUDIENCE",
+      "GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL",
+    ] as const;
+    const pubsubSet = pubsubNames.filter(
+      (name) => (process.env[name] ?? "").trim().length > 0,
+    );
+    results.push({
+      name: "Gmail Pub/Sub settings",
+      ok: pubsubSet.length === 0 || pubsubSet.length === pubsubNames.length,
+      detail:
+        pubsubSet.length === 0
+          ? "disabled; the polling fallback remains active"
+          : pubsubSet.length === pubsubNames.length
+            ? "topic, audience, and service account are all set"
+            : "set all three Pub/Sub variables together",
+    });
+
+    const e2eBaseUrl = process.env.GMAIL_E2E_BASE_URL;
+    results.push({
+      name: "fake Gmail endpoint isolation",
+      ok: e2eBaseUrl === undefined || process.env.NODE_ENV === "test",
+      detail:
+        e2eBaseUrl === undefined
+          ? "no fake endpoint configured"
+          : process.env.NODE_ENV === "test"
+            ? "enabled only for the test process"
+            : "GMAIL_E2E_BASE_URL is forbidden outside NODE_ENV=test",
+    });
   }
 
   return results;
@@ -189,6 +220,32 @@ async function checkDatabase(): Promise<CheckResult[]> {
       name: "migrations applied",
       ok: Number(migrations.rows[0]?.count ?? 0) > 0,
       detail: `${migrations.rows[0]?.count ?? 0} applied`,
+    });
+
+    const staleVendorSeeds = await pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+       FROM vendors
+       WHERE built_in = true
+         AND (source_url IS NULL OR source_reviewed_at IS NULL
+              OR source_reviewed_at < now() - interval '180 days')`,
+    );
+    const staleRouteSeeds = await pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+       FROM vendor_routes
+       WHERE built_in = true
+         AND (source_url IS NULL OR source_reviewed_at IS NULL
+              OR source_reviewed_at < now() - interval '180 days')`,
+    );
+    const staleSeeds =
+      Number(staleVendorSeeds.rows[0]?.count ?? 0) +
+      Number(staleRouteSeeds.rows[0]?.count ?? 0);
+    results.push({
+      name: "built-in vendor provenance",
+      ok: staleSeeds === 0,
+      detail:
+        staleSeeds === 0
+          ? "all official sources were reviewed within 180 days"
+          : `${staleSeeds} vendor or route seed(s) need source review`,
     });
 
     const admins = await pool.query<{ count: string }>(

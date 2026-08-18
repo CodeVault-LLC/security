@@ -10,6 +10,7 @@ import {
   parseTokenKeyring,
   type TokenKeyring,
 } from "./modules/mail/token-crypto.js";
+import type { GmailProviderEndpoints } from "./modules/mail/gmail-provider.js";
 
 export interface ServerConfig {
   database: {
@@ -56,6 +57,7 @@ export interface ServerConfig {
         clientSecret: string;
         redirectUri: string;
         tokenKeyring: TokenKeyring;
+        endpoints: GmailProviderEndpoints | null;
         pubsub: null | {
           topicName: string;
           audience: string;
@@ -157,11 +159,38 @@ export function loadConfig(env: Environment = process.env): ServerConfig {
       );
     }
 
+    const e2eBaseUrl = optional(env, "GMAIL_E2E_BASE_URL");
+    let endpoints: GmailProviderEndpoints | null = null;
+    if (e2eBaseUrl !== null) {
+      if (env.NODE_ENV !== "test") {
+        throw new ConfigError(
+          "GMAIL_E2E_BASE_URL is test-only and is refused outside NODE_ENV=test.",
+        );
+      }
+      const parsedBase = new URL(e2eBaseUrl);
+      if (
+        parsedBase.protocol !== "http:" ||
+        !["127.0.0.1", "[::1]"].includes(parsedBase.hostname)
+      ) {
+        throw new ConfigError(
+          "GMAIL_E2E_BASE_URL must be an exact loopback HTTP address.",
+        );
+      }
+      const base = e2eBaseUrl.replace(/\/$/, "");
+      endpoints = {
+        token: `${base}/token`,
+        revoke: `${base}/revoke`,
+        userInfo: `${base}/userinfo`,
+        gmailApi: `${base}/gmail/v1`,
+      };
+    }
+
     gmail = {
       enabled: true,
       clientId,
       clientSecret,
       redirectUri,
+      endpoints,
       tokenKeyring: parseTokenKeyring(
         required(env, "MAIL_TOKEN_KEYRING"),
         integer(env, "MAIL_ACTIVE_TOKEN_KEY_VERSION", 1),
