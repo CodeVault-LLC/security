@@ -112,11 +112,15 @@ export function createAuditWriter(): AuditWriter {
     async write(db, context, entry) {
       let organizationId = context.organizationId;
 
-      if (organizationId === undefined && entry.caseId !== undefined) {
+      if (
+        organizationId === undefined &&
+        entry.caseId !== undefined &&
+        entry.caseId !== null
+      ) {
         const [researchCase] = await db
           .select({ organizationId: schema.cases.organizationId })
           .from(schema.cases)
-          .where(eq(schema.cases.id, entry.caseId ?? ""))
+          .where(eq(schema.cases.id, entry.caseId))
           .limit(1);
         organizationId = researchCase?.organizationId;
       }

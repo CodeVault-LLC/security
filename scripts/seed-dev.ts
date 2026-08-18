@@ -644,6 +644,7 @@ async function main(): Promise<void> {
 
       await tx.insert(schema.auditEvents).values({
         id: uuidv7(),
+        organizationId: owner.organizationId,
         action: "system.seeded",
         entityType: "system",
         entityId: null,

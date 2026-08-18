@@ -30,7 +30,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    networks: [media-backend]
+    networks: [media-backend, host-access]
 
   # Runs on every stack start, including upgrades with an existing data volume.
   # The SQL is idempotent and provisions only development credentials.
@@ -92,7 +92,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-    networks: [media-backend]
+    networks: [media-backend, host-access]
 
   objectstore-init:
     image: minio/mc:RELEASE.2025-04-16T18-13-26Z
@@ -179,3 +179,4 @@ volumes:
 networks:
   media-backend:
     internal: true
+  host-access:

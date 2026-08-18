@@ -332,8 +332,8 @@ describeIntegration("vendor directory routes", () => {
     expect(asset.legacyVendorName).toBeNull();
   });
 
-  it("does not let an outsider mutate an asset linked to a restricted case", async () => {
-    const outsider = await harness.createUser({ role: "MEMBER" });
+  it("does not let a read-only member mutate an asset linked to a restricted case", async () => {
+    const reader = await harness.createUser({ role: "MEMBER" });
     const caseResponse = await harness.app.inject({
       method: "POST",
       url: "/v1/cases",
@@ -357,14 +357,21 @@ describeIntegration("vendor directory routes", () => {
     });
     const asset = created.json<AssetDetail>();
 
+    await harness.dbHandle.db.insert(schema.caseMembers).values({
+      caseId,
+      userId: reader.id,
+      access: "READ",
+      addedBy: author.id,
+    });
+
     const response = await harness.app.inject({
       method: "PATCH",
       url: `/v1/assets/${asset.id}`,
-      headers: outsider.headers,
+      headers: reader.headers,
       payload: { name: "Tampered target", expectedRevision: asset.revision },
     });
 
-    expect(response.statusCode).toBe(404);
+    expect(response.statusCode).toBe(403);
   });
 
   it("seeds editable starter vendors without importing an unverified key", async () => {
