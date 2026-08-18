@@ -11,6 +11,7 @@ import {
   Timestamp,
   Uuid,
 } from "./common.js";
+import { VendorSummary } from "./vendors.js";
 
 /**
  * Asset contracts.
@@ -61,7 +62,9 @@ export const AssetSummary = Type.Object({
   ref: HumanReference,
   name: Type.String(),
   kind: AssetKindSchema,
-  vendor: Type.Union([Type.String(), Type.Null()]),
+  vendorId: Type.Union([Uuid, Type.Null()]),
+  vendor: Type.Union([VendorSummary, Type.Null()]),
+  legacyVendorName: Type.Union([Type.String(), Type.Null()]),
   version: Type.Union([Type.String(), Type.Null()]),
   primaryIdentifier: Type.Union([Type.String(), Type.Null()]),
   findingCount: Type.Integer({ minimum: 0 }),
@@ -85,40 +88,44 @@ export const AssetDetail = Type.Object({
 export type AssetDetail = Static<typeof AssetDetail>;
 
 /** The simple create dialog: six fields, five of them optional. */
-export const CreateAssetRequest = Type.Object({
-  name: ShortText,
-  kind: AssetKindSchema,
-  vendor: Type.Optional(Type.String({ maxLength: 200 })),
-  version: Type.Optional(Type.String({ maxLength: 120 })),
-  identifier: Type.Optional(
-    Type.Object({
-      scheme: AssetIdentifierSchemeSchema,
-      value: Type.String({ minLength: 1, maxLength: 500 }),
-    }),
-  ),
-  notes: Type.Optional(Type.String({ maxLength: 5_000 })),
-  metadata: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-  /** Associates the new asset with a case straight away. */
-  caseId: Type.Optional(Uuid),
-});
+export const CreateAssetRequest = Type.Object(
+  {
+    name: ShortText,
+    kind: AssetKindSchema,
+    vendorId: Type.Optional(Uuid),
+    version: Type.Optional(Type.String({ maxLength: 120 })),
+    identifier: Type.Optional(
+      Type.Object({
+        scheme: AssetIdentifierSchemeSchema,
+        value: Type.String({ minLength: 1, maxLength: 500 }),
+      }),
+    ),
+    notes: Type.Optional(Type.String({ maxLength: 5_000 })),
+    metadata: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+    /** Associates the new asset with a case straight away. */
+    caseId: Type.Optional(Uuid),
+  },
+  { additionalProperties: false },
+);
 
 export type CreateAssetRequest = Static<typeof CreateAssetRequest>;
 
-export const UpdateAssetRequest = Type.Object({
-  name: Type.Optional(ShortText),
-  kind: Type.Optional(AssetKindSchema),
-  vendor: Type.Optional(
-    Type.Union([Type.String({ maxLength: 200 }), Type.Null()]),
-  ),
-  version: Type.Optional(
-    Type.Union([Type.String({ maxLength: 120 }), Type.Null()]),
-  ),
-  notes: Type.Optional(
-    Type.Union([Type.String({ maxLength: 5_000 }), Type.Null()]),
-  ),
-  metadata: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
-  expectedRevision: RevisionField,
-});
+export const UpdateAssetRequest = Type.Object(
+  {
+    name: Type.Optional(ShortText),
+    kind: Type.Optional(AssetKindSchema),
+    vendorId: Type.Optional(Type.Union([Uuid, Type.Null()])),
+    version: Type.Optional(
+      Type.Union([Type.String({ maxLength: 120 }), Type.Null()]),
+    ),
+    notes: Type.Optional(
+      Type.Union([Type.String({ maxLength: 5_000 }), Type.Null()]),
+    ),
+    metadata: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+    expectedRevision: RevisionField,
+  },
+  { additionalProperties: false },
+);
 
 export type UpdateAssetRequest = Static<typeof UpdateAssetRequest>;
 

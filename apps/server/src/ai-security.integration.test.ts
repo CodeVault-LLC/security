@@ -9,6 +9,7 @@ import type {
   FindingDetail,
   PreparedAiRun,
   ReportDetail,
+  SubmissionDetail,
 } from "@codevault/contracts";
 import { generateObjectKey, uuidv7 } from "@codevault/core/crypto";
 import { schema } from "@codevault/db";
@@ -37,6 +38,7 @@ describeIntegration("AI context filtering", () => {
   let researchCase: CaseDetail;
   let finding: FindingDetail;
   let report: ReportDetail;
+  let submission: SubmissionDetail;
 
   beforeAll(async () => {
     harness = await createHarness();
@@ -139,6 +141,48 @@ describeIntegration("AI context filtering", () => {
     });
 
     report = createdReport.json<ReportDetail>();
+
+    const vendorResponse = await harness.app.inject({
+      method: "POST",
+      url: "/v1/vendors",
+      headers: user.headers,
+      payload: { name: `AI security vendor ${uuidv7()}` },
+    });
+    const vendor = vendorResponse.json<{ id: string }>();
+    const routeResponse = await harness.app.inject({
+      method: "POST",
+      url: `/v1/vendors/${vendor.id}/routes`,
+      headers: user.headers,
+      payload: {
+        name: "Security portal",
+        type: "MANUAL",
+        destinationUrl: "https://security.example.test/report",
+        fieldMappings: [
+          {
+            key: "description",
+            label: "Description",
+            required: true,
+            format: "MULTILINE_TEXT",
+            submissionField: "reproduction",
+            helpText: null,
+          },
+        ],
+        acceptedExtensions: [".pdf"],
+        maximumFileBytes: 1_000_000,
+        maximumFileCount: 2,
+        acknowledgementBusinessDays: 5,
+        updateCadenceDays: null,
+        instructions: null,
+      },
+    });
+    const route = routeResponse.json<{ id: string }>();
+    const submissionResponse = await harness.app.inject({
+      method: "POST",
+      url: `/v1/cases/${researchCase.id}/submissions`,
+      headers: user.headers,
+      payload: { vendorId: vendor.id, routeId: route.id, cryptoMode: "PLAIN" },
+    });
+    submission = submissionResponse.json<SubmissionDetail>();
   });
 
   afterAll(async () => {
@@ -172,6 +216,26 @@ describeIntegration("AI context filtering", () => {
       expect(item.visibility).toBe("PUBLIC");
       expect(item.label).not.toContain(SENTINEL);
     }
+  });
+
+  it("never sends INTERNAL evidence into vendor submission drafting", async () => {
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/ai/context-preview",
+      headers: user.headers,
+      payload: {
+        action: "SUBMISSION_DRAFT_INITIAL",
+        targetType: "SUBMISSION",
+        targetId: submission.id,
+      },
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    const preview = response.json<AiContextPreview>();
+    expect(preview.audience).toBe("VENDOR");
+    expect(preview.promptText).not.toContain(SENTINEL);
+    expect(preview.items.every((item) => item.visibility !== "INTERNAL")).toBe(
+      true,
+    );
   });
 
   it("records what it excluded and why", async () => {

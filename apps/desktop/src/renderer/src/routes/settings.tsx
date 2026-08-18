@@ -1,7 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
-import type { OrganizationUser } from "@codevault/contracts";
+import type {
+  GmailAuthorization,
+  MailboxConnection,
+  OrganizationUser,
+} from "@codevault/contracts";
 import {
   Button,
   Card,
@@ -15,10 +19,11 @@ import {
 
 import { PageBody, PageHeader } from "../components/app-shell.js";
 import { Avatar } from "../components/avatar.js";
+import { QueryError } from "../components/query-boundary.js";
 import { useTheme } from "../hooks/use-theme.js";
 import { bridge } from "../lib/bridge.js";
 import { formatDateTime } from "../lib/dates.js";
-import { useApiMutation, useApiQuery } from "../lib/api.js";
+import { queryKeys, useApiMutation, useApiQuery } from "../lib/api.js";
 import { useSession } from "../lib/session.js";
 
 function SettingsNav(): React.JSX.Element {
@@ -32,6 +37,9 @@ function SettingsNav(): React.JSX.Element {
       </Link>
       <Link to="/settings/security" className="text-accent hover:underline">
         Security
+      </Link>
+      <Link to="/settings/mail" className="text-accent hover:underline">
+        Mail
       </Link>
     </nav>
   );
@@ -273,6 +281,133 @@ export function PersonalSecurityRoute(): React.JSX.Element {
           </CardBody>
         </Card>
       </div>
+    </PersonalPage>
+  );
+}
+
+export function PersonalMailRoute(): React.JSX.Element {
+  const [trackReplies, setTrackReplies] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const mailConnections = useApiQuery<{ items: MailboxConnection[] }>(
+    queryKeys.mailConnections,
+    "/v1/mail/connections",
+  );
+  const connectGmail = useApiMutation<
+    GmailAuthorization,
+    { enableReplyTracking: boolean }
+  >(
+    (body) => ({ path: "/v1/mail/gmail/connect", method: "POST", body }),
+    () => [queryKeys.mailConnections],
+  );
+  const disconnectMailbox = useApiMutation<null, { id: string }>(
+    ({ id }) => ({ path: `/v1/mail/connections/${id}`, method: "DELETE" }),
+    () => [queryKeys.mailConnections],
+  );
+
+  return (
+    <PersonalPage title="Mail settings">
+      <Card>
+        <CardHeader>
+          <CardTitle>Gmail delivery</CardTitle>
+        </CardHeader>
+        <CardBody className="space-y-3 text-[12px]">
+          <p className="text-text-muted">
+            Connect your own mailbox for reviewed vendor submissions. CodeVault
+            never receives your Google password. Reply tracking is optional and
+            requests broader read-only mailbox permission; unrelated message
+            bodies are never fetched.
+          </p>
+          <QueryError query={mailConnections} />
+          {mailConnections.data?.items.map((connection) => (
+            <div
+              key={connection.id}
+              className="flex flex-wrap items-center gap-3 rounded-(--cv-radius) border border-border p-2"
+            >
+              <div className="min-w-0 flex-1">
+                <p className="font-medium">{connection.emailAddress}</p>
+                <p className="text-text-muted">
+                  {connection.capabilities.includes("TRACK_REPLIES")
+                    ? "Send · Track replies"
+                    : "Send only"}
+                  {` · ${connection.status.toLowerCase().replaceAll("_", " ")}`}
+                </p>
+                {connection.lastSuccessfulSyncAt === null ? null : (
+                  <p className="text-text-muted">
+                    Last sync {formatDateTime(connection.lastSuccessfulSyncAt)}
+                  </p>
+                )}
+                {connection.watchExpiresAt === null ? null : (
+                  <p className="text-text-muted">
+                    Watch expires {formatDateTime(connection.watchExpiresAt)}
+                  </p>
+                )}
+                {connection.errorCategory === null ? null : (
+                  <p className="text-warning">
+                    Needs attention: {connection.errorCategory}
+                  </p>
+                )}
+              </div>
+              <Button
+                variant="secondary"
+                disabled={disconnectMailbox.isPending}
+                onClick={() =>
+                  disconnectMailbox.mutate(
+                    { id: connection.id },
+                    {
+                      onError: (mutationError) =>
+                        setError(mutationError.message),
+                    },
+                  )
+                }
+              >
+                Disconnect
+              </Button>
+            </div>
+          ))}
+          <label className="flex items-start gap-2">
+            <input
+              type="checkbox"
+              className="mt-0.5"
+              checked={trackReplies}
+              onChange={(event) => setTrackReplies(event.target.checked)}
+            />
+            <span>
+              Track replies to CodeVault-created threads
+              <span className="block text-text-muted">
+                Requests Google&rsquo;s restricted Gmail read-only scope. Enable
+                only when your organization has approved it.
+              </span>
+            </span>
+          </label>
+          <div className="flex gap-2">
+            <Button
+              variant="primary"
+              disabled={connectGmail.isPending}
+              onClick={() =>
+                connectGmail.mutate(
+                  { enableReplyTracking: trackReplies },
+                  {
+                    onSuccess: (authorization) =>
+                      void bridge().app.openExternal(
+                        authorization.authorizationUrl,
+                      ),
+                    onError: (mutationError) => setError(mutationError.message),
+                  },
+                )
+              }
+            >
+              Connect Gmail
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => void mailConnections.refetch()}
+            >
+              Refresh status
+            </Button>
+          </div>
+          {error === null ? null : <p className="text-danger">{error}</p>}
+        </CardBody>
+      </Card>
     </PersonalPage>
   );
 }

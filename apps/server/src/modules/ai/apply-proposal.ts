@@ -89,9 +89,156 @@ export async function applyProposalPatch(
     return;
   }
 
+  if (proposal.targetType === "SUBMISSION") {
+    await applyToSubmission(app, input);
+    return;
+  }
+
+  if (proposal.targetType === "CORRESPONDENCE_MESSAGE") {
+    await applyToCorrespondence(app, input);
+    return;
+  }
+
   await applyToFinding(app, input);
 
   void run;
+}
+
+async function applyToSubmission(
+  app: AppInstance,
+  input: ApplyProposalInput,
+): Promise<void> {
+  const { proposal, patch } = input;
+  const [submission] = await app.db
+    .select()
+    .from(schema.submissions)
+    .where(eq(schema.submissions.id, proposal.targetId))
+    .limit(1);
+  if (submission === undefined) throw notFound("Submission");
+  assertRevision(submission, input.expectedRevision, "submission");
+  if (submission.revision !== proposal.baseRevision) {
+    throw conflict(
+      "This submission changed since the AI proposal was created. Review the latest version before applying it.",
+      {
+        proposalBaseRevision: proposal.baseRevision,
+        currentRevision: submission.revision,
+      },
+    );
+  }
+  if (!["DRAFT", "IN_REVIEW", "APPROVED"].includes(submission.status)) {
+    throw conflict(
+      "A sealed or delivered submission cannot accept a draft proposal.",
+    );
+  }
+  const nextRevision = submission.revision + 1;
+  await app.db.transaction(async (tx) => {
+    await tx
+      .update(schema.submissions)
+      .set({
+        ...patch,
+        status: "DRAFT",
+        lastEditedBy: input.actorId,
+        revision: nextRevision,
+        updatedAt: sql`now()`,
+      })
+      .where(eq(schema.submissions.id, submission.id));
+    await tx.insert(schema.submissionRevisions).values({
+      submissionId: submission.id,
+      revision: nextRevision,
+      subject:
+        typeof patch.subject === "string" ? patch.subject : submission.subject,
+      bodyMarkdown:
+        typeof patch.bodyMarkdown === "string"
+          ? patch.bodyMarkdown
+          : submission.bodyMarkdown,
+      manualFields: submission.manualFields,
+      cryptoMode: submission.cryptoMode,
+      authoredBy: input.actorId,
+      aiRunId: proposal.runId,
+    });
+    await app.audit.write(
+      tx,
+      {
+        actorId: input.actorId,
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+      },
+      {
+        action: "ai.proposal_accepted",
+        entityType: "submission",
+        entityId: submission.id,
+        caseId: submission.caseId,
+        aiRunId: proposal.runId,
+        before: { revision: submission.revision, status: submission.status },
+        after: { revision: nextRevision, status: "DRAFT" },
+      },
+    );
+  });
+}
+
+async function applyToCorrespondence(
+  app: AppInstance,
+  input: ApplyProposalInput,
+): Promise<void> {
+  const { proposal, patch } = input;
+  const [message] = await app.db
+    .select()
+    .from(schema.correspondenceMessages)
+    .where(eq(schema.correspondenceMessages.id, proposal.targetId))
+    .limit(1);
+  if (message === undefined) throw notFound("Correspondence message");
+  assertRevision(message, input.expectedRevision, "correspondence message");
+  if (message.revision !== proposal.baseRevision) {
+    throw conflict("This message changed since the AI proposal was created.");
+  }
+  const classification = patch.classification;
+  const allowed = [
+    "UNREVIEWED",
+    "AUTO_REPLY",
+    "ACKNOWLEDGEMENT",
+    "REQUEST_FOR_INFORMATION",
+    "STATUS_UPDATE",
+    "FIX_AVAILABLE",
+    "REJECTION",
+    "OTHER",
+  ];
+  if (typeof classification !== "string" || !allowed.includes(classification)) {
+    throw aiOutputInvalid(
+      "The proposal contains an invalid reply classification.",
+    );
+  }
+  const [submission] = await app.db
+    .select({ caseId: schema.submissions.caseId })
+    .from(schema.submissions)
+    .where(eq(schema.submissions.id, message.submissionId))
+    .limit(1);
+  if (submission === undefined) throw notFound("Submission");
+  await app.db.transaction(async (tx) => {
+    await tx
+      .update(schema.correspondenceMessages)
+      .set({
+        classification: classification as typeof message.classification,
+        revision: message.revision + 1,
+      })
+      .where(eq(schema.correspondenceMessages.id, message.id));
+    await app.audit.write(
+      tx,
+      {
+        actorId: input.actorId,
+        sessionId: input.sessionId,
+        requestId: input.requestId,
+      },
+      {
+        action: "ai.proposal_accepted",
+        entityType: "correspondence_message",
+        entityId: message.id,
+        caseId: submission.caseId,
+        aiRunId: proposal.runId,
+        before: { classification: message.classification },
+        after: { classification },
+      },
+    );
+  });
 }
 
 async function applyToFinding(

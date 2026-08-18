@@ -17,8 +17,13 @@
     "@codevault/markdown": "workspace:*",
     "@codevault/standards": "workspace:*",
     "@codevault/ui": "workspace:*",
+    "@types/mailparser": "3.4.6",
     "cmdk": "^1.1.1",
-    "lucide-react": "^0.545.0"
+    "fflate": "^0.8.2",
+    "lucide-react": "^0.545.0",
+    "mailparser": "3.9.15",
+    "nodemailer": "7.0.6",
+    "openpgp": "6.2.2"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.9.0",
@@ -26,10 +31,12 @@
     "@codemirror/language": "^6.11.3",
     "@codemirror/state": "^6.7.1",
     "@codemirror/view": "^6.39.1",
+    "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.101.4",
     "@tanstack/react-router": "^1.170.29",
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.14.9",
+    "@types/nodemailer": "7.0.1",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^43.4.0",
     "electron-builder": "^26.15.3",
@@ -38,7 +45,6 @@
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.85.0",
     "tailwindcss": "^4.3.3",
-    "@tailwindcss/vite": "^4.3.3",
     "zustand": "^5.0.15"
   }
 }

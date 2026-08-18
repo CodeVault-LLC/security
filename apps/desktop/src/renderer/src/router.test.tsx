@@ -15,6 +15,7 @@ describe("settings route ownership boundaries", () => {
         "/settings/profile",
         "/settings/appearance",
         "/settings/security",
+        "/settings/mail",
       ]),
     );
     expect(paths).not.toContain("/organization");

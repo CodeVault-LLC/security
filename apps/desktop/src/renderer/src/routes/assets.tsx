@@ -43,6 +43,10 @@ import {
 } from "@codevault/ui";
 
 import { PageHeader } from "../components/app-shell.js";
+import {
+  VendorDialog,
+  VendorPicker,
+} from "../features/vendors/vendor-dialog.js";
 import { QueryError } from "../components/query-boundary.js";
 import { formatDate } from "../lib/dates.js";
 import { humanise } from "../lib/format.js";
@@ -263,7 +267,7 @@ export function AssetsRoute(): React.JSX.Element {
                   </Mono>
                   <span className="min-w-0 flex-1 truncate">{asset.name}</span>
                   <span className="w-40 shrink-0 truncate text-text-muted">
-                    {asset.vendor ?? "—"}
+                    {asset.vendor?.name ?? asset.legacyVendorName ?? "—"}
                   </span>
                   <span className="w-24 shrink-0 truncate text-text-muted">
                     {asset.version ?? "—"}
@@ -292,6 +296,8 @@ export function AssetDetailRoute({
 }: {
   assetId: string;
 }): React.JSX.Element {
+  const user = useSession((state) => state.user);
+  const [editOpen, setEditOpen] = useState(false);
   const asset = useApiQuery<AssetDetail>(
     queryKeys.asset(assetId),
     `/v1/assets/${assetId}`,
@@ -336,10 +342,26 @@ export function AssetDetailRoute({
           <span className="rounded border border-border px-1 text-[10px] uppercase text-text-muted">
             {humanise(data.kind)}
           </span>
+          {canWrite(user) ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              className="ml-auto"
+              onClick={() => setEditOpen(true)}
+            >
+              Edit asset
+            </Button>
+          ) : null}
         </div>
         <h1 className="mt-0.5 text-[15px] font-semibold">{data.name}</h1>
         <p className="text-[12px] text-text-muted">
-          {data.vendor ?? "Vendor unknown"}
+          {data.vendor === null ? (
+            (data.legacyVendorName ?? "Vendor unknown")
+          ) : (
+            <Link to={`/vendors/${data.vendor.id}`} className="hover:underline">
+              {data.vendor.name}
+            </Link>
+          )}
           {data.version === null ? "" : ` · ${data.version}`}
         </p>
       </header>
@@ -515,6 +537,11 @@ export function AssetDetailRoute({
           </Card>
         </div>
       </div>
+      <EditAssetDialog
+        asset={data}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+      />
     </div>
   );
 }
@@ -528,7 +555,8 @@ function CreateAssetDialog({
 }): React.JSX.Element {
   const [name, setName] = useState("");
   const [kind, setKind] = useState<AssetKind>("SOFTWARE_COMPONENT");
-  const [vendor, setVendor] = useState("");
+  const [vendorId, setVendorId] = useState<string | null>(null);
+  const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
   const [version, setVersion] = useState("");
   const [scheme, setScheme] = useState<string>("PURL");
   const [identifier, setIdentifier] = useState("");
@@ -543,7 +571,7 @@ function CreateAssetDialog({
       body: {
         name: name.trim(),
         kind,
-        ...(vendor.trim().length === 0 ? {} : { vendor: vendor.trim() }),
+        ...(vendorId === null ? {} : { vendorId }),
         ...(version.trim().length === 0 ? {} : { version: version.trim() }),
         ...(identifier.trim().length === 0
           ? {}
@@ -586,12 +614,11 @@ function CreateAssetDialog({
 
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label htmlFor="asset-vendor">Vendor (optional)</Label>
-              <Input
-                id="asset-vendor"
-                value={vendor}
-                onChange={(event) => setVendor(event.target.value)}
-                className="mt-1"
+              <Label>Vendor (optional)</Label>
+              <VendorPicker
+                value={vendorId}
+                onValueChange={setVendorId}
+                onCreateVendor={() => setVendorDialogOpen(true)}
               />
             </div>
             <div>
@@ -672,7 +699,7 @@ function CreateAssetDialog({
                 onSuccess: () => {
                   onOpenChange(false);
                   setName("");
-                  setVendor("");
+                  setVendorId(null);
                   setVersion("");
                   setIdentifier("");
                   setNotes("");
@@ -685,6 +712,135 @@ function CreateAssetDialog({
           </Button>
         </DialogFooter>
       </DialogContent>
+      <VendorDialog
+        open={vendorDialogOpen}
+        onOpenChange={setVendorDialogOpen}
+        onCreated={(created) => setVendorId(created.id)}
+      />
+    </Dialog>
+  );
+}
+
+function EditAssetDialog({
+  asset,
+  open,
+  onOpenChange,
+}: {
+  asset: AssetDetail;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}): React.JSX.Element {
+  const [name, setName] = useState(asset.name);
+  const [kind, setKind] = useState<AssetKind>(asset.kind);
+  const [vendorId, setVendorId] = useState<string | null>(asset.vendorId);
+  const [version, setVersion] = useState(asset.version ?? "");
+  const [notes, setNotes] = useState(asset.notes ?? "");
+  const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const update = useApiMutation<AssetDetail>(
+    () => ({
+      path: `/v1/assets/${asset.id}`,
+      method: "PATCH",
+      body: {
+        name: name.trim(),
+        kind,
+        vendorId,
+        version: version.trim().length === 0 ? null : version.trim(),
+        notes: notes.trim().length === 0 ? null : notes.trim(),
+        expectedRevision: asset.revision,
+      },
+    }),
+    () => [queryKeys.asset(asset.id), queryKeys.assets()],
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        title="Edit asset"
+        description="Vendor linkage uses a directory ID. Disclosure routes are chosen later for each submission."
+      >
+        <DialogBody className="space-y-3">
+          <div>
+            <Label htmlFor="edit-asset-name">Name</Label>
+            <Input
+              id="edit-asset-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label>Kind</Label>
+              <Select
+                aria-label="Edit asset kind"
+                value={kind}
+                onValueChange={(value) => setKind(value as AssetKind)}
+                options={assetKindSelectOptions(ASSET_KINDS)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="edit-asset-version">Version / model</Label>
+              <Input
+                id="edit-asset-version"
+                value={version}
+                onChange={(event) => setVersion(event.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <div>
+            <Label>Vendor</Label>
+            <VendorPicker
+              value={vendorId}
+              onValueChange={setVendorId}
+              onCreateVendor={() => setVendorDialogOpen(true)}
+            />
+            {asset.legacyVendorName === null ? null : (
+              <p className="mt-1 text-[10px] text-text-muted">
+                Imported legacy label: {asset.legacyVendorName}
+              </p>
+            )}
+          </div>
+          <div>
+            <Label htmlFor="edit-asset-notes">Notes</Label>
+            <Textarea
+              id="edit-asset-notes"
+              rows={3}
+              value={notes}
+              onChange={(event) => setNotes(event.target.value)}
+              className="mt-1"
+            />
+          </div>
+          {error === null ? null : (
+            <p className="text-[12px] text-danger">{error}</p>
+          )}
+        </DialogBody>
+        <DialogFooter>
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            disabled={name.trim().length === 0}
+            loading={update.isPending}
+            onClick={() =>
+              update.mutate(undefined, {
+                onSuccess: () => onOpenChange(false),
+                onError: (mutationError) => setError(mutationError.message),
+              })
+            }
+          >
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+      <VendorDialog
+        open={vendorDialogOpen}
+        onOpenChange={setVendorDialogOpen}
+        onCreated={(created) => setVendorId(created.id)}
+      />
     </Dialog>
   );
 }

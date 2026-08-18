@@ -9,6 +9,7 @@ import type {
   RecoveryCodeBundle,
   ServerEvent,
   SessionUser,
+  SubmissionDelivery,
 } from "@codevault/contracts";
 
 /**
@@ -87,6 +88,27 @@ export interface StartUploadRequest {
   selections: UploadSelection[];
 }
 
+export interface ManualBundleResult {
+  saved: boolean;
+  packageId: string | null;
+  sha256: string | null;
+}
+
+export interface SigningKeySummary {
+  fingerprint: string;
+  userIds: string[];
+  createdAt: string;
+  expiresAt: string | null;
+  encrypted: boolean;
+  persistent: boolean;
+}
+
+export interface DecryptedCorrespondence {
+  messageId: string;
+  bodyText: string;
+  attachmentCount: number;
+}
+
 /**
  * What the renderer may say about a run.
  *
@@ -160,6 +182,28 @@ export interface CodeVaultDesktopApi {
     load(avatarId: string): Promise<ApiOutcome<string>>;
   };
 
+  submissions: {
+    /** Builds, verifies, seals, and saves one manual disclosure bundle. */
+    downloadManualBundle(
+      submissionId: string,
+    ): Promise<ApiOutcome<ManualBundleResult>>;
+    /** Seals email through a native exact-content confirmation. */
+    seal(submissionId: string): Promise<ApiOutcome<ManualBundleResult>>;
+    /** Sends only after a second native review of the sealed package. */
+    send(submissionId: string): Promise<ApiOutcome<SubmissionDelivery>>;
+  };
+
+  signingKeys: {
+    list(): Promise<SigningKeySummary[]>;
+    import(persist: boolean): Promise<ApiOutcome<SigningKeySummary | null>>;
+    remove(fingerprint: string): Promise<ApiOutcome<{ ok: true }>>;
+  };
+
+  correspondence: {
+    /** Decrypts only after native confirmation; plaintext is memory-only. */
+    decrypt(messageId: string): Promise<ApiOutcome<DecryptedCorrespondence>>;
+  };
+
   ai: {
     /** Detected local providers and their versions. */
     providers(): Promise<AiProviderStatus[]>;
@@ -211,6 +255,13 @@ export const IPC_CHANNELS = {
   uploadsProgress: "uploads:progress",
   avatarsSelectAndUpload: "avatars:select-and-upload",
   avatarsLoad: "avatars:load",
+  submissionsDownloadManualBundle: "submissions:download-manual-bundle",
+  submissionsSeal: "submissions:seal",
+  submissionsSend: "submissions:send",
+  signingKeysList: "signing-keys:list",
+  signingKeysImport: "signing-keys:import",
+  signingKeysRemove: "signing-keys:remove",
+  correspondenceDecrypt: "correspondence:decrypt",
   aiProviders: "ai:providers",
   aiPreviewContext: "ai:preview-context",
   aiRun: "ai:run",

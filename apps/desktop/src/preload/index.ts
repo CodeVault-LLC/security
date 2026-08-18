@@ -132,6 +132,50 @@ const api: CodeVaultDesktopApi = {
       >,
   },
 
+  submissions: {
+    downloadManualBundle: (submissionId: string) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.submissionsDownloadManualBundle,
+        submissionId,
+      ) as ReturnType<
+        CodeVaultDesktopApi["submissions"]["downloadManualBundle"]
+      >,
+    seal: (submissionId: string) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.submissionsSeal,
+        submissionId,
+      ) as ReturnType<CodeVaultDesktopApi["submissions"]["seal"]>,
+    send: (submissionId: string) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.submissionsSend,
+        submissionId,
+      ) as ReturnType<CodeVaultDesktopApi["submissions"]["send"]>,
+  },
+
+  signingKeys: {
+    list: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.signingKeysList) as ReturnType<
+        CodeVaultDesktopApi["signingKeys"]["list"]
+      >,
+    import: (persist: boolean) =>
+      ipcRenderer.invoke(IPC_CHANNELS.signingKeysImport, persist) as ReturnType<
+        CodeVaultDesktopApi["signingKeys"]["import"]
+      >,
+    remove: (fingerprint: string) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.signingKeysRemove,
+        fingerprint,
+      ) as ReturnType<CodeVaultDesktopApi["signingKeys"]["remove"]>,
+  },
+
+  correspondence: {
+    decrypt: (messageId: string) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.correspondenceDecrypt,
+        messageId,
+      ) as ReturnType<CodeVaultDesktopApi["correspondence"]["decrypt"]>,
+  },
+
   ai: {
     providers: () =>
       ipcRenderer.invoke(IPC_CHANNELS.aiProviders) as ReturnType<

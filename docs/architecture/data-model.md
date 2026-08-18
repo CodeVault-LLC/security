@@ -140,6 +140,26 @@ has to read them again.
 Every save writes an immutable revision, which is what makes an AI polish
 reversible and an approval auditable.
 
+## Vendor routes, submissions, and correspondence
+
+A vendor is linked to assets by ID, never guessed from a product string. Each
+EMAIL or MANUAL route stores validated requirements and provenance. Creating a
+submission copies the complete route and its revision into an immutable
+snapshot, so a later recipient, portal, key, or limit change cannot silently
+alter an in-flight disclosure.
+
+Submission text and attachments are mutable only before sealing. Every edit
+writes a revision and invalidates approval. A sealed package records its
+manifest digest, byte digest, size, cryptographic mode, and stable RFC
+`Message-ID`; delivery records the exact mailbox, recipients, provider result,
+and route snapshot. `DELIVERY_UNKNOWN` is a durable fact, not a retry state.
+
+Correspondence rows belong to one submission and tracked provider thread. Raw
+MIME and attachments use opaque object-storage keys; PostgreSQL holds bounded,
+sanitised text and metadata. Lifecycle fields are human decisions layered over
+immutable delivery and message facts. Closing or resolving requires an outcome
+note, and snoozing requires both a bounded date and a reason.
+
 ## The audit table
 
 Append-only, enforced by `DO INSTEAD NOTHING` rules on UPDATE and DELETE. Not a

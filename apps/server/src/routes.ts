@@ -16,9 +16,14 @@ import { registerMetricsRoutes } from "./modules/metrics/routes.js";
 import { registerPriorArtRoutes } from "./modules/prior-art/routes.js";
 import { registerReportRoutes } from "./modules/reports/routes.js";
 import { registerSearchRoutes } from "./modules/search/routes.js";
+import { registerSubmissionRoutes } from "./modules/submissions/routes.js";
+import { registerCorrespondenceRoutes } from "./modules/submissions/correspondence.js";
+import { registerSubmissionLifecycleRoutes } from "./modules/submissions/lifecycle.js";
 import { registerUserRoutes } from "./modules/users/routes.js";
 import { registerOrganizationRoutes } from "./modules/organization/routes.js";
 import { registerSettingsRoutes } from "./modules/settings/routes.js";
+import { registerVendorRoutes } from "./modules/vendors/routes.js";
+import { registerMailRoutes } from "./modules/mail/routes.js";
 
 /**
  * Route registration.
@@ -37,6 +42,11 @@ export async function registerRoutes(app: AppInstance): Promise<void> {
   await registerSettingsRoutes(app);
   await registerCaseRoutes(app);
   await registerAssetRoutes(app);
+  await registerVendorRoutes(app);
+  await registerSubmissionRoutes(app);
+  await registerCorrespondenceRoutes(app);
+  await registerSubmissionLifecycleRoutes(app);
+  await registerMailRoutes(app);
   await registerFindingRoutes(app);
   await registerIntakeRoutes(app);
   await registerEvidenceRoutes(app);

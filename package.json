@@ -29,6 +29,7 @@
     "mfa:rotate-key": "bun run scripts/rotate-mfa-key.ts",
     "seed:dev": "bun run scripts/seed-dev.ts",
     "verify:env": "bun run scripts/verify-env.ts",
+    "mail:rewrap-tokens": "bun run scripts/rewrap-mail-tokens.ts",
     "e2e": "playwright test"
   },
   "devDependencies": {
@@ -47,6 +48,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^16.5.0",
     "jsdom": "^28.0.1",
+    "openpgp": "6.3.1",
     "playwright": "^1.62.1",
     "prettier": "^3.9.6",
     "react": "^19.2.0",

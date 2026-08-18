@@ -219,6 +219,63 @@ tracking pixel that would reveal an embargoed document had been opened.
 *Enforced by* `packages/reporting/src/lint.ts`, `apps/worker/src/jobs/report-pdf.ts`.
 *Tested by* `packages/reporting/src/lint.test.ts`, `apps/server/src/reports.integration.test.ts`.
 
+### 12. Renderer ↔ disclosure sealing and OpenPGP keys
+
+The renderer cannot read private keys, signed artifact URLs, package bytes, or
+call the generic API path that completes a seal or sends a message. It can name
+a submission through a fixed IPC operation. The main process downloads each
+artifact, verifies its server-authenticated size and SHA-256, constructs the
+MIME entity locally, and requires native confirmation before upload. The server
+then independently reads object storage and verifies the final size and digest
+before consuming a short-lived, one-time seal intent.
+
+OpenPGP private keys remain in the main process. Persistent keys are encrypted
+with Electron `safeStorage`; Linux `basic_text` storage is refused. Passphrases
+are entered into a dedicated sandboxed modal with no preload, Node, DevTools,
+network, or application bridge and are never stored. PGP/MIME follows RFC 3156:
+attachments and body are encrypted together, while the subject is visibly and
+explicitly outside the encrypted entity. A stable RFC `Message-ID` is generated
+before hashing so later Gmail reconciliation can prevent duplicate sends.
+
+*Enforced by* `apps/desktop/src/main/crypto/`, `apps/desktop/src/main/submissions/`,
+`apps/desktop/src/main/ipc.ts`, `apps/server/src/modules/submissions/`.
+*Tested by* `apps/desktop/src/main/crypto/openpgp-message.test.ts`,
+`apps/desktop/src/main/submissions/package-builder.test.ts`, and
+`apps/desktop/src/main/security.test.ts`.
+
+### 13. CodeVault ↔ Gmail
+
+OAuth uses PKCE and a one-time expiring state. Refresh tokens are AES-256-GCM
+encrypted with associated data binding them to provider, connection, and user;
+key versions support rotation. Production provider endpoints are fixed HTTPS
+Google origins. Test overrides are accepted only on exact loopback addresses
+under `NODE_ENV=test`, which prevents DNS or configuration substitution from
+exfiltrating a token.
+
+The send worker enforces the connected Gmail identity against the sealed `From`
+header and reconciles a stable RFC `Message-ID` around delivery. Timeouts are
+ambiguous and never auto-retried. Reply sync queries metadata first and fetches
+raw MIME only for a known provider thread. A stale history cursor recovers from
+known thread IDs rather than searching the mailbox.
+
+*Enforced by* `apps/server/src/modules/mail/`,
+`apps/worker/src/jobs/gmail-send.ts`, and `apps/worker/src/jobs/gmail-sync.ts`.
+*Tested by* `tests/e2e/gmail-thread-sync.spec.ts` and the corresponding worker
+unit tests.
+
+### 14. Hostile inbound mail ↔ correspondence UI
+
+Inbound MIME is size- and count-bounded. HTML never reaches the renderer;
+scripts, remote tracking resources, control characters, and path-bearing
+filenames are removed or normalised. OpenPGP ciphertext is stored as opaque raw
+mail with no server-side plaintext. Decryption happens locally after an
+unavoidable native confirmation, and reviewed plaintext is an explicit audited
+append-only revision.
+
+Pub/Sub notifications are authenticated with Google's OIDC signature, issuer,
+exact audience, and exact service-account email. Duplicate notifications are
+idempotent and notification storage excludes message bodies and raw addresses.
+
 ## Accepted risks
 
 - **A researcher can still publish something they should not.** CodeVault
@@ -241,6 +298,15 @@ tracking pixel that would reveal an embargoed document had been opened.
 - **Prior-art coverage is bounded by the sources configured.** "No prior art
   found" means the checked sources returned no convincing match on a given date,
   which is what the interface says and what the badge's tooltip explains.
+- **OpenPGP does not hide the email subject or transport metadata.** The UI
+  labels the subject as unencrypted and confirmation makes recipients visible.
+- **Gmail restricted scope is broader than the product's view.** Application
+  minimisation prevents unrelated raw bodies from being fetched, but a fully
+  compromised worker holding a valid token could exercise Google's granted
+  scope. Use delivery-only mode where reply tracking is unnecessary.
+- **A compromised workstation OS defeats local key and confirmation controls.**
+  Private-key custody protects against renderer/server compromise, not an
+  attacker controlling the researcher's operating system.
 
 ## Reporting a vulnerability in CodeVault
 

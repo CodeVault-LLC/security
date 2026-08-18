@@ -89,6 +89,11 @@ export const queryKeys = {
       ? (["assets"] as const)
       : (["assets", filters] as const),
   asset: (id: string) => ["asset", id] as const,
+  vendors: (filters?: Record<string, unknown>) =>
+    filters === undefined
+      ? (["vendors"] as const)
+      : (["vendors", filters] as const),
+  vendor: (id: string) => ["vendor", id] as const,
   metrics: (filters?: Record<string, unknown>) =>
     filters === undefined
       ? (["metrics"] as const)
@@ -106,10 +111,16 @@ export const queryKeys = {
   reportExports: (id: string) => ["report", id, "exports"] as const,
   reportTemplates: ["report-templates"] as const,
   disclosure: (caseId: string) => ["disclosure", caseId] as const,
+  submissions: (caseId: string) => ["submissions", caseId] as const,
+  submission: (id: string) => ["submission", id] as const,
+  submissionValidation: (id: string) =>
+    ["submission", id, "validation"] as const,
+  correspondence: (id: string) => ["submission", id, "correspondence"] as const,
   priorArt: (findingId: string) => ["prior-art", findingId] as const,
   aiRuns: (filters: Record<string, unknown>) => ["ai-runs", filters] as const,
   aiPolicies: ["ai-policies"] as const,
   aiProviders: ["ai-providers"] as const,
+  mailConnections: ["mail-connections"] as const,
   activity: (filters?: Record<string, unknown>) =>
     filters === undefined
       ? (["activity"] as const)

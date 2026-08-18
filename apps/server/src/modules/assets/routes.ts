@@ -13,11 +13,13 @@ import {
   ListAssetsQuery,
   PaginatedResponse,
   UpdateAssetRequest,
+  type VendorSummary,
 } from "@codevault/contracts";
 import {
   DomainError,
   normalizeIdentity,
   notFound,
+  type ActingUser,
   validationError,
 } from "@codevault/core";
 import { allocateReference, schema } from "@codevault/db";
@@ -26,6 +28,7 @@ import { assertRevision } from "../../http/concurrency.js";
 import { actingUser, principalOf, requireAuthor } from "../../http/guards.js";
 import { decodeCursor, pageSize, paginate } from "../../http/pagination.js";
 import { requireCaseWrite } from "../../services/case-access.js";
+import { vendorNameForAsset } from "../vendors/service.js";
 
 /**
  * Asset routes.
@@ -73,7 +76,8 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
         filters.push(
           sql`(
             ${schema.assets.name} ILIKE ${pattern}
-            OR ${schema.assets.vendor} ILIKE ${pattern}
+            OR ${schema.assets.legacyVendorName} ILIKE ${pattern}
+            OR ${schema.vendors.name} ILIKE ${pattern}
             OR ${schema.assets.ref} ILIKE ${pattern}
           )`,
         );
@@ -97,7 +101,19 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
           ref: schema.assets.ref,
           name: schema.assets.name,
           kind: schema.assets.kind,
-          vendor: schema.assets.vendor,
+          vendorId: schema.assets.vendorId,
+          legacyVendorName: schema.assets.legacyVendorName,
+          vendorRef: schema.vendors.ref,
+          vendorSlug: schema.vendors.slug,
+          vendorName: schema.vendors.name,
+          vendorWebsiteUrl: schema.vendors.websiteUrl,
+          vendorBuiltIn: schema.vendors.builtIn,
+          vendorSourceUrl: schema.vendors.sourceUrl,
+          vendorSourceReviewedAt: schema.vendors.sourceReviewedAt,
+          vendorArchivedAt: schema.vendors.archivedAt,
+          vendorCreatedAt: schema.vendors.createdAt,
+          vendorUpdatedAt: schema.vendors.updatedAt,
+          vendorRevision: schema.vendors.revision,
           version: schema.assets.version,
           revision: schema.assets.revision,
           createdAt: schema.assets.createdAt,
@@ -114,13 +130,31 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
           )`,
         })
         .from(schema.assets)
+        .leftJoin(schema.vendors, eq(schema.vendors.id, schema.assets.vendorId))
         .where(filters.length === 0 ? undefined : and(...filters))
         .orderBy(desc(schema.assets.updatedAt), desc(schema.assets.id))
         .limit(size + 1);
 
       const page = paginate(rows, size, (row) => row.updatedAt);
 
-      return { items: page.items, nextCursor: page.nextCursor };
+      return {
+        items: page.items.map((row) => ({
+          id: row.id,
+          ref: row.ref,
+          name: row.name,
+          kind: row.kind,
+          vendorId: row.vendorId,
+          vendor: joinedVendorSummary(row),
+          legacyVendorName: row.legacyVendorName,
+          version: row.version,
+          primaryIdentifier: row.primaryIdentifier,
+          findingCount: row.findingCount,
+          createdAt: row.createdAt,
+          updatedAt: row.updatedAt,
+          revision: row.revision,
+        })),
+        nextCursor: page.nextCursor,
+      };
     },
   );
 
@@ -141,9 +175,13 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
         await requireCaseWrite(app.db, user, body.caseId);
       }
 
+      const vendorName = await vendorNameForAsset(
+        app.db,
+        body.vendorId ?? null,
+      );
       const identity = normalizeIdentity({
         name: body.name,
-        vendor: body.vendor ?? null,
+        vendor: vendorName,
         identifiers: body.identifier === undefined ? [] : [body.identifier],
       });
 
@@ -156,7 +194,7 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
             ref,
             name: body.name,
             kind: body.kind,
-            vendor: body.vendor ?? null,
+            vendorId: body.vendorId ?? null,
             version: body.version ?? null,
             notes: body.notes ?? null,
             normalizedVendor: identity.vendor,
@@ -245,6 +283,8 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
       const principal = principalOf(request);
       const body = request.body;
 
+      await requireAssetWrite(app, user, request.params.id);
+
       const rows = await app.db
         .select()
         .from(schema.assets)
@@ -267,9 +307,12 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
         .from(schema.assetIdentifiers)
         .where(eq(schema.assetIdentifiers.assetId, existing.id));
 
+      const nextVendorId =
+        body.vendorId === undefined ? existing.vendorId : body.vendorId;
+      const vendorName = await vendorNameForAsset(app.db, nextVendorId);
       const identity = normalizeIdentity({
         name: body.name ?? existing.name,
-        vendor: body.vendor === undefined ? existing.vendor : body.vendor,
+        vendor: vendorName,
         identifiers,
       });
 
@@ -279,7 +322,7 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
           .set({
             ...(body.name === undefined ? {} : { name: body.name }),
             ...(body.kind === undefined ? {} : { kind: body.kind }),
-            ...(body.vendor === undefined ? {} : { vendor: body.vendor }),
+            ...(body.vendorId === undefined ? {} : { vendorId: body.vendorId }),
             ...(body.version === undefined ? {} : { version: body.version }),
             ...(body.notes === undefined ? {} : { notes: body.notes }),
             ...(body.metadata === undefined ? {} : { metadata: body.metadata }),
@@ -325,7 +368,7 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
     },
     async (request) => {
       const user = requireAuthor(request);
-      const assetId = await requireAsset(app, request.params.id);
+      const assetId = await requireAssetWrite(app, user, request.params.id);
       const body = request.body;
 
       await app.db.transaction(async (tx) => {
@@ -380,9 +423,9 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
       },
     },
     async (request) => {
-      requireAuthor(request);
+      const user = requireAuthor(request);
 
-      const assetId = await requireAsset(app, request.params.id);
+      const assetId = await requireAssetWrite(app, user, request.params.id);
       const body = request.body;
 
       await app.db
@@ -410,7 +453,7 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
     },
     async (request) => {
       const user = requireAuthor(request);
-      const assetId = await requireAsset(app, request.params.id);
+      const assetId = await requireAssetWrite(app, user, request.params.id);
       const body = request.body;
 
       if (body.toAssetId === assetId) {
@@ -459,6 +502,70 @@ async function requireAsset(
   return row.id;
 }
 
+async function requireAssetWrite(
+  app: AppInstance,
+  user: ActingUser,
+  assetId: string,
+): Promise<string> {
+  await requireAsset(app, assetId);
+
+  const linkedCases = await app.db
+    .select({ caseId: schema.caseAssets.caseId })
+    .from(schema.caseAssets)
+    .where(eq(schema.caseAssets.assetId, assetId));
+
+  for (const linked of linkedCases) {
+    await requireCaseWrite(app.db, user, linked.caseId);
+  }
+
+  return assetId;
+}
+
+interface JoinedVendorColumns {
+  vendorId: string | null;
+  vendorRef: string | null;
+  vendorSlug: string | null;
+  vendorName: string | null;
+  vendorWebsiteUrl: string | null;
+  vendorBuiltIn: boolean | null;
+  vendorSourceUrl: string | null;
+  vendorSourceReviewedAt: string | null;
+  vendorArchivedAt: string | null;
+  vendorCreatedAt: string | null;
+  vendorUpdatedAt: string | null;
+  vendorRevision: number | null;
+}
+
+function joinedVendorSummary(row: JoinedVendorColumns): VendorSummary | null {
+  if (
+    row.vendorId === null ||
+    row.vendorRef === null ||
+    row.vendorSlug === null ||
+    row.vendorName === null ||
+    row.vendorBuiltIn === null ||
+    row.vendorCreatedAt === null ||
+    row.vendorUpdatedAt === null ||
+    row.vendorRevision === null
+  ) {
+    return null;
+  }
+
+  return {
+    id: row.vendorId,
+    ref: row.vendorRef,
+    slug: row.vendorSlug,
+    name: row.vendorName,
+    websiteUrl: row.vendorWebsiteUrl,
+    builtIn: row.vendorBuiltIn,
+    sourceUrl: row.vendorSourceUrl,
+    sourceReviewedAt: row.vendorSourceReviewedAt,
+    archivedAt: row.vendorArchivedAt,
+    createdAt: row.vendorCreatedAt,
+    updatedAt: row.vendorUpdatedAt,
+    revision: row.vendorRevision,
+  };
+}
+
 /** Keeps the normalized identity in step with the identifier list. */
 async function refreshNormalizedIdentity(
   tx: Parameters<Parameters<AppInstance["db"]["transaction"]>[0]>[0],
@@ -467,9 +574,10 @@ async function refreshNormalizedIdentity(
   const rows = await tx
     .select({
       name: schema.assets.name,
-      vendor: schema.assets.vendor,
+      vendorName: schema.vendors.name,
     })
     .from(schema.assets)
+    .leftJoin(schema.vendors, eq(schema.vendors.id, schema.assets.vendorId))
     .where(eq(schema.assets.id, assetId))
     .limit(1);
 
@@ -489,7 +597,7 @@ async function refreshNormalizedIdentity(
 
   const identity = normalizeIdentity({
     name: asset.name,
-    vendor: asset.vendor,
+    vendor: asset.vendorName,
     identifiers,
   });
 
@@ -512,7 +620,19 @@ async function loadAssetDetail(
       ref: schema.assets.ref,
       name: schema.assets.name,
       kind: schema.assets.kind,
-      vendor: schema.assets.vendor,
+      vendorId: schema.assets.vendorId,
+      legacyVendorName: schema.assets.legacyVendorName,
+      vendorRef: schema.vendors.ref,
+      vendorSlug: schema.vendors.slug,
+      vendorName: schema.vendors.name,
+      vendorWebsiteUrl: schema.vendors.websiteUrl,
+      vendorBuiltIn: schema.vendors.builtIn,
+      vendorSourceUrl: schema.vendors.sourceUrl,
+      vendorSourceReviewedAt: schema.vendors.sourceReviewedAt,
+      vendorArchivedAt: schema.vendors.archivedAt,
+      vendorCreatedAt: schema.vendors.createdAt,
+      vendorUpdatedAt: schema.vendors.updatedAt,
+      vendorRevision: schema.vendors.revision,
       version: schema.assets.version,
       notes: schema.assets.notes,
       metadata: schema.assets.metadata,
@@ -525,6 +645,7 @@ async function loadAssetDetail(
       )`,
     })
     .from(schema.assets)
+    .leftJoin(schema.vendors, eq(schema.vendors.id, schema.assets.vendorId))
     .where(eq(schema.assets.id, assetId))
     .limit(1);
 
@@ -574,7 +695,9 @@ async function loadAssetDetail(
     ref: asset.ref,
     name: asset.name,
     kind: asset.kind,
-    vendor: asset.vendor,
+    vendorId: asset.vendorId,
+    vendor: joinedVendorSummary(asset),
+    legacyVendorName: asset.legacyVendorName,
     version: asset.version,
     notes: asset.notes,
     metadata: asset.metadata,

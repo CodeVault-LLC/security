@@ -52,6 +52,27 @@ services:
       - ./postgres-init/010-media-runtime.sql:/init/010-media-runtime.sql:ro
     networks: [media-backend]
 
+  # Ephemeral release-test database. It starts only with
+  # `docker compose --profile e2e up postgres-e2e` and never shares the
+  # development volume, so destructive acceptance fixtures are disposable.
+  postgres-e2e:
+    profiles: ["e2e"]
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: codevault
+      POSTGRES_PASSWORD: codevault_e2e_password
+      POSTGRES_DB: codevault_e2e
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    ports:
+      - "5434:5432"
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U codevault -d codevault_e2e"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+
   # S3-compatible object storage for artifacts. Buckets are private; the API
   # hands out short-lived presigned URLs and never proxies file bytes.
   objectstore:

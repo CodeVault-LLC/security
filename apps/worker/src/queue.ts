@@ -11,6 +11,9 @@ import { generateArtifactPreview } from "./jobs/artifact-preview.js";
 import { refreshIntelligence } from "./jobs/intelligence-refresh.js";
 import { runPriorArtCheck } from "./jobs/prior-art.js";
 import { generateReportPdf } from "./jobs/report-pdf.js";
+import { runGmailSend } from "./jobs/gmail-send.js";
+import { runGmailSync } from "./jobs/gmail-sync.js";
+import { renewGmailWatches } from "./jobs/gmail-watch-renewal.js";
 
 /**
  * Job registration.
@@ -60,6 +63,24 @@ const HANDLERS = [
     expireInSeconds: 900,
     run: generateReportPdf,
   } satisfies Handler<"report-pdf">,
+  {
+    queue: JOB_QUEUES.gmailSend,
+    concurrency: 2,
+    expireInSeconds: 120,
+    run: runGmailSend,
+  } satisfies Handler<"gmail-send">,
+  {
+    queue: JOB_QUEUES.gmailSync,
+    concurrency: 2,
+    expireInSeconds: 300,
+    run: runGmailSync,
+  } satisfies Handler<"gmail-sync">,
+  {
+    queue: JOB_QUEUES.gmailWatchRenewal,
+    concurrency: 1,
+    expireInSeconds: 300,
+    run: renewGmailWatches,
+  } satisfies Handler<"gmail-watch-renewal">,
   {
     queue: JOB_QUEUES.intelligenceRefresh,
     concurrency: 2,
@@ -111,6 +132,9 @@ export async function startQueue(
       },
     );
   }
+
+  await boss.schedule(JOB_QUEUES.gmailSync, "*/10 * * * *", {});
+  await boss.schedule(JOB_QUEUES.gmailWatchRenewal, "17 2 * * *", {});
 
   context.log(`listening on ${HANDLERS.length} queues`);
 

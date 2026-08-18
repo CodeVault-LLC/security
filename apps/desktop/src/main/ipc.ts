@@ -1,3 +1,6 @@
+import { createHash, randomUUID } from "node:crypto";
+import { readFile, stat, writeFile } from "node:fs/promises";
+
 import { app, dialog, ipcMain, shell, type BrowserWindow } from "electron";
 
 import type {
@@ -9,6 +12,11 @@ import type {
   PreparedAiRun,
   RecoveryCodeBundle,
   TotpEnrollmentResponse,
+  SubmissionPackage,
+  SubmissionDelivery,
+  SubmissionSendIntent,
+  CorrespondenceDecryptIntent,
+  SubmissionSealIntent,
 } from "@codevault/contracts";
 
 import {
@@ -27,7 +35,19 @@ import {
   type LocalUploadSelection,
 } from "./file-uploads.js";
 import { loadAvatarDataUrl, selectAndUploadAvatar } from "./avatar-uploads.js";
-import { isExternalUrlAllowed, normalizeServerUrl } from "./security.js";
+import { buildAndSealManualPackage } from "./submissions/manual-package.js";
+import { buildAndSealEmailPackage } from "./submissions/package-builder.js";
+import type { SigningKeyStore } from "./crypto/signing-key-store.js";
+import {
+  decryptPgpMimeMessage,
+  unlockPrivateKey,
+} from "./crypto/openpgp-message.js";
+import { promptPrivateKeyPassphrase } from "./crypto/passphrase-prompt.js";
+import {
+  isExternalUrlAllowed,
+  isProtectedNativeOnlyApiPath,
+  normalizeServerUrl,
+} from "./security.js";
 import type { SessionStore } from "./session-store.js";
 import { UploadSelectionStore } from "./upload-selections.js";
 
@@ -48,6 +68,8 @@ export interface IpcDependencies {
   sessionStore: SessionStore;
   apiClient: ApiClient;
   providers: ProviderRegistry;
+  signingKeys: SigningKeyStore;
+  promptPassphrase?: (window: BrowserWindow) => Promise<string | null>;
   /** Cancels an in-flight AI run. */
   registerCancellation: (runId: string, controller: AbortController) => void;
   cancelRun: (runId: string) => void;
@@ -101,7 +123,9 @@ function failure(error: unknown): ApiOutcome<never> {
 }
 
 export function registerIpcHandlers(dependencies: IpcDependencies): void {
-  const { sessionStore, apiClient, providers } = dependencies;
+  const { sessionStore, apiClient, providers, signingKeys } = dependencies;
+  const promptPassphrase =
+    dependencies.promptPassphrase ?? promptPrivateKeyPassphrase;
   let pendingLogin: {
     serverUrl: string;
     challengeToken: string;
@@ -493,6 +517,17 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       // the main process to fetch an arbitrary path on the server host.
       return failure(new Error("invalid api path"));
     }
+    if (isProtectedNativeOnlyApiPath(request.path)) {
+      return failure(
+        new ApiError(
+          403,
+          "PERMISSION_DENIED",
+          "Sending requires the named native confirmation operation.",
+          null,
+          null,
+        ),
+      );
+    }
 
     try {
       const data = await apiClient.request<unknown>(request.path, {
@@ -635,6 +670,313 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       });
 
       return { ok: true as const, data: artifactIds };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.submissionsDownloadManualBundle, async (payload) => {
+    if (
+      typeof payload !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        payload,
+      )
+    ) {
+      return failure(new Error("invalid submission id"));
+    }
+
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+
+    const destination = await dialog.showSaveDialog(window, {
+      title: "Save sealed manual submission",
+      defaultPath: `codevault-submission-${payload.slice(0, 8)}.zip`,
+      filters: [{ name: "ZIP archive", extensions: ["zip"] }],
+      properties: ["createDirectory", "showOverwriteConfirmation"],
+    });
+    if (destination.canceled || destination.filePath === undefined) {
+      return {
+        ok: true as const,
+        data: { saved: false, packageId: null, sha256: null },
+      };
+    }
+
+    try {
+      const intent = await apiClient.request<SubmissionSealIntent>(
+        `/v1/submissions/${payload}/seal-intent`,
+        { method: "POST" },
+      );
+      const result = await buildAndSealManualPackage({
+        intent,
+        fetchImpl: async (url, init) =>
+          fetch(url, {
+            ...(init?.method === undefined ? {} : { method: init.method }),
+            ...(init?.headers === undefined ? {} : { headers: init.headers }),
+            ...(init?.body === undefined
+              ? {}
+              : { body: Buffer.from(init.body) }),
+          }),
+        beforeUpload: async (bytes) => {
+          await writeFile(destination.filePath!, bytes, { mode: 0o600 });
+        },
+        complete: (body) =>
+          apiClient.request<SubmissionPackage>(
+            `/v1/submissions/${payload}/seal`,
+            { method: "POST", body },
+          ),
+      });
+      return {
+        ok: true as const,
+        data: {
+          saved: true,
+          packageId: result.packageId,
+          sha256: result.sha256,
+        },
+      };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.signingKeysList, async () => signingKeys.list());
+
+  handle(IPC_CHANNELS.signingKeysImport, async (payload) => {
+    if (typeof payload !== "boolean")
+      return failure(new Error("invalid persistence choice"));
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+    const selection = await dialog.showOpenDialog(window, {
+      title: "Import OpenPGP private signing key",
+      properties: ["openFile", "dontAddToRecent"],
+      filters: [
+        { name: "Armored OpenPGP key", extensions: ["asc", "pgp", "key"] },
+      ],
+    });
+    const path = selection.filePaths[0];
+    if (selection.canceled || path === undefined)
+      return { ok: true as const, data: null };
+    try {
+      const info = await stat(path);
+      if (info.size > 2_000_000) throw new Error("key file too large");
+      const summary = await signingKeys.importArmored(
+        await readFile(path, "utf8"),
+        payload,
+      );
+      return { ok: true as const, data: summary };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.signingKeysRemove, async (payload) => {
+    if (
+      typeof payload !== "string" ||
+      !/^(?:[0-9A-F]{40}|[0-9A-F]{64})$/i.test(payload)
+    ) {
+      return failure(new Error("invalid fingerprint"));
+    }
+    try {
+      await signingKeys.remove(payload);
+      return { ok: true as const, data: { ok: true as const } };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.submissionsSeal, async (payload) => {
+    if (
+      typeof payload !== "string" ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(payload)
+    ) {
+      return failure(new Error("invalid submission id"));
+    }
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+    try {
+      const intent = await apiClient.request<SubmissionSealIntent>(
+        `/v1/submissions/${payload}/seal-intent`,
+        { method: "POST" },
+      );
+      const route = intent.manifest.routeSnapshot.route;
+      if (route.type !== "EMAIL" || intent.senderAddress === null) {
+        throw new Error(
+          "Select an active sending mailbox before sealing email.",
+        );
+      }
+      let signingPrivateKey: string | null = null;
+      let unlockedSigningPrivateKey: Awaited<
+        ReturnType<typeof unlockPrivateKey>
+      > | null = null;
+      if (intent.cryptoMode === "SIGNED_AND_ENCRYPTED") {
+        const keys = await signingKeys.list();
+        if (keys.length !== 1)
+          throw new Error("Select exactly one local signing key.");
+        signingPrivateKey =
+          (await signingKeys.armored(keys[0]!.fingerprint)) ?? null;
+        if (signingPrivateKey === null)
+          throw new Error("The selected signing key is unavailable.");
+        if (keys[0]!.encrypted) {
+          const passphrase = await promptPassphrase(window);
+          if (passphrase === null) throw new Error("Key unlock cancelled.");
+          unlockedSigningPrivateKey = await unlockPrivateKey(
+            signingPrivateKey,
+            passphrase,
+          );
+        }
+      }
+      const messageId = `<${randomUUID()}@codevault.local>`;
+      const result = await buildAndSealEmailPackage({
+        intent,
+        senderAddress: intent.senderAddress,
+        messageId,
+        signingPrivateKey: unlockedSigningPrivateKey ?? signingPrivateKey,
+        fetchImpl: async (url, init) =>
+          fetch(url, {
+            ...(init?.method === undefined ? {} : { method: init.method }),
+            ...(init?.headers === undefined ? {} : { headers: init.headers }),
+            ...(init?.body === undefined
+              ? {}
+              : { body: Buffer.from(init.body) }),
+          }),
+        confirm: async (summary) => {
+          const confirmation = await dialog.showMessageBox(window, {
+            type: "warning",
+            buttons: ["Seal exact message", "Cancel"],
+            defaultId: 1,
+            cancelId: 1,
+            title: "Seal vendor email",
+            message: "Seal this exact email package?",
+            detail: `From: ${intent.senderAddress}\nTo: ${route.to.join(", ")}\nCC: ${route.cc.join(", ") || "none"}\nSubject: ${intent.subject}\nCrypto: ${intent.cryptoMode}\nAttachments: ${intent.attachments.length}\nSHA-256: ${summary.sha256}`,
+            noLink: true,
+          });
+          return confirmation.response === 0;
+        },
+        complete: (body) =>
+          apiClient.request<SubmissionPackage>(
+            `/v1/submissions/${payload}/seal`,
+            { method: "POST", body },
+          ),
+      });
+      return {
+        ok: true as const,
+        data: {
+          saved: true,
+          packageId: result.packageId,
+          sha256: result.sha256,
+        },
+      };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.submissionsSend, async (payload) => {
+    if (
+      typeof payload !== "string" ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(payload)
+    ) {
+      return failure(new Error("invalid submission id"));
+    }
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+    try {
+      const intent = await apiClient.request<SubmissionSendIntent>(
+        `/v1/submissions/${payload}/send-intent`,
+      );
+      const attachmentSummary =
+        intent.attachments.length === 0
+          ? "none"
+          : intent.attachments
+              .map(
+                (item) =>
+                  `${item.filename} (${item.sizeBytes} bytes, SHA-256 ${item.sha256})`,
+              )
+              .join("\n");
+      const confirmation = await dialog.showMessageBox(window, {
+        type: "warning",
+        buttons: ["Send now", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        title: "Send vendor email",
+        message: "Send this exact sealed email now? This cannot be undone.",
+        detail: `From: ${intent.from}\nTo: ${intent.to.join(", ")}\nCC: ${intent.cc.join(", ") || "none"}\nSubject (not encrypted): ${intent.subject}\n\nBody:\n${intent.bodyText}\n\nBody SHA-256: ${intent.bodyUtf8Sha256}\nCrypto: ${intent.cryptoMode}\nRecipient key: ${intent.publicKeyFingerprint ?? "none"}\nPackage: ${intent.packageSizeBytes} bytes, SHA-256 ${intent.packageSha256}\nMessage-ID: ${intent.rfcMessageId}\nAttachments:\n${attachmentSummary}`,
+        noLink: true,
+      });
+      if (confirmation.response !== 0) {
+        return failure(
+          new ApiError(400, "VALIDATION", "Send cancelled.", null, null),
+        );
+      }
+      const delivery = await apiClient.request<SubmissionDelivery>(
+        `/v1/submissions/${payload}/send`,
+        { method: "POST" },
+      );
+      return { ok: true as const, data: delivery };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.correspondenceDecrypt, async (payload) => {
+    if (
+      typeof payload !== "string" ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(payload)
+    ) {
+      return failure(new Error("invalid correspondence id"));
+    }
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+    try {
+      const intent = await apiClient.request<CorrespondenceDecryptIntent>(
+        `/v1/correspondence/${payload}/decrypt-intent`,
+      );
+      const confirmation = await dialog.showMessageBox(window, {
+        type: "warning",
+        buttons: ["Decrypt locally", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        title: "Decrypt vendor correspondence",
+        message: "Decrypt this message on this workstation?",
+        detail: `From: ${intent.from}\nSubject (not encrypted): ${intent.subject}\n\nPlaintext will be shown in the app temporarily. It is not saved unless you explicitly save the reviewed plaintext to the case.`,
+        noLink: true,
+      });
+      if (confirmation.response !== 0) {
+        return failure(
+          new ApiError(400, "VALIDATION", "Decryption cancelled.", null, null),
+        );
+      }
+      const keys = await signingKeys.list();
+      if (keys.length !== 1)
+        throw new Error("Select exactly one local private key.");
+      const armoredKey = await signingKeys.armored(keys[0]!.fingerprint);
+      if (armoredKey === null)
+        throw new Error("The selected private key is unavailable.");
+      let privateKey: string | Awaited<ReturnType<typeof unlockPrivateKey>> =
+        armoredKey;
+      if (keys[0]!.encrypted) {
+        const passphrase = await promptPassphrase(window);
+        if (passphrase === null) throw new Error("Key unlock cancelled.");
+        privateKey = await unlockPrivateKey(armoredKey, passphrase);
+      }
+      const response = await fetch(intent.downloadUrl, {
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok)
+        throw new Error("The encrypted message could not be downloaded.");
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (
+        bytes.byteLength !== intent.sizeBytes ||
+        createHash("sha256").update(bytes).digest("hex") !== intent.sha256
+      ) {
+        throw new Error(
+          "The encrypted message failed its digest or size check.",
+        );
+      }
+      const opened = await decryptPgpMimeMessage(bytes, privateKey);
+      return {
+        ok: true as const,
+        data: { messageId: payload, ...opened },
+      };
     } catch (error: unknown) {
       return failure(error);
     }

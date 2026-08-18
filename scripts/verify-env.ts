@@ -83,6 +83,112 @@ function checkVariables(): CheckResult[] {
     });
   }
 
+  const gmailEnabled = ["true", "1"].includes(
+    (process.env.GMAIL_ENABLED ?? "").toLowerCase(),
+  );
+  results.push({
+    name: "Gmail integration",
+    ok: true,
+    detail: gmailEnabled ? "enabled" : "disabled by default",
+  });
+
+  if (gmailEnabled) {
+    for (const name of [
+      "GMAIL_CLIENT_ID",
+      "GMAIL_CLIENT_SECRET",
+      "GMAIL_REDIRECT_URI",
+      "MAIL_TOKEN_KEYRING",
+      "MAIL_ACTIVE_TOKEN_KEY_VERSION",
+    ]) {
+      const value = process.env[name];
+      const present = value !== undefined && value.trim().length > 0;
+      results.push({
+        name,
+        ok: present,
+        detail: present
+          ? name.includes("SECRET") || name.includes("KEYRING")
+            ? "set"
+            : value
+          : "missing — required when Gmail is enabled",
+      });
+    }
+
+    const keyring = process.env.MAIL_TOKEN_KEYRING ?? "";
+    const activeVersion = process.env.MAIL_ACTIVE_TOKEN_KEY_VERSION ?? "";
+    const keys = new Map(
+      keyring.split(",").flatMap((entry) => {
+        const separator = entry.indexOf(":");
+        if (separator < 1) return [];
+        return [
+          [entry.slice(0, separator), entry.slice(separator + 1)] as const,
+        ];
+      }),
+    );
+    const activeKey = keys.get(activeVersion);
+    const activeKeyValid =
+      activeKey !== undefined &&
+      Buffer.from(activeKey, "base64").byteLength === 32;
+    results.push({
+      name: "active Gmail token key",
+      ok: activeKeyValid,
+      detail: activeKeyValid
+        ? `version ${activeVersion} is 32 bytes`
+        : "active version is absent or is not a 32-byte base64 key",
+    });
+
+    const redirect = process.env.GMAIL_REDIRECT_URI;
+    let redirectSafe = false;
+    try {
+      if (redirect !== undefined) {
+        const url = new URL(redirect);
+        redirectSafe =
+          url.protocol === "https:" ||
+          (url.protocol === "http:" &&
+            (url.hostname === "127.0.0.1" || url.hostname === "[::1]"));
+      }
+    } catch {
+      redirectSafe = false;
+    }
+    results.push({
+      name: "Gmail redirect transport",
+      ok: redirectSafe,
+      detail: redirectSafe
+        ? "HTTPS or exact loopback"
+        : "must be HTTPS or exact loopback HTTP",
+    });
+
+    const pubsubNames = [
+      "GMAIL_PUBSUB_TOPIC",
+      "GMAIL_PUBSUB_AUDIENCE",
+      "GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL",
+    ] as const;
+    const pubsubSet = pubsubNames.filter(
+      (name) => (process.env[name] ?? "").trim().length > 0,
+    );
+    results.push({
+      name: "Gmail Pub/Sub settings",
+      ok: pubsubSet.length === 0 || pubsubSet.length === pubsubNames.length,
+      detail:
+        pubsubSet.length === 0
+          ? "disabled; the polling fallback remains active"
+          : pubsubSet.length === pubsubNames.length
+            ? "topic, audience, and service account are all set"
+            : "set all three Pub/Sub variables together",
+    });
+
+    const e2eBaseUrl = process.env.GMAIL_E2E_BASE_URL;
+    results.push({
+      name: "fake Gmail endpoint isolation",
+      ok: e2eBaseUrl === undefined || process.env.NODE_ENV === "test",
+      detail:
+        e2eBaseUrl === undefined
+          ? "no fake endpoint configured"
+          : process.env.NODE_ENV === "test"
+            ? "enabled only for the test process"
+            : "GMAIL_E2E_BASE_URL is forbidden outside NODE_ENV=test",
+    });
+  }
+
   return results;
 }
 
@@ -149,8 +255,34 @@ async function checkDatabase(): Promise<CheckResult[]> {
 
     results.push({
       name: "migrations applied",
-      ok: Number(migrations.rows[0]?.count ?? 0) >= 8,
+      ok: Number(migrations.rows[0]?.count ?? 0) >= 15,
       detail: `${migrations.rows[0]?.count ?? 0} applied`,
+    });
+
+    const staleVendorSeeds = await pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+       FROM vendors
+       WHERE built_in = true
+         AND (source_url IS NULL OR source_reviewed_at IS NULL
+              OR source_reviewed_at < now() - interval '180 days')`,
+    );
+    const staleRouteSeeds = await pool.query<{ count: string }>(
+      `SELECT count(*)::text AS count
+       FROM vendor_routes
+       WHERE built_in = true
+         AND (source_url IS NULL OR source_reviewed_at IS NULL
+              OR source_reviewed_at < now() - interval '180 days')`,
+    );
+    const staleSeeds =
+      Number(staleVendorSeeds.rows[0]?.count ?? 0) +
+      Number(staleRouteSeeds.rows[0]?.count ?? 0);
+    results.push({
+      name: "built-in vendor provenance",
+      ok: staleSeeds === 0,
+      detail:
+        staleSeeds === 0
+          ? "all official sources were reviewed within 180 days"
+          : `${staleSeeds} vendor or route seed(s) need source review`,
     });
 
     const admins = await pool.query<{ count: string }>(`

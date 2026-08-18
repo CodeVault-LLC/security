@@ -1,5 +1,6 @@
 import type { AppInstance } from "../../http/app-instance.js";
 import { sql } from "drizzle-orm";
+import type { CoordinationState, MessageClassification } from "@codevault/core";
 
 import {
   DashboardResponse,
@@ -13,6 +14,7 @@ import {
 import { actingUser } from "../../http/guards.js";
 import { decodeCursor, pageSize, paginate } from "../../http/pagination.js";
 import { readableCaseIdsSubquery } from "../findings/queries.js";
+import { deriveSubmissionNextAction } from "../submissions/lifecycle.js";
 
 /**
  * Dashboard and activity routes.
@@ -298,6 +300,111 @@ export async function registerDashboardRoutes(app: AppInstance): Promise<void> {
         });
       }
 
+      const coordinatedSubmissions = await app.db.execute<{
+        id: string;
+        ref: string;
+        case_id: string;
+        case_title: string;
+        vendor_name: string;
+        status: string;
+        coordination_state: CoordinationState;
+        route_snapshot: unknown;
+        delivery_status: string | null;
+        mailbox_status: string | null;
+        last_inbound_at: string | null;
+        last_inbound_classification: MessageClassification | null;
+        last_outbound_at: string | null;
+        planned_next_contact_at: string | null;
+        agreed_disclosure_at: string | null;
+        snoozed_until: string | null;
+      }>(sql`
+        SELECT s.id, s.ref, s.case_id, c.title AS case_title,
+               v.name AS vendor_name, s.status,
+               s.coordination_state, s.route_snapshot,
+               delivery.status AS delivery_status,
+               mc.status AS mailbox_status,
+               inbound.received_at AS last_inbound_at,
+               inbound.classification AS last_inbound_classification,
+               outbound.sent_at AS last_outbound_at,
+               s.planned_next_contact_at, s.agreed_disclosure_at,
+               s.snoozed_until
+        FROM submissions s
+        JOIN cases c ON c.id = s.case_id
+        JOIN vendors v ON v.id = s.vendor_id
+        LEFT JOIN mailbox_connections mc ON mc.id = s.mailbox_connection_id
+        LEFT JOIN LATERAL (
+          SELECT sd.status
+          FROM submission_deliveries sd
+          WHERE sd.submission_id = s.id
+          ORDER BY sd.created_at DESC
+          LIMIT 1
+        ) delivery ON true
+        LEFT JOIN LATERAL (
+          SELECT cm.received_at, cm.classification
+          FROM correspondence_messages cm
+          WHERE cm.submission_id = s.id AND cm.direction = 'INBOUND'
+          ORDER BY cm.received_at DESC NULLS LAST, cm.created_at DESC
+          LIMIT 1
+        ) inbound ON true
+        LEFT JOIN LATERAL (
+          SELECT cm.sent_at
+          FROM correspondence_messages cm
+          WHERE cm.submission_id = s.id AND cm.direction = 'OUTBOUND'
+          ORDER BY cm.sent_at DESC NULLS LAST, cm.created_at DESC
+          LIMIT 1
+        ) outbound ON true
+        WHERE s.case_id IN ${scope}
+          AND s.coordination_state NOT IN ('RESOLVED', 'CLOSED')
+        ORDER BY s.updated_at DESC
+        LIMIT 100
+      `);
+
+      for (const row of coordinatedSubmissions.rows) {
+        if (row.status === "NEEDS_REVIEW") {
+          attention.push({
+            kind: "SUBMISSION_NEEDS_REVIEW",
+            entityType: "submission",
+            entityId: row.id,
+            ref: row.ref,
+            title: `${row.vendor_name} — ${row.case_title}`,
+            detail:
+              "The disclosure package needs human review before approval.",
+            dueAt: null,
+            severity: null,
+            caseId: row.case_id,
+          });
+          continue;
+        }
+
+        const route = routeCadence(row.route_snapshot);
+        const nextAction = deriveSubmissionNextAction({
+          coordinationState: row.coordination_state,
+          deliveryStatus: row.delivery_status,
+          mailboxStatus: row.mailbox_status,
+          lastOutboundAt: row.last_outbound_at,
+          lastInboundAt: row.last_inbound_at,
+          lastInboundClassification: row.last_inbound_classification,
+          plannedNextContactAt: row.planned_next_contact_at,
+          acknowledgementBusinessDays: route.acknowledgementBusinessDays,
+          updateCadenceDays: route.updateCadenceDays,
+          agreedDisclosureAt: row.agreed_disclosure_at,
+          snoozedUntil: row.snoozed_until,
+        });
+        if (nextAction.kind === "NONE") continue;
+
+        attention.push({
+          kind: nextAction.kind,
+          entityType: "submission",
+          entityId: row.id,
+          ref: row.ref,
+          title: `${row.vendor_name} — ${row.case_title}`,
+          detail: nextAction.detail,
+          dueAt: nextAction.dueAt,
+          severity: null,
+          caseId: row.case_id,
+        });
+      }
+
       const changes = await app.db.execute<{
         action: string;
         entity_type: string;
@@ -529,4 +636,34 @@ function describeAction(action: string): string {
   };
 
   return descriptions[action] ?? action;
+}
+
+function routeCadence(value: unknown): {
+  acknowledgementBusinessDays: number;
+  updateCadenceDays: number;
+} {
+  const defaults = { acknowledgementBusinessDays: 5, updateCadenceDays: 42 };
+  if (value === null || typeof value !== "object") return defaults;
+  const route = (value as { route?: unknown }).route;
+  if (route === null || typeof route !== "object") return defaults;
+  const candidate = route as Record<string, unknown>;
+  return {
+    acknowledgementBusinessDays: boundedCadence(
+      candidate.acknowledgementBusinessDays,
+      defaults.acknowledgementBusinessDays,
+    ),
+    updateCadenceDays: boundedCadence(
+      candidate.updateCadenceDays,
+      defaults.updateCadenceDays,
+    ),
+  };
+}
+
+function boundedCadence(value: unknown, fallback: number): number {
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value > 0 &&
+    value <= 365
+    ? value
+    : fallback;
 }

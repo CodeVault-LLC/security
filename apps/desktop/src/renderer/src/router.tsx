@@ -30,9 +30,12 @@ import {
 } from "./routes/organization.js";
 import {
   PersonalAppearanceRoute,
+  PersonalMailRoute,
   PersonalProfileRoute,
   PersonalSecurityRoute,
 } from "./routes/settings.js";
+import { SubmissionDetailRoute } from "./routes/submission-detail.js";
+import { VendorDetailRoute, VendorsRoute } from "./routes/vendors.js";
 
 /**
  * Routing.
@@ -105,6 +108,22 @@ const assetDetailRoute = createRoute({
   },
 });
 
+const vendorsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/vendors",
+  component: VendorsRoute,
+});
+
+const vendorDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/vendors/$vendorId",
+  component: function VendorDetailPage() {
+    const { vendorId } = useParams({ from: "/vendors/$vendorId" });
+
+    return <VendorDetailRoute vendorId={vendorId} />;
+  },
+});
+
 const reportsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/reports",
@@ -118,6 +137,15 @@ const reportDetailRoute = createRoute({
     const { reportId } = useParams({ from: "/reports/$reportId" });
 
     return <ReportDetailRoute reportId={reportId} />;
+  },
+});
+
+const submissionDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/submissions/$submissionId",
+  component: function SubmissionDetailPage() {
+    const { submissionId } = useParams({ from: "/submissions/$submissionId" });
+    return <SubmissionDetailRoute submissionId={submissionId} />;
   },
 });
 
@@ -165,6 +193,12 @@ const securitySettingsRoute = createRoute({
   component: PersonalSecurityRoute,
 });
 
+const mailSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/mail",
+  component: PersonalMailRoute,
+});
+
 const organizationUsersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/organization/users",
@@ -205,8 +239,11 @@ const routeTree = rootRoute.addChildren([
   findingDetailRoute,
   assetsRoute,
   assetDetailRoute,
+  vendorsRoute,
+  vendorDetailRoute,
   reportsRoute,
   reportDetailRoute,
+  submissionDetailRoute,
   disclosureRoute,
   activityRoute,
   metricsRoute,
@@ -214,6 +251,7 @@ const routeTree = rootRoute.addChildren([
   profileSettingsRoute,
   appearanceSettingsRoute,
   securitySettingsRoute,
+  mailSettingsRoute,
   accountRoute,
   organizationUsersRoute,
   organizationUserDetailRoute,

@@ -34,7 +34,7 @@ immediately before the PDF is rendered.
 apps/
   desktop/   Electron client: hardened main process, narrow preload bridge, React renderer
   server/    Fastify API: auth, cases, findings, evidence, reports, AI, search, audit
-  worker/    Background jobs: prior art, artifact previews, EPSS/KEV, PDF export
+  worker/    Background jobs: prior art, artifact previews, EPSS/KEV, PDF export, Gmail send/sync
   media-worker/ Isolated JPEG/PNG decoding and metadata-free avatar derivatives
 packages/
   core/      Domain rules: permissions, visibility, states, policy packs, identifiers
@@ -104,10 +104,14 @@ bun run typecheck
 bunx vitest --run --project node --project dom   # unit tests
 bunx vitest --run --project node-integration     # needs DATABASE_URL
 bun run build
+DATABASE_URL=... bun run e2e -- tests/e2e/vendor-submission.spec.ts tests/e2e/gmail-thread-sync.spec.ts
 ```
 
 The integration tests run against a real PostgreSQL on purpose. Case access is
 partly SQL, and a security test against a mocked database proves very little.
+The Gmail E2E suite uses a deterministic loopback provider and `.test`/`.invalid`
+recipients. It cannot contact Google or a real vendor. See
+[`docs/operations/gmail-integration.md`](docs/operations/gmail-integration.md).
 
 ## Packaging
 
@@ -134,6 +138,9 @@ committed.
   finding has five independent states and why asset kinds are ecosystem-neutral.
 - [`docs/architecture/report-model.md`](docs/architecture/report-model.md) — how
   directives, the linter and the export gate keep the three reports honest.
+- [`docs/operations/vendor-seed-maintenance.md`](docs/operations/vendor-seed-maintenance.md)
+  — provenance, expiry, key verification, and maintainer assignment for starter
+  vendor routes.
 
 ## Licence
 

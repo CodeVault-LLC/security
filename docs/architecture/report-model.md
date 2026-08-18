@@ -152,3 +152,11 @@ one on disk.
 The linter runs once more inside the worker, immediately before rendering,
 because content can change between approval and export — and the export is the
 thing that leaves the building.
+
+An approved vendor PDF is an input to a disclosure submission, not authority to
+send one. Submission validation rechecks audience visibility, route limits,
+required fields, attachment digests, key version, and approval before sealing.
+Editing the report or submission invalidates the applicable approval. The
+native confirmation then presents the exact exported report and every other
+byte that will leave; Gmail and manual delivery receipts point back to that
+immutable package digest.

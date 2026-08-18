@@ -1,5 +1,9 @@
 import { PgBoss } from "pg-boss";
 
+export interface JobTransactionDatabase {
+  executeSql(text: string, values?: unknown[]): Promise<{ rows: unknown[] }>;
+}
+
 /**
  * Background job queue.
  *
@@ -15,6 +19,9 @@ export const JOB_QUEUES = {
   artifactIntegrity: "artifact-integrity",
   intelligenceRefresh: "intelligence-refresh",
   artifactDelete: "artifact-delete",
+  gmailSend: "gmail-send",
+  gmailSync: "gmail-sync",
+  gmailWatchRenewal: "gmail-watch-renewal",
 } as const;
 
 export type JobQueueName = (typeof JOB_QUEUES)[keyof typeof JOB_QUEUES];
@@ -52,6 +59,18 @@ export interface ArtifactDeleteJobData {
   previewObjectKey: string | null;
 }
 
+export interface GmailSendJobData {
+  deliveryId: string;
+}
+
+export interface GmailSyncJobData {
+  connectionId?: string;
+}
+
+export interface GmailWatchRenewalJobData {
+  connectionId?: string;
+}
+
 export interface JobPayloadMap {
   "prior-art-check": PriorArtJobData;
   "report-pdf": ReportPdfJobData;
@@ -59,6 +78,9 @@ export interface JobPayloadMap {
   "artifact-integrity": ArtifactIntegrityJobData;
   "intelligence-refresh": IntelligenceRefreshJobData;
   "artifact-delete": ArtifactDeleteJobData;
+  "gmail-send": GmailSendJobData;
+  "gmail-sync": GmailSyncJobData;
+  "gmail-watch-renewal": GmailWatchRenewalJobData;
 }
 
 export interface JobQueue {
@@ -67,6 +89,7 @@ export interface JobQueue {
   send<Name extends JobQueueName>(
     queue: Name,
     data: JobPayloadMap[Name],
+    options?: { db?: JobTransactionDatabase; singletonKey?: string },
   ): Promise<string | null>;
   instance(): PgBoss;
 }
@@ -109,11 +132,17 @@ export function createJobQueue(options: JobQueueOptions): JobQueue {
       started = false;
     },
 
-    async send(queue, data) {
+    async send(queue, data, sendOptions) {
       return boss.send(queue, data, {
-        retryLimit: 3,
+        // Gmail delivery owns its ambiguity state machine. A generic queue
+        // retry could duplicate an email after a network timeout.
+        retryLimit: queue === JOB_QUEUES.gmailSend ? 0 : 3,
         retryDelay: 30,
         retryBackoff: true,
+        ...(sendOptions?.db === undefined ? {} : { db: sendOptions.db }),
+        ...(sendOptions?.singletonKey === undefined
+          ? {}
+          : { singletonKey: sendOptions.singletonKey }),
       });
     },
 

@@ -25,6 +25,7 @@ import {
   timestampColumn,
   updatedAt,
 } from "./columns.js";
+import { vendors } from "./vendors.js";
 
 /**
  * Asset tables.
@@ -44,7 +45,9 @@ export const assets = pgTable(
     ref: text("ref").notNull(),
     name: text("name").notNull(),
     kind: text("kind").$type<AssetKind>().notNull(),
-    vendor: text("vendor"),
+    vendorId: uuid("vendor_id").references(() => vendors.id),
+    /** Retained for one release after migration; application writes vendorId. */
+    legacyVendorName: text("legacy_vendor_name"),
     /** Headline version or model; the full list lives in `asset_versions`. */
     version: text("version"),
     notes: text("notes"),
@@ -68,6 +71,7 @@ export const assets = pgTable(
     index("assets_kind_idx").on(table.kind),
     index("assets_normalized_product_idx").on(table.normalizedProduct),
     index("assets_organization_idx").on(table.organizationId),
+    index("assets_vendor_id_idx").on(table.vendorId),
   ],
 );
 
@@ -145,7 +149,8 @@ export const assetRelationships = pgTable(
   ],
 );
 
-export const assetsRelations = relations(assets, ({ many }) => ({
+export const assetsRelations = relations(assets, ({ one, many }) => ({
+  vendor: one(vendors, { fields: [assets.vendorId], references: [vendors.id] }),
   identifiers: many(assetIdentifiers),
   versions: many(assetVersions),
 }));

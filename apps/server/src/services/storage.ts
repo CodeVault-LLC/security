@@ -48,6 +48,15 @@ export interface ObjectStorage {
     sizeBytes: number,
     sha256Hex: string,
   ): Promise<PresignedUpload>;
+  /**
+   * Creates a single-part target when trusted local code has not produced the
+   * final bytes yet. The caller must verify the stored size and digest before
+   * promoting the artifact out of PENDING.
+   */
+  createDeferredIntegrityUpload(
+    objectKey: string,
+    contentType: string,
+  ): Promise<PresignedUpload>;
   completeMultipartUpload(
     objectKey: string,
     uploadId: string,
@@ -162,6 +171,28 @@ export function createObjectStorage(config: ServerConfig): ObjectStorage {
         partUrls,
         partSizeBytes: partSize,
         requiredHeaders: {},
+        expiresAt: expiryFrom(),
+      };
+    },
+
+    async createDeferredIntegrityUpload(objectKey, contentType) {
+      const url = await getSignedUrl(
+        client,
+        new PutObjectCommand({
+          Bucket: bucket,
+          Key: objectKey,
+          ContentType: contentType,
+        }),
+        { expiresIn: ttlSeconds },
+      );
+
+      return {
+        strategy: "SINGLE",
+        url,
+        multipartUploadId: null,
+        partUrls: [],
+        partSizeBytes: 0,
+        requiredHeaders: { "content-type": contentType },
         expiresAt: expiryFrom(),
       };
     },

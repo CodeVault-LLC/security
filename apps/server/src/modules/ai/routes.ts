@@ -850,6 +850,24 @@ async function currentTargetRevision(
     return rows[0]?.revision ?? 1;
   }
 
+  if (targetType === "SUBMISSION") {
+    const rows = await app.db
+      .select({ revision: schema.submissions.revision })
+      .from(schema.submissions)
+      .where(eq(schema.submissions.id, targetId))
+      .limit(1);
+    return rows[0]?.revision ?? 1;
+  }
+
+  if (targetType === "CORRESPONDENCE_MESSAGE") {
+    const rows = await app.db
+      .select({ revision: schema.correspondenceMessages.revision })
+      .from(schema.correspondenceMessages)
+      .where(eq(schema.correspondenceMessages.id, targetId))
+      .limit(1);
+    return rows[0]?.revision ?? 1;
+  }
+
   const rows = await app.db
     .select({ revision: schema.findings.revision })
     .from(schema.findings)

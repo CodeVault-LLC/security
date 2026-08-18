@@ -32,7 +32,14 @@ export const aiRuns = pgTable(
     id: primaryId(),
     action: text("action").notNull(),
     targetType: text("target_type")
-      .$type<"FINDING" | "SCORE" | "CLAIM" | "REPORT_SECTION">()
+      .$type<
+        | "FINDING"
+        | "SCORE"
+        | "CLAIM"
+        | "REPORT_SECTION"
+        | "SUBMISSION"
+        | "CORRESPONDENCE_MESSAGE"
+      >()
       .notNull(),
     targetId: uuid("target_id").notNull(),
     caseId: uuid("case_id")
@@ -109,7 +116,14 @@ export const aiProposals = pgTable(
       .references(() => aiRuns.id, { onDelete: "cascade" }),
     action: text("action").notNull(),
     targetType: text("target_type")
-      .$type<"FINDING" | "SCORE" | "CLAIM" | "REPORT_SECTION">()
+      .$type<
+        | "FINDING"
+        | "SCORE"
+        | "CLAIM"
+        | "REPORT_SECTION"
+        | "SUBMISSION"
+        | "CORRESPONDENCE_MESSAGE"
+      >()
       .notNull(),
     targetId: uuid("target_id").notNull(),
     patch: jsonb("patch").$type<Record<string, unknown>>().notNull(),

@@ -98,6 +98,18 @@ export function createFakeStorage(): FakeStorage {
       };
     },
 
+    async createDeferredIntegrityUpload(objectKey, contentType) {
+      return {
+        strategy: "SINGLE",
+        url: `memory://${objectKey}`,
+        multipartUploadId: null,
+        partUrls: [],
+        partSizeBytes: 0,
+        requiredHeaders: { "content-type": contentType },
+        expiresAt: new Date(Date.now() + 900_000).toISOString(),
+      };
+    },
+
     async completeMultipartUpload(
       _objectKey: string,
       _uploadId: string,
@@ -170,7 +182,7 @@ export function createFakeJobQueue(): FakeJobQueue {
     sent,
     async start() {},
     async stop() {},
-    async send(queue, data) {
+    async send(queue, data, _options) {
       sent.push({ queue, data });
 
       return uuidv7();
