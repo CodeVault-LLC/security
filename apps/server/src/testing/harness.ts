@@ -179,6 +179,7 @@ export async function createHarness(): Promise<TestHarness> {
       S3_BUCKET: "codevault-test",
       S3_ACCESS_KEY_ID: "test",
       S3_SECRET_ACCESS_KEY: "test",
+      MFA_ENCRYPTION_KEYS: `test:${Buffer.alloc(32, 7).toString("base64")}`,
       LOG_LEVEL: process.env.CODEVAULT_TEST_LOG ?? "silent",
     }),
   };

@@ -1,5 +1,7 @@
 import pg from "pg";
 
+import { parseMfaKeyring } from "../apps/server/src/auth/secret-keyring.js";
+
 /**
  * Environment check.
  *
@@ -21,6 +23,7 @@ const REQUIRED_VARIABLES = [
   "S3_BUCKET",
   "S3_ACCESS_KEY_ID",
   "S3_SECRET_ACCESS_KEY",
+  "MFA_ENCRYPTION_KEYS",
 ] as const;
 
 /** Variables that are optional but change behaviour when absent. */
@@ -116,9 +119,12 @@ async function checkDatabase(): Promise<CheckResult[]> {
       detail: `${migrations.rows[0]?.count ?? 0} applied`,
     });
 
-    const admins = await pool.query<{ count: string }>(
-      "SELECT count(*)::text AS count FROM users WHERE role = 'ADMIN' AND disabled = false",
-    );
+    const admins = await pool.query<{ count: string }>(`
+      SELECT count(*)::text AS count
+      FROM organization_memberships AS membership
+      JOIN users AS account ON account.id = membership.user_id
+      WHERE membership.role = 'ADMIN' AND account.disabled = false
+    `);
 
     const adminCount = Number(admins.rows[0]?.count ?? 0);
 
@@ -141,6 +147,30 @@ async function checkDatabase(): Promise<CheckResult[]> {
   }
 
   return results;
+}
+
+function checkMfaKeyring(): CheckResult {
+  const raw = process.env.MFA_ENCRYPTION_KEYS;
+  if (raw === undefined) {
+    return { name: "MFA keyring", ok: false, detail: "missing" };
+  }
+
+  try {
+    const keyring = parseMfaKeyring(raw);
+    const envelope = keyring.encrypt("verification", "environment-check");
+    const recovered = keyring
+      .decrypt(envelope, "environment-check")
+      .toString("utf8");
+
+    return {
+      name: "MFA keyring",
+      ok: recovered === "verification",
+      detail:
+        recovered === "verification" ? "encrypt/decrypt passed" : "failed",
+    };
+  } catch {
+    return { name: "MFA keyring", ok: false, detail: "invalid" };
+  }
 }
 
 async function checkObjectStorage(): Promise<CheckResult> {
@@ -185,6 +215,7 @@ async function checkObjectStorage(): Promise<CheckResult> {
 async function main(): Promise<void> {
   const results = [
     ...checkVariables(),
+    checkMfaKeyring(),
     ...(await checkDatabase()),
     await checkObjectStorage(),
   ];
