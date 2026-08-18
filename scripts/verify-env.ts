@@ -1,5 +1,8 @@
 import pg from "pg";
 
+import { parseMfaKeyring } from "../apps/server/src/auth/secret-keyring.js";
+import { environmentValueDetail } from "./verify-env-helpers.js";
+
 /**
  * Environment check.
  *
@@ -21,6 +24,7 @@ const REQUIRED_VARIABLES = [
   "S3_BUCKET",
   "S3_ACCESS_KEY_ID",
   "S3_SECRET_ACCESS_KEY",
+  "MFA_ENCRYPTION_KEYS",
 ] as const;
 
 /** Variables that are optional but change behaviour when absent. */
@@ -33,6 +37,12 @@ const OPTIONAL_VARIABLES: Array<[string, string]> = [
   ],
 ];
 
+const MEDIA_RUNTIME_VARIABLES = [
+  "MEDIA_DATABASE_URL",
+  "MEDIA_S3_ACCESS_KEY_ID",
+  "MEDIA_S3_SECRET_ACCESS_KEY",
+] as const;
+
 function checkVariables(): CheckResult[] {
   const results: CheckResult[] = [];
 
@@ -44,9 +54,7 @@ function checkVariables(): CheckResult[] {
       name,
       ok: present,
       detail: present
-        ? name.includes("SECRET") || name.includes("KEY")
-          ? "set"
-          : (value as string)
+        ? environmentValueDetail(name, value as string)
         : "missing",
     });
   }
@@ -59,6 +67,19 @@ function checkVariables(): CheckResult[] {
       name,
       ok: true,
       detail: present ? "set" : `not set — ${consequence}`,
+    });
+  }
+
+  for (const name of MEDIA_RUNTIME_VARIABLES) {
+    const present = Boolean(process.env[name]?.trim());
+    results.push({
+      name,
+      ok: process.env.NODE_ENV !== "production" || present,
+      detail: present
+        ? name.includes("SECRET") || name.includes("KEY")
+          ? "set"
+          : "set"
+        : "not set — dedicated media credentials are required in production",
     });
   }
 
@@ -76,7 +97,11 @@ async function checkDatabase(): Promise<CheckResult[]> {
   const results: CheckResult[] = [];
 
   try {
-    const version = await pool.query<{ version: string }>("SELECT version()");
+    const queryStartedAt = Date.now();
+    const version = await pool.query<{ version: string; database_ms: string }>(
+      "SELECT version(), extract(epoch FROM clock_timestamp()) * 1000 AS database_ms",
+    );
+    const queryFinishedAt = Date.now();
     const versionText = version.rows[0]?.version ?? "unknown";
     const major = /PostgreSQL (\d+)/.exec(versionText)?.[1];
 
@@ -84,6 +109,18 @@ async function checkDatabase(): Promise<CheckResult[]> {
       name: "database connection",
       ok: true,
       detail: versionText.split(",")[0] ?? versionText,
+    });
+
+    const databaseMs = Number(version.rows[0]?.database_ms);
+    const clockDifference = Math.abs(
+      databaseMs - (queryStartedAt + queryFinishedAt) / 2,
+    );
+    results.push({
+      name: "database clock difference",
+      ok: Number.isFinite(clockDifference) && clockDifference < 2_000,
+      detail: Number.isFinite(clockDifference)
+        ? `${Math.round(clockDifference)} ms`
+        : "unknown",
     });
 
     results.push({
@@ -112,13 +149,16 @@ async function checkDatabase(): Promise<CheckResult[]> {
 
     results.push({
       name: "migrations applied",
-      ok: Number(migrations.rows[0]?.count ?? 0) > 0,
+      ok: Number(migrations.rows[0]?.count ?? 0) >= 8,
       detail: `${migrations.rows[0]?.count ?? 0} applied`,
     });
 
-    const admins = await pool.query<{ count: string }>(
-      "SELECT count(*)::text AS count FROM users WHERE role = 'ADMIN' AND disabled = false",
-    );
+    const admins = await pool.query<{ count: string }>(`
+      SELECT count(*)::text AS count
+      FROM organization_memberships AS membership
+      JOIN users AS account ON account.id = membership.user_id
+      WHERE membership.role = 'ADMIN' AND account.disabled = false
+    `);
 
     const adminCount = Number(admins.rows[0]?.count ?? 0);
 
@@ -129,6 +169,66 @@ async function checkDatabase(): Promise<CheckResult[]> {
         adminCount > 0
           ? `${adminCount} enabled administrator(s)`
           : "none — run `bun run admin:create`",
+    });
+
+    const missingMfa = await pool.query<{ count: string }>(`
+      SELECT count(*)::text AS count
+      FROM users AS account
+      JOIN organization_memberships AS membership ON membership.user_id = account.id
+      LEFT JOIN totp_credentials AS credential
+        ON credential.user_id = account.id AND credential.replaced_at IS NULL
+      WHERE account.disabled = false AND credential.id IS NULL
+    `);
+    const missingMfaCount = Number(missingMfa.rows[0]?.count ?? 0);
+    results.push({
+      name: "active users enrolled in MFA",
+      ok: missingMfaCount === 0,
+      detail:
+        missingMfaCount === 0
+          ? "all enrolled"
+          : `${missingMfaCount} active user(s) require enrollment`,
+    });
+
+    const unsafeAvatars = await pool.query<{ count: string }>(`
+      SELECT count(*)::text AS count FROM avatar_images
+      WHERE status = 'READY'
+        AND (sanitized_object_key IS NULL OR sanitized_object_key LIKE 'quarantine/%')
+    `);
+    const unsafeAvatarCount = Number(unsafeAvatars.rows[0]?.count ?? 0);
+    results.push({
+      name: "ready avatar derivatives",
+      ok: unsafeAvatarCount === 0,
+      detail:
+        unsafeAvatarCount === 0
+          ? "all point to sanitized storage"
+          : `${unsafeAvatarCount} unsafe ready avatar row(s)`,
+    });
+
+    const mediaPrivileges = await pool.query<{
+      can_read_users: boolean;
+      can_claim: boolean;
+      can_complete: boolean;
+      can_fail: boolean;
+    }>(`
+      SELECT
+        has_table_privilege('codevault_media_runtime', 'public.users', 'SELECT') AS can_read_users,
+        has_function_privilege('codevault_media_runtime', 'public.claim_media_job(text,text)', 'EXECUTE') AS can_claim,
+        has_function_privilege('codevault_media_runtime', 'public.complete_media_job(uuid,text,text,text,integer,integer)', 'EXECUTE') AS can_complete,
+        has_function_privilege('codevault_media_runtime', 'public.fail_media_job(uuid,text,text,boolean)', 'EXECUTE') AS can_fail
+    `);
+    const media = mediaPrivileges.rows[0];
+    const mediaRoleOk =
+      media?.can_read_users === false &&
+      media.can_claim &&
+      media.can_complete &&
+      media.can_fail;
+    results.push({
+      name: "media database capability role",
+      ok: mediaRoleOk === true,
+      detail:
+        mediaRoleOk === true
+          ? "function-only access confirmed"
+          : "unexpected table or function privileges",
     });
   } catch (error: unknown) {
     results.push({
@@ -141,6 +241,73 @@ async function checkDatabase(): Promise<CheckResult[]> {
   }
 
   return results;
+}
+
+async function checkMediaDatabase(): Promise<CheckResult> {
+  const connectionString = process.env.MEDIA_DATABASE_URL;
+  if (!connectionString) {
+    return {
+      name: "media runtime database login",
+      ok: process.env.NODE_ENV !== "production",
+      detail:
+        process.env.NODE_ENV === "production"
+          ? "MEDIA_DATABASE_URL is required in production"
+          : "not set — production must use a dedicated runtime login",
+    };
+  }
+
+  const pool = new pg.Pool({ connectionString, max: 1 });
+  try {
+    const privileges = await pool.query<{
+      can_read_users: boolean;
+      can_claim: boolean;
+    }>(`
+      SELECT
+        has_table_privilege(current_user, 'public.users', 'SELECT') AS can_read_users,
+        has_function_privilege(current_user, 'public.claim_media_job(text,text)', 'EXECUTE') AS can_claim
+    `);
+    const row = privileges.rows[0];
+    return {
+      name: "media runtime database login",
+      ok: row?.can_read_users === false && row.can_claim === true,
+      detail:
+        row?.can_read_users === false && row.can_claim === true
+          ? "cannot read users; can execute media capability"
+          : "login is not least privilege",
+    };
+  } catch (error) {
+    return {
+      name: "media runtime database login",
+      ok: false,
+      detail: error instanceof Error ? error.message : String(error),
+    };
+  } finally {
+    await pool.end();
+  }
+}
+
+function checkMfaKeyring(): CheckResult {
+  const raw = process.env.MFA_ENCRYPTION_KEYS;
+  if (raw === undefined) {
+    return { name: "MFA keyring", ok: false, detail: "missing" };
+  }
+
+  try {
+    const keyring = parseMfaKeyring(raw);
+    const envelope = keyring.encrypt("verification", "environment-check");
+    const recovered = keyring
+      .decrypt(envelope, "environment-check")
+      .toString("utf8");
+
+    return {
+      name: "MFA keyring",
+      ok: recovered === "verification",
+      detail:
+        recovered === "verification" ? "encrypt/decrypt passed" : "failed",
+    };
+  } catch {
+    return { name: "MFA keyring", ok: false, detail: "invalid" };
+  }
 }
 
 async function checkObjectStorage(): Promise<CheckResult> {
@@ -159,21 +326,27 @@ async function checkObjectStorage(): Promise<CheckResult> {
     const timer = setTimeout(() => controller.abort(), 5_000);
 
     try {
-      const response = await fetch(endpoint, { signal: controller.signal });
+      const bucket = process.env.S3_BUCKET;
+      if (!bucket) throw new Error("S3_BUCKET is not set");
+      const url = new URL(endpoint);
+      if (process.env.S3_FORCE_PATH_STYLE === "false") {
+        url.hostname = `${bucket}.${url.hostname}`;
+      } else {
+        url.pathname = `${url.pathname.replace(/\/$/u, "")}/${encodeURIComponent(bucket)}`;
+      }
+      const response = await fetch(url, { signal: controller.signal });
 
-      // Any HTTP answer means something is listening; an S3 endpoint refusing
-      // an unauthenticated request is exactly what should happen.
       return {
-        name: "object storage",
-        ok: true,
-        detail: `${endpoint} responded ${response.status}`,
+        name: "object storage bucket privacy",
+        ok: response.status === 401 || response.status === 403,
+        detail: `${url.origin} responded ${response.status} to anonymous bucket access`,
       };
     } finally {
       clearTimeout(timer);
     }
   } catch (error: unknown) {
     return {
-      name: "object storage",
+      name: "object storage bucket privacy",
       ok: false,
       detail: `${endpoint} unreachable (${
         error instanceof Error ? error.message : String(error)
@@ -185,7 +358,9 @@ async function checkObjectStorage(): Promise<CheckResult> {
 async function main(): Promise<void> {
   const results = [
     ...checkVariables(),
+    checkMfaKeyring(),
     ...(await checkDatabase()),
+    await checkMediaDatabase(),
     await checkObjectStorage(),
   ];
 

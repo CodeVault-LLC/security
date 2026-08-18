@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 
 import pg from "pg";
 
@@ -104,38 +104,4 @@ export async function runMigrations(
   } finally {
     await pool.end();
   }
-}
-
-/** CLI entry point: `bun run --cwd packages/db migrate`. */
-async function main(): Promise<void> {
-  const connectionString = process.env.DATABASE_URL;
-
-  if (connectionString === undefined || connectionString.length === 0) {
-    console.error("DATABASE_URL is not set.");
-    process.exitCode = 1;
-
-    return;
-  }
-
-  const result = await runMigrations(connectionString);
-
-  for (const name of result.applied) {
-    console.warn(`applied  ${name}`);
-  }
-
-  for (const name of result.skipped) {
-    console.warn(`skipped  ${name}`);
-  }
-
-  console.warn(
-    `${result.applied.length} applied, ${result.skipped.length} already present.`,
-  );
-}
-
-const invokedDirectly =
-  process.argv[1] !== undefined &&
-  import.meta.url === pathToFileURL(process.argv[1]).href;
-
-if (invokedDirectly) {
-  await main();
 }

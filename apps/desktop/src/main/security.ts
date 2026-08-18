@@ -183,6 +183,35 @@ export function isExternalUrlAllowed(url: string): boolean {
   return !CONTROL_CHARACTERS.test(url);
 }
 
+/** Canonicalizes a user-approved API origin and rejects dangerous URL forms. */
+export function normalizeServerUrl(value: string): string | null {
+  if (CONTROL_CHARACTERS.test(value)) return null;
+  try {
+    const parsed = new URL(value);
+    const loopback =
+      parsed.hostname === "localhost" ||
+      parsed.hostname === "127.0.0.1" ||
+      parsed.hostname === "[::1]";
+    if (
+      parsed.protocol !== "https:" &&
+      !(parsed.protocol === "http:" && loopback)
+    ) {
+      return null;
+    }
+    if (
+      parsed.username.length > 0 ||
+      parsed.password.length > 0 ||
+      parsed.search.length > 0 ||
+      parsed.hash.length > 0
+    ) {
+      return null;
+    }
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
 /** Web preferences every CodeVault window is created with. */
 export const SECURE_WEB_PREFERENCES = {
   nodeIntegration: false,

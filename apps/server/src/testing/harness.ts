@@ -8,6 +8,7 @@ import { createDatabase, schema, type DatabaseHandle } from "@codevault/db";
 import { buildApp } from "../app.js";
 import { hashPassword } from "../auth/password.js";
 import { hashToken } from "../auth/tokens.js";
+import { createTotpEnrollment } from "../auth/totp.js";
 import { loadConfig, type ServerConfig } from "../config.js";
 import { createEventBroker } from "../services/events.js";
 import type { JobQueue } from "../services/jobs.js";
@@ -34,6 +35,7 @@ export interface TestHarness {
   storage: FakeStorage;
   jobs: FakeJobQueue;
   config: ServerConfig;
+  organizationId: string;
   /** Creates a user and returns a usable bearer token. */
   createUser(options?: CreateUserOptions): Promise<TestUser>;
   /** Issues a session for an existing user. */
@@ -53,8 +55,11 @@ export interface TestUser {
   email: string;
   password: string;
   role: UserRole;
+  organizationId: string;
   token: string;
   headers: Record<string, string>;
+  totpSecret: string;
+  recoveryCodes: string[];
 }
 
 export const TEST_PASSWORD = "correct-horse-battery-staple";
@@ -80,6 +85,7 @@ export function createFakeStorage(): FakeStorage {
       objectKey,
       _contentType,
       sizeBytes,
+      _sha256Hex,
     ): Promise<PresignedUpload> {
       return {
         strategy: "SINGLE",
@@ -87,6 +93,7 @@ export function createFakeStorage(): FakeStorage {
         multipartUploadId: null,
         partUrls: [],
         partSizeBytes: sizeBytes,
+        requiredHeaders: {},
         expiresAt: new Date(Date.now() + 900_000).toISOString(),
       };
     },
@@ -137,6 +144,17 @@ export function createFakeStorage(): FakeStorage {
       return stored;
     },
 
+    async getObjectStream(objectKey) {
+      const stored = objects.get(objectKey);
+      if (stored === undefined) throw new Error(`No object at ${objectKey}`);
+      return (async function* () {
+        const chunkSize = 64 * 1024;
+        for (let offset = 0; offset < stored.byteLength; offset += chunkSize) {
+          yield stored.subarray(offset, offset + chunkSize);
+        }
+      })();
+    },
+
     async deleteObject(objectKey) {
       objects.delete(objectKey);
     },
@@ -177,6 +195,7 @@ export async function createHarness(): Promise<TestHarness> {
       S3_BUCKET: "codevault-test",
       S3_ACCESS_KEY_ID: "test",
       S3_SECRET_ACCESS_KEY: "test",
+      MFA_ENCRYPTION_KEYS: `test:${Buffer.alloc(32, 7).toString("base64")}`,
       LOG_LEVEL: process.env.CODEVAULT_TEST_LOG ?? "silent",
     }),
   };
@@ -184,6 +203,38 @@ export async function createHarness(): Promise<TestHarness> {
   const dbHandle = createDatabase({ connectionString });
   const storage = createFakeStorage();
   const jobs = createFakeJobQueue();
+  const organizationId = await dbHandle.db.transaction(async (tx) => {
+    // Integration files share one database and may start together. Serialize
+    // singleton bootstrap so their read-then-insert cannot race.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(1129270868, 2)`);
+    const [existingOrganization] = await tx
+      .select({ id: schema.organizations.id })
+      .from(schema.organizations)
+      .limit(1);
+    if (existingOrganization) return existingOrganization.id;
+
+    const id = uuidv7();
+    const harnessAdministratorId = uuidv7();
+    await tx.insert(schema.organizations).values({
+      id,
+      name: "CodeVault Test Organization",
+    });
+    await tx
+      .insert(schema.organizationSecurityPolicies)
+      .values({ organizationId: id });
+    await tx.insert(schema.users).values({
+      id: harnessAdministratorId,
+      email: `harness-admin-${harnessAdministratorId}@codevault.test`,
+      displayName: "Harness Administrator",
+      passwordHash: await hashPassword(TEST_PASSWORD),
+    });
+    await tx.insert(schema.organizationMemberships).values({
+      organizationId: id,
+      userId: harnessAdministratorId,
+      role: "ADMIN",
+    });
+    return id;
+  });
 
   const app = await buildApp({
     config,
@@ -206,6 +257,8 @@ export async function createHarness(): Promise<TestHarness> {
       userId,
       tokenHash: hashToken(token),
       expiresAt: expiresAt.toISOString(),
+      mfaVerifiedAt: new Date().toISOString(),
+      mfaMethod: "TOTP",
     });
 
     return token;
@@ -217,26 +270,58 @@ export async function createHarness(): Promise<TestHarness> {
     storage,
     jobs,
     config,
+    organizationId,
 
     async createUser(options: CreateUserOptions = {}): Promise<TestUser> {
       const password = options.password ?? TEST_PASSWORD;
       const email = options.email ?? `user-${uuidv7()}@codevault.test`;
       const role = options.role ?? "MEMBER";
+      const enrollment = createTotpEnrollment("CodeVault Test", email);
+      const recoveryCodes = Array.from({ length: 10 }, () =>
+        randomBytes(16).toString("base64url"),
+      );
 
-      const [created] = await dbHandle.db
-        .insert(schema.users)
-        .values({
-          email,
-          displayName: `Test ${role}`,
-          passwordHash: await hashPassword(password),
+      const created = await dbHandle.db.transaction(async (tx) => {
+        const [account] = await tx
+          .insert(schema.users)
+          .values({
+            email,
+            displayName: `Test ${role}`,
+            passwordHash: await hashPassword(password),
+            disabled: options.disabled ?? false,
+          })
+          .returning({ id: schema.users.id });
+
+        if (account === undefined) {
+          throw new Error("Could not create the test user.");
+        }
+
+        await tx.insert(schema.organizationMemberships).values({
+          organizationId,
+          userId: account.id,
           role,
-          disabled: options.disabled ?? false,
-        })
-        .returning({ id: schema.users.id });
+        });
 
-      if (created === undefined) {
-        throw new Error("Could not create the test user.");
-      }
+        const credentialId = uuidv7();
+        const envelope = config.auth.mfaKeyring.encrypt(
+          enrollment.manualSecret,
+          `totp:${credentialId}:${account.id}`,
+        );
+        await tx.insert(schema.totpCredentials).values({
+          id: credentialId,
+          userId: account.id,
+          ...envelope,
+        });
+        await tx.insert(schema.mfaRecoveryCodes).values(
+          recoveryCodes.map((code) => ({
+            userId: account.id,
+            keyId: config.auth.mfaKeyring.activeKeyId,
+            digest: config.auth.mfaKeyring.digestRecoveryCode(code),
+          })),
+        );
+
+        return account;
+      });
 
       const token = await issueSession(created.id);
 
@@ -245,8 +330,11 @@ export async function createHarness(): Promise<TestHarness> {
         email,
         password,
         role,
+        organizationId,
         token,
         headers: { authorization: `Bearer ${token}` },
+        totpSecret: enrollment.manualSecret,
+        recoveryCodes,
       };
     },
 
@@ -263,3 +351,4 @@ export async function createHarness(): Promise<TestHarness> {
 export async function clearLoginAttempts(handle: TestHarness): Promise<void> {
   await handle.dbHandle.db.execute(sql`DELETE FROM login_attempts`);
 }
+import { randomBytes } from "node:crypto";

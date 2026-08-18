@@ -247,7 +247,7 @@ function UploadDialog({
 
                 return (
                   <li
-                    key={selection.path}
+                    key={selection.selectionId}
                     className="flex items-center gap-2 px-2 py-1.5 text-[12px]"
                   >
                     <span className="min-w-0 flex-1 truncate">

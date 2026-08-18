@@ -184,7 +184,7 @@ describeIntegration("uploads", () => {
     expect(rows[0]?.status).toBe("QUARANTINED");
   });
 
-  it("completes an upload whose object matches, and queues a preview", async () => {
+  it("keeps a matching-size upload unavailable until digest verification", async () => {
     const before = harness.jobs.sent.length;
     const instructions = await startUpload();
 
@@ -198,9 +198,9 @@ describeIntegration("uploads", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json<Artifact>().status).toBe("STORED");
+    expect(response.json<Artifact>().status).toBe("VERIFYING");
     expect(harness.jobs.sent.length).toBe(before + 1);
-    expect(harness.jobs.sent.at(-1)?.queue).toBe("artifact-preview");
+    expect(harness.jobs.sent.at(-1)?.queue).toBe("artifact-integrity");
   });
 
   it("refuses to complete the same upload twice", async () => {
@@ -328,6 +328,13 @@ describeIntegration("artifact downloads", () => {
       payload: {},
     });
 
+    // This helper creates a record for download authorization tests. Streaming
+    // integrity itself is exercised by the worker integration suite.
+    await harness.dbHandle.db
+      .update(schema.artifacts)
+      .set({ status: "STORED" })
+      .where(eq(schema.artifacts.id, instructions.artifactId));
+
     return { artifactId: instructions.artifactId, caseId };
   }
 
@@ -370,7 +377,7 @@ describeIntegration("artifact downloads", () => {
     expect(audit.map((row) => row.action)).toContain("artifact.downloaded");
   });
 
-  it("refuses a download to someone outside a restricted case", async () => {
+  it("allows another cleared organization member to download a restricted case", async () => {
     const { artifactId } = await storedArtifact(true);
     const outsider = await harness.createUser({ role: "MEMBER" });
 
@@ -380,7 +387,7 @@ describeIntegration("artifact downloads", () => {
       headers: outsider.headers,
     });
 
-    expect(response.statusCode).toBe(404);
+    expect(response.statusCode).toBe(200);
   });
 });
 
@@ -538,5 +545,41 @@ describeIntegration("evidence visibility", () => {
     expect(audit.map((row) => row.action)).toContain(
       "evidence.visibility_changed",
     );
+  });
+
+  it("lists restricted-case evidence for every cleared organization member", async () => {
+    const other = await harness.createUser({ role: "MEMBER" });
+    const createdCase = await harness.app.inject({
+      method: "POST",
+      url: "/v1/cases",
+      headers: user.headers,
+      payload: {
+        title: "Organization-wide evidence",
+        profile: "CRITICAL_ZERO_DAY",
+        restricted: true,
+      },
+    });
+    const evidence = await harness.app.inject({
+      method: "POST",
+      url: "/v1/evidence",
+      headers: user.headers,
+      payload: {
+        caseId: createdCase.json<CaseDetail>().id,
+        title: "Restricted reproduction details",
+        visibility: "INTERNAL",
+      },
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/evidence?limit=200",
+      headers: other.headers,
+    });
+    const ids = response
+      .json<{ items: Evidence[] }>()
+      .items.map((item) => item.id);
+
+    expect(response.statusCode).toBe(200);
+    expect(ids).toContain(evidence.json<Evidence>().id);
   });
 });

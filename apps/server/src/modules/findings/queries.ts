@@ -19,15 +19,10 @@ import { schema } from "@codevault/db";
  * Expressed in SQL rather than as a fetched array so a workspace with thousands
  * of cases does not ship its whole case list into the process on every query.
  */
-export function readableCaseIdsSubquery(userId: string): SQL {
+export function readableCaseIdsSubquery(organizationId: string): SQL {
   return sql`(
     SELECT c.id FROM cases c
-    WHERE c.restricted = false
-       OR c.owner_id = ${userId}
-       OR EXISTS (
-         SELECT 1 FROM case_members m
-         WHERE m.case_id = c.id AND m.user_id = ${userId}
-       )
+    WHERE c.organization_id = ${organizationId}
   )`;
 }
 

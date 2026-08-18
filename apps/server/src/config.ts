@@ -24,6 +24,7 @@ export interface ServerConfig {
     loginMaxAttempts: number;
     loginAttemptWindowMinutes: number;
     minPasswordLength: number;
+    mfaKeyring: SecretKeyring;
   };
   storage: {
     endpoint: string;
@@ -143,6 +144,7 @@ export function loadConfig(env: Environment = process.env): ServerConfig {
       ),
       // Long enough to matter, short enough that a passphrase is practical.
       minPasswordLength: 12,
+      mfaKeyring: parseMfaKeyring(required(env, "MFA_ENCRYPTION_KEYS")),
     },
     storage: {
       endpoint: required(env, "S3_ENDPOINT"),
@@ -167,3 +169,4 @@ export function loadConfig(env: Environment = process.env): ServerConfig {
 }
 
 export { ConfigError };
+import { parseMfaKeyring, type SecretKeyring } from "./auth/secret-keyring.js";

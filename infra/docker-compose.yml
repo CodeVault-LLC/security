@@ -1,8 +1,9 @@
 # CodeVault development infrastructure.
 #
-# Two services only. Background jobs live in PostgreSQL through pg-boss and
-# large artifacts live in object storage, so there is no Redis, no message
-# broker and no search cluster to operate.
+# Background jobs live in PostgreSQL through pg-boss and large artifacts live
+# in object storage, so there is no Redis, message broker, or search cluster.
+# One-shot init and maintenance containers enforce least-privilege credentials
+# and stale multipart cleanup for this development stack.
 
 # The project name is deliberately distinct so this stack cannot collide with
 # another Compose project on the same workstation.
@@ -29,6 +30,27 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    networks: [media-backend]
+
+  # Runs on every stack start, including upgrades with an existing data volume.
+  # The SQL is idempotent and provisions only development credentials.
+  media-db-init:
+    image: postgres:18-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: codevault_dev_password
+    command:
+      - psql
+      - postgres://codevault@postgres:5432/codevault
+      - -v
+      - ON_ERROR_STOP=1
+      - -f
+      - /init/010-media-runtime.sql
+    volumes:
+      - ./postgres-init/010-media-runtime.sql:/init/010-media-runtime.sql:ro
+    networks: [media-backend]
 
   # S3-compatible object storage for artifacts. Buckets are private; the API
   # hands out short-lived presigned URLs and never proxies file bytes.
@@ -49,6 +71,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    networks: [media-backend]
 
   objectstore-init:
     image: minio/mc:RELEASE.2025-04-16T18-13-26Z
@@ -59,9 +82,79 @@ services:
       /bin/sh -c "
       mc alias set local http://objectstore:9000 codevault codevault_dev_password &&
       mc mb --ignore-existing local/codevault-artifacts &&
-      mc anonymous set none local/codevault-artifacts
+      mc anonymous set none local/codevault-artifacts &&
+      (mc admin user info local codevault-media >/dev/null 2>&1 || mc admin user add local codevault-media codevault_media_dev_password) &&
+      (mc admin policy info local codevault-media-runtime >/dev/null 2>&1 || mc admin policy create local codevault-media-runtime /policies/media-worker-s3-policy.json) &&
+      mc admin policy attach local codevault-media-runtime --user codevault-media
       "
+    volumes:
+      - ./media-worker-s3-policy.json:/policies/media-worker-s3-policy.json:ro
+    networks: [media-backend]
+
+  # The pinned development MinIO release does not expose an abort-only ILM
+  # rule, so stale multipart data is removed by a narrow maintenance process.
+  # Production S3 deployments should use AbortIncompleteMultipartUpload ILM.
+  objectstore-cleanup:
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    restart: unless-stopped
+    depends_on:
+      objectstore-init:
+        condition: service_completed_successfully
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://objectstore:9000 codevault codevault_dev_password &&
+      while true; do
+        mc rm --incomplete --recursive --older-than 24h --force local/codevault-artifacts;
+        sleep 3600;
+      done
+      "
+    environment:
+      MC_CONFIG_DIR: /tmp/mc
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m,mode=1770
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 16
+    mem_limit: 64m
+    cpus: 0.25
+    networks: [media-backend]
+
+  media-worker:
+    profiles: ["full"]
+    build:
+      context: ..
+      dockerfile: infra/media-worker.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      media-db-init:
+        condition: service_completed_successfully
+      objectstore-init:
+        condition: service_completed_successfully
+    environment:
+      MEDIA_DATABASE_URL: postgres://codevault_media_login:codevault_media_dev_password@postgres:5432/codevault
+      S3_ENDPOINT: http://objectstore:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: codevault-artifacts
+      MEDIA_S3_ACCESS_KEY_ID: codevault-media
+      MEDIA_S3_SECRET_ACCESS_KEY: codevault_media_dev_password
+      S3_FORCE_PATH_STYLE: "true"
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1770
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 32
+    mem_limit: 256m
+    cpus: 1.0
+    networks: [media-backend]
 
 volumes:
   postgres-data:
   objectstore-data:
+
+networks:
+  media-backend:
+    internal: true

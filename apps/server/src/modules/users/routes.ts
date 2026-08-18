@@ -1,5 +1,5 @@
 import type { AppInstance } from "../../http/app-instance.js";
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 
 import {
   CreateInviteRequest,
@@ -18,7 +18,10 @@ import { Type } from "@sinclair/typebox";
 
 import { revokeAllSessionsForUser } from "../../auth/session.js";
 import { hashToken } from "../../auth/tokens.js";
-import { principalOf, requireAdmin } from "../../http/guards.js";
+import {
+  principalOf,
+  requireOrganizationAdminWithRecentMfa,
+} from "../../http/guards.js";
 
 /**
  * User and invitation administration.
@@ -37,19 +40,29 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
     async (request) => {
       // Every authenticated user may see the roster: they need it to assign
       // case members and to read who approved a report.
-      principalOf(request);
+      const principal = principalOf(request);
 
       const rows = await app.db
         .select({
           id: schema.users.id,
           email: schema.users.email,
           displayName: schema.users.displayName,
-          role: schema.users.role,
+          role: schema.organizationMemberships.role,
           disabled: schema.users.disabled,
           createdAt: schema.users.createdAt,
           lastLoginAt: schema.users.lastLoginAt,
         })
         .from(schema.users)
+        .innerJoin(
+          schema.organizationMemberships,
+          eq(schema.organizationMemberships.userId, schema.users.id),
+        )
+        .where(
+          eq(
+            schema.organizationMemberships.organizationId,
+            principal.organization.id,
+          ),
+        )
         .orderBy(schema.users.displayName);
 
       return { items: rows };
@@ -66,14 +79,34 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
       },
     },
     async (request) => {
-      const admin = requireAdmin(request);
+      const admin = requireOrganizationAdminWithRecentMfa(request);
       const { id } = request.params;
       const changes = request.body;
 
       const rows = await app.db
-        .select()
+        .select({
+          id: schema.users.id,
+          email: schema.users.email,
+          displayName: schema.users.displayName,
+          disabled: schema.users.disabled,
+          createdAt: schema.users.createdAt,
+          lastLoginAt: schema.users.lastLoginAt,
+          role: schema.organizationMemberships.role,
+        })
         .from(schema.users)
-        .where(eq(schema.users.id, id))
+        .innerJoin(
+          schema.organizationMemberships,
+          eq(schema.organizationMemberships.userId, schema.users.id),
+        )
+        .where(
+          and(
+            eq(schema.users.id, id),
+            eq(
+              schema.organizationMemberships.organizationId,
+              admin.organizationId,
+            ),
+          ),
+        )
         .limit(1);
 
       const existing = rows[0];
@@ -94,28 +127,55 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
         throw validationError("You cannot remove your own administrator role.");
       }
 
-      const [updated] = await app.db
-        .update(schema.users)
-        .set({
-          ...(changes.role === undefined ? {} : { role: changes.role }),
-          ...(changes.disabled === undefined
-            ? {}
-            : { disabled: changes.disabled }),
-          ...(changes.displayName === undefined
-            ? {}
-            : { displayName: changes.displayName }),
-          updatedAt: sql`now()`,
-        })
-        .where(eq(schema.users.id, id))
-        .returning({
-          id: schema.users.id,
-          email: schema.users.email,
-          displayName: schema.users.displayName,
-          role: schema.users.role,
-          disabled: schema.users.disabled,
-          createdAt: schema.users.createdAt,
-          lastLoginAt: schema.users.lastLoginAt,
-        });
+      const updated = await app.db.transaction(async (tx) => {
+        await tx
+          .update(schema.users)
+          .set({
+            ...(changes.disabled === undefined
+              ? {}
+              : { disabled: changes.disabled }),
+            ...(changes.displayName === undefined
+              ? {}
+              : { displayName: changes.displayName }),
+            updatedAt: sql`now()`,
+          })
+          .where(eq(schema.users.id, id));
+
+        if (changes.role !== undefined) {
+          await tx
+            .update(schema.organizationMemberships)
+            .set({ role: changes.role })
+            .where(
+              and(
+                eq(schema.organizationMemberships.userId, id),
+                eq(
+                  schema.organizationMemberships.organizationId,
+                  admin.organizationId,
+                ),
+              ),
+            );
+        }
+
+        const [result] = await tx
+          .select({
+            id: schema.users.id,
+            email: schema.users.email,
+            displayName: schema.users.displayName,
+            role: schema.organizationMemberships.role,
+            disabled: schema.users.disabled,
+            createdAt: schema.users.createdAt,
+            lastLoginAt: schema.users.lastLoginAt,
+          })
+          .from(schema.users)
+          .innerJoin(
+            schema.organizationMemberships,
+            eq(schema.organizationMemberships.userId, schema.users.id),
+          )
+          .where(eq(schema.users.id, id))
+          .limit(1);
+
+        return result;
+      });
 
       if (updated === undefined) {
         throw new DomainError("SERVER_ERROR", "Could not update the user.");
@@ -154,10 +214,10 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
   );
 
   app.get(
-    "/v1/invites",
+    "/v1/organization/invitations",
     { schema: { response: { 200: InviteListResponse } } },
     async (request) => {
-      requireAdmin(request);
+      const principal = principalOf(request);
 
       const rows = await app.db
         .select({
@@ -174,6 +234,7 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
         })
         .from(schema.invites)
         .innerJoin(schema.users, eq(schema.users.id, schema.invites.createdBy))
+        .where(eq(schema.invites.organizationId, principal.organization.id))
         .orderBy(desc(schema.invites.createdAt))
         .limit(200);
 
@@ -197,7 +258,7 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
   );
 
   app.post(
-    "/v1/invites",
+    "/v1/organization/invitations",
     {
       schema: {
         body: CreateInviteRequest,
@@ -205,11 +266,27 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
       },
     },
     async (request) => {
-      const admin = requireAdmin(request);
+      const admin = requireOrganizationAdminWithRecentMfa(request);
       const principal = principalOf(request);
       const { email, role } = request.body;
-      const expiresInDays =
-        request.body.expiresInDays ?? app.config.auth.inviteTtlDays;
+      const [policy] = await app.db
+        .select({
+          inviteTtlHours: schema.organizationSecurityPolicies.inviteTtlHours,
+        })
+        .from(schema.organizationSecurityPolicies)
+        .where(
+          eq(
+            schema.organizationSecurityPolicies.organizationId,
+            admin.organizationId,
+          ),
+        )
+        .limit(1);
+      if (!policy) {
+        throw new DomainError(
+          "SERVER_ERROR",
+          "The organization security policy is missing.",
+        );
+      }
 
       const existing = await app.db
         .select({ id: schema.users.id })
@@ -223,12 +300,13 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
 
       const token = generateOpaqueToken();
       const expiresAt = new Date(
-        Date.now() + expiresInDays * 24 * 60 * 60 * 1000,
+        Date.now() + policy.inviteTtlHours * 60 * 60 * 1000,
       ).toISOString();
 
       const [created] = await app.db
         .insert(schema.invites)
         .values({
+          organizationId: admin.organizationId,
           email,
           role,
           tokenHash: hashToken(token),
@@ -283,7 +361,7 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
   );
 
   app.delete(
-    "/v1/invites/:id",
+    "/v1/organization/invitations/:id",
     {
       schema: {
         params: IdParam,
@@ -291,14 +369,19 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
       },
     },
     async (request) => {
-      const admin = requireAdmin(request);
+      const admin = requireOrganizationAdminWithRecentMfa(request);
       const principal = principalOf(request);
       const { id } = request.params;
 
       const [revoked] = await app.db
         .update(schema.invites)
         .set({ revokedAt: sql`now()`, revokedBy: admin.id })
-        .where(eq(schema.invites.id, id))
+        .where(
+          and(
+            eq(schema.invites.id, id),
+            eq(schema.invites.organizationId, admin.organizationId),
+          ),
+        )
         .returning({ id: schema.invites.id });
 
       if (revoked === undefined) {

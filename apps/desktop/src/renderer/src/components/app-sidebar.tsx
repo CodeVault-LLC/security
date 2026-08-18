@@ -8,7 +8,9 @@ import {
   Search,
   Settings,
   ShieldAlert,
+  ShieldCheck,
   Send,
+  Users,
   UserCircle2,
   WifiOff,
 } from "lucide-react";
@@ -132,6 +134,27 @@ export function AppSidebar({
 
         <div className="flex flex-col gap-0.5">
           <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted">
+            Organization
+          </p>
+          {renderItem({
+            to: "/organization/users",
+            label: "Users",
+            icon: <Users aria-hidden className="size-4" />,
+          })}
+          {renderItem({
+            to: "/organization/settings",
+            label: "Settings",
+            icon: <Settings aria-hidden className="size-4" />,
+          })}
+          {renderItem({
+            to: "/organization/security",
+            label: "Security",
+            icon: <ShieldCheck aria-hidden className="size-4" />,
+          })}
+        </div>
+
+        <div className="flex flex-col gap-0.5">
+          <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted">
             Publishing
           </p>
           {PUBLISHING_ITEMS.map(renderItem)}
@@ -164,13 +187,13 @@ export function AppSidebar({
 
         <div className="flex flex-col gap-0.5">
           {renderItem({
-            to: "/settings",
-            label: "Settings",
+            to: "/settings/profile",
+            label: "Personal settings",
             icon: <Settings aria-hidden className="size-4" />,
           })}
 
           <Link
-            to="/settings/account"
+            to="/settings/profile"
             className="flex items-center gap-2 rounded-(--cv-radius) px-2 py-1 text-[13px] text-text-muted hover:bg-surface-hover hover:text-text"
           >
             <UserCircle2 aria-hidden className="size-4 shrink-0" />

@@ -2,6 +2,7 @@ import type { AppInstance } from "./http/app-instance.js";
 
 import { registerAiRoutes } from "./modules/ai/routes.js";
 import { registerAssetRoutes } from "./modules/assets/routes.js";
+import { registerAvatarRoutes } from "./modules/avatars/routes.js";
 import { registerAuthRoutes } from "./modules/auth/routes.js";
 import { registerCaseRoutes } from "./modules/cases/routes.js";
 import { registerDashboardRoutes } from "./modules/dashboard/routes.js";
@@ -16,6 +17,8 @@ import { registerPriorArtRoutes } from "./modules/prior-art/routes.js";
 import { registerReportRoutes } from "./modules/reports/routes.js";
 import { registerSearchRoutes } from "./modules/search/routes.js";
 import { registerUserRoutes } from "./modules/users/routes.js";
+import { registerOrganizationRoutes } from "./modules/organization/routes.js";
+import { registerSettingsRoutes } from "./modules/settings/routes.js";
 
 /**
  * Route registration.
@@ -29,6 +32,9 @@ import { registerUserRoutes } from "./modules/users/routes.js";
 export async function registerRoutes(app: AppInstance): Promise<void> {
   await registerAuthRoutes(app);
   await registerUserRoutes(app);
+  await app.register(registerAvatarRoutes);
+  await registerOrganizationRoutes(app);
+  await registerSettingsRoutes(app);
   await registerCaseRoutes(app);
   await registerAssetRoutes(app);
   await registerFindingRoutes(app);

@@ -3,6 +3,7 @@ import {
   createRoute,
   createRouter,
   Outlet,
+  redirect,
   useParams,
 } from "@tanstack/react-router";
 import { createMemoryHistory } from "@tanstack/react-router";
@@ -19,9 +20,19 @@ import {
   ActivityRoute,
   DisclosureIndexRoute,
   ReportsRoute,
-  SettingsRoute,
 } from "./routes/misc.js";
 import { ReportDetailRoute } from "./routes/report-detail.js";
+import {
+  OrganizationSecurityRoute,
+  OrganizationSettingsRoute,
+  OrganizationUserDetailRoute,
+  OrganizationUsersRoute,
+} from "./routes/organization.js";
+import {
+  PersonalAppearanceRoute,
+  PersonalProfileRoute,
+  PersonalSecurityRoute,
+} from "./routes/settings.js";
 
 /**
  * Routing.
@@ -131,13 +142,59 @@ const metricsRoute = createRoute({
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
-  component: SettingsRoute,
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/profile" });
+  },
+});
+
+const profileSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/profile",
+  component: PersonalProfileRoute,
+});
+
+const appearanceSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/appearance",
+  component: PersonalAppearanceRoute,
+});
+
+const securitySettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/security",
+  component: PersonalSecurityRoute,
+});
+
+const organizationUsersRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/organization/users",
+  component: OrganizationUsersRoute,
+});
+const organizationUserDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/organization/users/$userId",
+  component: function OrganizationUserDetailPage() {
+    const { userId } = useParams({ from: "/organization/users/$userId" });
+    return <OrganizationUserDetailRoute userId={userId} />;
+  },
+});
+const organizationSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/organization/settings",
+  component: OrganizationSettingsRoute,
+});
+const organizationSecurityRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/organization/security",
+  component: OrganizationSecurityRoute,
 });
 
 const accountRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings/account",
-  component: SettingsRoute,
+  beforeLoad: () => {
+    throw redirect({ to: "/settings/profile" });
+  },
 });
 
 const routeTree = rootRoute.addChildren([
@@ -154,7 +211,14 @@ const routeTree = rootRoute.addChildren([
   activityRoute,
   metricsRoute,
   settingsRoute,
+  profileSettingsRoute,
+  appearanceSettingsRoute,
+  securitySettingsRoute,
   accountRoute,
+  organizationUsersRoute,
+  organizationUserDetailRoute,
+  organizationSettingsRoute,
+  organizationSecurityRoute,
 ]);
 
 export function createAppRouter(): ReturnType<typeof createRouter> {

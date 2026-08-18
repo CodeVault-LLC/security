@@ -35,6 +35,7 @@ apps/
   desktop/   Electron client: hardened main process, narrow preload bridge, React renderer
   server/    Fastify API: auth, cases, findings, evidence, reports, AI, search, audit
   worker/    Background jobs: prior art, artifact previews, EPSS/KEV, PDF export
+  media-worker/ Isolated JPEG/PNG decoding and metadata-free avatar derivatives
 packages/
   core/      Domain rules: permissions, visibility, states, policy packs, identifiers
   standards/ CVSS 4.0 and 3.1, CWE, TLP, external identifier schemes
@@ -60,7 +61,8 @@ docker compose -f infra/docker-compose.yml up -d
 set -a; . ./.env; set +a
 
 bun run db:migrate
-bun run admin:create --email you@example.com --name "Your Name"
+bun run admin:create --organization "Your Organization" \
+  --email you@example.com --name "Your Name"
 bun run verify:env
 
 # Optional: three realistic cases to look at
@@ -83,8 +85,15 @@ If the desktop client reports "Electron uninstall", the binary download did not
 complete during install. Run `bun run electron:install` to retry it; nothing
 else in the repository needs it.
 
-There is no registration page. The first administrator is created by the CLI
-above; everyone else arrives through an expiring, single-use invitation.
+There is no public registration page. The first administrator is created by the
+CLI above, which enrolls TOTP and prints ten one-time recovery codes only after
+the organization, membership, credential, and audit record commit atomically.
+Everyone else arrives through an expiring, single-use invitation and must enroll
+MFA before receiving a session.
+
+Rotate encrypted TOTP credentials after adding a new first entry to
+`MFA_ENCRYPTION_KEYS` with `bun run mfa:rotate-key`. Use `--dry-run` first; the
+command reports counts and never prints decrypted secrets.
 
 ## Checks
 
@@ -116,6 +125,8 @@ committed.
 - [`docs/architecture/threat-model.md`](docs/architecture/threat-model.md) —
   what is being protected, from whom, and which code and test enforce each
   boundary.
+- [`docs/architecture/organization-security.md`](docs/architecture/organization-security.md) —
+  organization roles, read clearance, mandatory MFA, and categorized settings.
 - [`docs/architecture/ai-security.md`](docs/architecture/ai-security.md) — the
   four gates every AI interaction passes through, and the list of fields a model
   can never write.

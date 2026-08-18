@@ -9,6 +9,8 @@ export * from "./evidence.js";
 export * from "./findings.js";
 export * from "./intake.js";
 export * from "./metrics.js";
+export * from "./media.js";
+export * from "./organization.js";
 export * from "./prior-art.js";
 export * from "./reports.js";
 export * from "./search.js";

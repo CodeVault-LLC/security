@@ -2,6 +2,7 @@ import { and, eq, gte, sql } from "drizzle-orm";
 
 import type { Database } from "@codevault/db";
 import { schema } from "@codevault/db";
+import type { LoginAttemptStage } from "@codevault/db/schema";
 
 /**
  * Login throttling.
@@ -26,72 +27,80 @@ function windowStart(windowMinutes: number): string {
   return new Date(Date.now() - windowMinutes * 60 * 1000).toISOString();
 }
 
-export async function checkLoginThrottle(
+/**
+ * Atomically reserves one failed-attempt slot before expensive verification.
+ * Account and source advisory locks make the limit exact across API replicas;
+ * a successful verification clears the pessimistic reservation afterward.
+ */
+export async function reserveLoginAttempt(
   db: Database,
   email: string,
   sourceKey: string,
+  stage: LoginAttemptStage,
   config: ThrottleConfig,
 ): Promise<ThrottleDecision> {
-  const since = windowStart(config.windowMinutes);
-
-  const [byEmail] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(schema.loginAttempts)
-    .where(
-      and(
-        sql`lower(${schema.loginAttempts.email}) = lower(${email})`,
-        eq(schema.loginAttempts.successful, false),
-        gte(schema.loginAttempts.attemptedAt, since),
-      ),
+  return db.transaction(async (tx) => {
+    const normalizedEmail = email.trim().toLowerCase();
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`auth-account:${stage}:${normalizedEmail}`}, 0))`,
     );
-
-  const [bySource] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(schema.loginAttempts)
-    .where(
-      and(
-        eq(schema.loginAttempts.sourceKey, sourceKey),
-        eq(schema.loginAttempts.successful, false),
-        gte(schema.loginAttempts.attemptedAt, since),
-      ),
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`auth-source:${stage}:${sourceKey}`}, 0))`,
     );
-
-  const emailAttempts = byEmail?.count ?? 0;
-  // A single source is allowed more total failures than one account, because a
-  // shared office address legitimately produces several people's typos.
-  const sourceAttempts = bySource?.count ?? 0;
-  const blocked =
-    emailAttempts >= config.maxAttempts ||
-    sourceAttempts >= config.maxAttempts * 5;
-
-  if (!blocked) {
+    const since = windowStart(config.windowMinutes);
+    const [byEmail] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.loginAttempts)
+      .where(
+        and(
+          sql`lower(${schema.loginAttempts.email}) = ${normalizedEmail}`,
+          eq(schema.loginAttempts.stage, stage),
+          eq(schema.loginAttempts.successful, false),
+          gte(schema.loginAttempts.attemptedAt, since),
+        ),
+      );
+    const [bySource] = await tx
+      .select({ count: sql<number>`count(*)::int` })
+      .from(schema.loginAttempts)
+      .where(
+        and(
+          eq(schema.loginAttempts.sourceKey, sourceKey),
+          eq(schema.loginAttempts.stage, stage),
+          eq(schema.loginAttempts.successful, false),
+          gte(schema.loginAttempts.attemptedAt, since),
+        ),
+      );
+    const blocked =
+      (byEmail?.count ?? 0) >= config.maxAttempts ||
+      (bySource?.count ?? 0) >= config.maxAttempts * 5;
+    if (blocked) {
+      return {
+        allowed: false,
+        retryAfterSeconds: config.windowMinutes * 60,
+      };
+    }
+    await tx.insert(schema.loginAttempts).values({
+      email: normalizedEmail,
+      sourceKey,
+      stage,
+      successful: false,
+    });
     return { allowed: true, retryAfterSeconds: 0 };
-  }
-
-  return { allowed: false, retryAfterSeconds: config.windowMinutes * 60 };
-}
-
-export async function recordLoginAttempt(
-  db: Database,
-  email: string,
-  sourceKey: string,
-  successful: boolean,
-): Promise<void> {
-  await db
-    .insert(schema.loginAttempts)
-    .values({ email, sourceKey, successful });
+  });
 }
 
 /** Clears the failure history for an account after a successful login. */
 export async function clearFailedAttempts(
   db: Database,
   email: string,
+  stage: LoginAttemptStage,
 ): Promise<void> {
   await db
     .delete(schema.loginAttempts)
     .where(
       and(
         sql`lower(${schema.loginAttempts.email}) = lower(${email})`,
+        eq(schema.loginAttempts.stage, stage),
         eq(schema.loginAttempts.successful, false),
       ),
     );

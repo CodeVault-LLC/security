@@ -15,6 +15,7 @@ import type {
 } from "@codevault/core";
 
 import { users } from "./auth.js";
+import { organizations } from "./organizations.js";
 import {
   createdAt,
   metadata,
@@ -37,6 +38,9 @@ export const assets = pgTable(
   "assets",
   {
     id: primaryId(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "restrict" }),
     ref: text("ref").notNull(),
     name: text("name").notNull(),
     kind: text("kind").$type<AssetKind>().notNull(),
@@ -63,6 +67,7 @@ export const assets = pgTable(
     uniqueIndex("assets_ref_key").on(table.ref),
     index("assets_kind_idx").on(table.kind),
     index("assets_normalized_product_idx").on(table.normalizedProduct),
+    index("assets_organization_idx").on(table.organizationId),
   ],
 );
 

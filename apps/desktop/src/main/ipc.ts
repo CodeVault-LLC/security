@@ -3,8 +3,12 @@ import { app, dialog, ipcMain, shell, type BrowserWindow } from "electron";
 import type {
   AiContextPreview,
   AiRunWithProposals,
+  InviteInspection,
+  LoginStartResponse,
   LoginResponse,
   PreparedAiRun,
+  RecoveryCodeBundle,
+  TotpEnrollmentResponse,
 } from "@codevault/contracts";
 
 import {
@@ -17,9 +21,15 @@ import {
 import { ApiError, type ApiClient } from "./api-client.js";
 import type { ProviderRegistry } from "./agents/registry.js";
 import { DEFAULT_ENVIRONMENT_ALLOWLIST } from "./agents/types.js";
-import { hashSelection, runUploads } from "./file-uploads.js";
-import { isExternalUrlAllowed } from "./security.js";
+import {
+  hashSelection,
+  runUploads,
+  type LocalUploadSelection,
+} from "./file-uploads.js";
+import { loadAvatarDataUrl, selectAndUploadAvatar } from "./avatar-uploads.js";
+import { isExternalUrlAllowed, normalizeServerUrl } from "./security.js";
 import type { SessionStore } from "./session-store.js";
+import { UploadSelectionStore } from "./upload-selections.js";
 
 /**
  * IPC handlers.
@@ -92,6 +102,40 @@ function failure(error: unknown): ApiOutcome<never> {
 
 export function registerIpcHandlers(dependencies: IpcDependencies): void {
   const { sessionStore, apiClient, providers } = dependencies;
+  let pendingLogin: {
+    serverUrl: string;
+    challengeToken: string;
+  } | null = null;
+  let pendingMigratedEnrollment: {
+    serverUrl: string;
+    enrollmentToken: string;
+  } | null = null;
+  let pendingInvitation: { serverUrl: string; token: string } | null = null;
+  let pendingEnrollment: {
+    serverUrl: string;
+    enrollmentToken: string;
+  } | null = null;
+  const uploadSelections = new UploadSelectionStore();
+
+  const approveServer = async (value: string): Promise<string | null> => {
+    const serverUrl = normalizeServerUrl(value);
+    if (serverUrl === null) return null;
+    const confirmation = await dialog.showMessageBox(
+      dependencies.window() ?? undefined!,
+      {
+        type: "question",
+        buttons: ["Connect", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        title: "Connect to organization server",
+        message: `Connect CodeVault to ${serverUrl}?`,
+        detail:
+          "Only approve the server address supplied by your organization administrator.",
+        noLink: true,
+      },
+    );
+    return confirmation.response === 0 ? serverUrl : null;
+  };
 
   /** Registers a handler that refuses messages from an untrusted sender. */
   const handle = <T>(
@@ -139,7 +183,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     return true;
   });
 
-  handle(IPC_CHANNELS.authLogin, async (payload) => {
+  handle(IPC_CHANNELS.authLoginStart, async (payload) => {
     const request = payload as {
       serverUrl?: unknown;
       email?: unknown;
@@ -155,23 +199,64 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
 
     try {
-      const response = await apiClient.request<LoginResponse>(
-        "/v1/auth/login",
+      const serverUrl = await approveServer(request.serverUrl);
+      if (serverUrl === null) {
+        return failure(new Error("server connection was not approved"));
+      }
+      const response = await apiClient.request<LoginStartResponse>(
+        "/v1/auth/login/start",
         {
           method: "POST",
           body: { email: request.email, password: request.password },
-          serverUrl: request.serverUrl,
+          serverUrl,
           anonymous: true,
         },
       );
+      pendingLogin = {
+        serverUrl,
+        challengeToken: response.challengeToken,
+      };
+      return {
+        ok: true as const,
+        data: { challenge: response.challenge, expiresAt: response.expiresAt },
+      };
+    } catch (error: unknown) {
+      pendingLogin = null;
+      return failure(error);
+    }
+  });
 
+  handle(IPC_CHANNELS.authLoginComplete, async (payload) => {
+    const request = payload as { totp?: unknown };
+    if (
+      pendingLogin === null ||
+      typeof request.totp !== "string" ||
+      !/^[0-9]{6}$/u.test(request.totp)
+    ) {
+      return failure(new Error("invalid MFA completion payload"));
+    }
+    try {
+      const response = await apiClient.request<LoginResponse>(
+        "/v1/auth/login/complete",
+        {
+          method: "POST",
+          body: {
+            challengeToken: pendingLogin.challengeToken,
+            totp: request.totp,
+          },
+          serverUrl: pendingLogin.serverUrl,
+          anonymous: true,
+        },
+      );
+      const serverUrl = pendingLogin.serverUrl;
+      pendingLogin = null;
+      uploadSelections.clear();
       const status = await sessionStore.save({
         token: response.token,
-        serverUrl: request.serverUrl,
+        serverUrl,
         expiresAt: response.expiresAt,
         userId: response.user.id,
       });
-
       const result: AuthResult = {
         user: response.user,
         persistent: status.persistent,
@@ -181,25 +266,193 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
             ? status.reason
             : null,
       };
-
       return { ok: true as const, data: result };
     } catch (error: unknown) {
       return failure(error);
     }
   });
 
-  handle(IPC_CHANNELS.authLogout, async () => {
-    try {
-      await apiClient.request("/v1/auth/logout", { method: "POST" });
-    } catch {
-      // The local session is cleared regardless: a server that cannot be
-      // reached must not leave a token sitting on the workstation.
+  handle(IPC_CHANNELS.authEnrollmentStart, async () => {
+    if (pendingLogin === null) {
+      return failure(new Error("missing migration enrollment challenge"));
     }
+    try {
+      const enrollment = await apiClient.request<TotpEnrollmentResponse>(
+        "/v1/auth/enrollment/start",
+        {
+          method: "POST",
+          body: { challengeToken: pendingLogin.challengeToken },
+          serverUrl: pendingLogin.serverUrl,
+          anonymous: true,
+        },
+      );
+      pendingMigratedEnrollment = {
+        serverUrl: pendingLogin.serverUrl,
+        enrollmentToken: enrollment.enrollmentToken,
+      };
+      pendingLogin = null;
+      return {
+        ok: true as const,
+        data: {
+          provisioningUri: enrollment.provisioningUri,
+          manualSecret: enrollment.manualSecret,
+          expiresAt: enrollment.expiresAt,
+        },
+      };
+    } catch (error) {
+      return failure(error);
+    }
+  });
 
+  handle(IPC_CHANNELS.authEnrollmentConfirm, async (payload) => {
+    const request = payload as { totp?: unknown };
+    if (
+      pendingMigratedEnrollment === null ||
+      typeof request.totp !== "string" ||
+      !/^[0-9]{6}$/u.test(request.totp)
+    ) {
+      return failure(new Error("invalid migration enrollment confirmation"));
+    }
+    try {
+      const result = await apiClient.request<RecoveryCodeBundle>(
+        "/v1/auth/enrollment/confirm",
+        {
+          method: "POST",
+          body: {
+            enrollmentToken: pendingMigratedEnrollment.enrollmentToken,
+            totp: request.totp,
+          },
+          serverUrl: pendingMigratedEnrollment.serverUrl,
+          anonymous: true,
+        },
+      );
+      pendingMigratedEnrollment = null;
+      return { ok: true as const, data: result };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.invitationInspect, async (payload) => {
+    const request = payload as { serverUrl?: unknown; token?: unknown };
+    if (
+      typeof request.serverUrl !== "string" ||
+      typeof request.token !== "string"
+    )
+      return failure(new Error("invalid invitation payload"));
+    try {
+      const serverUrl = await approveServer(request.serverUrl);
+      if (serverUrl === null) {
+        return failure(new Error("server connection was not approved"));
+      }
+      const inspection = await apiClient.request<InviteInspection>(
+        "/v1/invitations/inspect",
+        {
+          method: "POST",
+          body: { token: request.token },
+          serverUrl,
+          anonymous: true,
+        },
+      );
+      pendingInvitation = {
+        serverUrl,
+        token: request.token,
+      };
+      pendingEnrollment = null;
+      return { ok: true as const, data: inspection };
+    } catch (error) {
+      pendingInvitation = null;
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.invitationStart, async (payload) => {
+    const request = payload as { displayName?: unknown; password?: unknown };
+    if (
+      pendingInvitation === null ||
+      typeof request.displayName !== "string" ||
+      typeof request.password !== "string"
+    )
+      return failure(new Error("invalid enrollment payload"));
+    try {
+      const enrollment = await apiClient.request<TotpEnrollmentResponse>(
+        "/v1/invitations/enrollment/start",
+        {
+          method: "POST",
+          body: {
+            token: pendingInvitation.token,
+            displayName: request.displayName,
+            password: request.password,
+          },
+          serverUrl: pendingInvitation.serverUrl,
+          anonymous: true,
+        },
+      );
+      pendingEnrollment = {
+        serverUrl: pendingInvitation.serverUrl,
+        enrollmentToken: enrollment.enrollmentToken,
+      };
+      return {
+        ok: true as const,
+        data: {
+          provisioningUri: enrollment.provisioningUri,
+          manualSecret: enrollment.manualSecret,
+          expiresAt: enrollment.expiresAt,
+        },
+      };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.invitationConfirm, async (payload) => {
+    const request = payload as { totp?: unknown };
+    if (
+      pendingEnrollment === null ||
+      typeof request.totp !== "string" ||
+      !/^[0-9]{6}$/u.test(request.totp)
+    )
+      return failure(new Error("invalid enrollment confirmation"));
+    try {
+      const result = await apiClient.request<RecoveryCodeBundle>(
+        "/v1/invitations/enrollment/confirm",
+        {
+          method: "POST",
+          body: {
+            enrollmentToken: pendingEnrollment.enrollmentToken,
+            totp: request.totp,
+          },
+          serverUrl: pendingEnrollment.serverUrl,
+          anonymous: true,
+        },
+      );
+      pendingInvitation = null;
+      pendingEnrollment = null;
+      return { ok: true as const, data: result };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.authLogout, async () => {
+    pendingLogin = null;
+    pendingMigratedEnrollment = null;
+    pendingInvitation = null;
+    pendingEnrollment = null;
+    uploadSelections.clear();
+    // Start the authenticated request while the token is still available, then
+    // synchronously invalidate the in-memory session before yielding. This
+    // closes the window in which a file picker could mint a post-logout
+    // capability while the network request is pending.
+    const logoutRequest = apiClient
+      .request("/v1/auth/logout", { method: "POST" })
+      .catch(() => undefined);
     await sessionStore.clear();
+    await logoutRequest;
   });
 
   handle(IPC_CHANNELS.authRestore, async () => {
+    uploadSelections.clear();
     const restored = await sessionStore.restore();
 
     if (restored === null) {
@@ -257,8 +510,9 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
 
   handle(IPC_CHANNELS.uploadsSelect, async () => {
     const window = dependencies.window();
+    const owner = sessionStore.current();
 
-    if (window === null) {
+    if (window === null || owner === null) {
       return [];
     }
 
@@ -271,21 +525,109 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       return [];
     }
 
-    const results = [];
-
+    const hashedSelections: Array<Omit<LocalUploadSelection, "selectionId">> =
+      [];
     for (const path of selection.filePaths) {
-      results.push(await hashSelection(path));
+      hashedSelections.push(await hashSelection(path));
+    }
+    const currentOwner = sessionStore.current();
+    if (
+      currentOwner === null ||
+      currentOwner.userId !== owner.userId ||
+      currentOwner.serverUrl !== owner.serverUrl ||
+      currentOwner.token !== owner.token
+    ) {
+      return [];
+    }
+
+    const results: StartUploadRequest["selections"] = [];
+    for (const hashed of hashedSelections) {
+      const selected = uploadSelections.issue(hashed, owner);
+      results.push({
+        selectionId: selected.selectionId,
+        filename: selected.filename,
+        sizeBytes: selected.sizeBytes,
+        mimeType: selected.mimeType,
+        sha256: selected.sha256,
+      });
     }
 
     return results;
+  });
+
+  handle(IPC_CHANNELS.avatarsSelectAndUpload, async (payload) => {
+    if (payload !== "USER" && payload !== "ORGANIZATION")
+      return failure(new Error("invalid avatar target"));
+    const window = dependencies.window();
+    if (!window) return failure(new Error("window unavailable"));
+    try {
+      const result = await selectAndUploadAvatar({
+        window,
+        target: payload,
+        apiClient,
+        sessionStore,
+      });
+      return { ok: true as const, data: result };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.avatarsLoad, async (payload) => {
+    if (typeof payload !== "string" || !/^[0-9a-f-]{36}$/u.test(payload))
+      return failure(new Error("invalid avatar id"));
+    try {
+      return {
+        ok: true as const,
+        data: await loadAvatarDataUrl(sessionStore, payload),
+      };
+    } catch (error) {
+      return failure(error);
+    }
   });
 
   handle(IPC_CHANNELS.uploadsStart, async (payload) => {
     const window = dependencies.window();
 
     try {
+      const request = payload as Partial<StartUploadRequest>;
+      if (
+        typeof request.caseId !== "string" ||
+        (request.findingId !== undefined &&
+          typeof request.findingId !== "string") ||
+        typeof request.artifactKind !== "string" ||
+        !["INTERNAL", "VENDOR", "PUBLIC"].includes(
+          request.visibility as string,
+        ) ||
+        !Array.isArray(request.selections) ||
+        request.selections.length === 0
+      ) {
+        return failure(new Error("invalid upload request"));
+      }
+      const selectionIds: string[] = [];
+      for (const item of request.selections) {
+        if (
+          typeof item !== "object" ||
+          item === null ||
+          typeof item.selectionId !== "string"
+        ) {
+          return failure(new Error("invalid upload selection"));
+        }
+        selectionIds.push(item.selectionId);
+      }
+      const owner = sessionStore.current();
+      if (owner === null) return failure(new Error("missing upload session"));
+      const resolved = uploadSelections.consume(selectionIds, owner);
       const artifactIds = await runUploads({
-        request: payload as StartUploadRequest,
+        request: {
+          caseId: request.caseId,
+          ...(request.findingId === undefined
+            ? {}
+            : { findingId: request.findingId }),
+          artifactKind: request.artifactKind,
+          visibility: request.visibility as "INTERNAL" | "VENDOR" | "PUBLIC",
+          selections: resolved,
+        },
         apiClient,
         onProgress: (progress) => {
           window?.webContents.send(IPC_CHANNELS.uploadsProgress, progress);

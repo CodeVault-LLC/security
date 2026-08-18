@@ -11,3 +11,4 @@ coverage/
 release/
 test-results/
 playwright-report/
+/.security-review/

@@ -1,9 +1,12 @@
 import type {
+  AvatarUpload,
   AiContextPreview,
   AiProviderStatus,
   AiRunWithProposals,
   CreateAiRunRequest,
   PreparedAiRun,
+  InviteInspection,
+  RecoveryCodeBundle,
   ServerEvent,
   SessionUser,
 } from "@codevault/contracts";
@@ -24,6 +27,17 @@ export interface AuthResult {
   persistent: boolean;
   /** Explanation shown when the session cannot be persisted securely. */
   storageWarning: string | null;
+}
+
+export interface LoginChallengeResult {
+  challenge: "MFA_REQUIRED" | "ENROLLMENT_REQUIRED";
+  expiresAt: string;
+}
+
+export interface EnrollmentSetup {
+  provisioningUri: string;
+  manualSecret: string;
+  expiresAt: string;
 }
 
 export interface ApiRequestOptions {
@@ -47,8 +61,8 @@ export interface ApiSuccess<T> {
 export type ApiOutcome<T> = ApiSuccess<T> | ApiFailure;
 
 export interface UploadSelection {
-  /** Absolute path, held in the main process only. */
-  path: string;
+  /** Opaque, one-use capability for a path held only by the main process. */
+  selectionId: string;
   filename: string;
   sizeBytes: number;
   mimeType: string;
@@ -92,16 +106,31 @@ export interface CodeVaultDesktopApi {
   };
 
   auth: {
-    login(
+    loginStart(
       serverUrl: string,
       email: string,
       password: string,
-    ): Promise<ApiOutcome<AuthResult>>;
+    ): Promise<ApiOutcome<LoginChallengeResult>>;
+    loginComplete(totp: string): Promise<ApiOutcome<AuthResult>>;
+    enrollmentStart(): Promise<ApiOutcome<EnrollmentSetup>>;
+    enrollmentConfirm(totp: string): Promise<ApiOutcome<RecoveryCodeBundle>>;
     logout(): Promise<void>;
     /** Restores a persisted session at startup, if one is available. */
     restore(): Promise<ApiOutcome<AuthResult> | null>;
     /** Warning to display when the session could not be stored securely. */
     storageWarning(): Promise<string | null>;
+  };
+
+  invitation: {
+    inspect(
+      serverUrl: string,
+      token: string,
+    ): Promise<ApiOutcome<InviteInspection>>;
+    start(
+      displayName: string,
+      password: string,
+    ): Promise<ApiOutcome<EnrollmentSetup>>;
+    confirm(totp: string): Promise<ApiOutcome<RecoveryCodeBundle>>;
   };
 
   /**
@@ -122,6 +151,13 @@ export interface CodeVaultDesktopApi {
     select(): Promise<UploadSelection[]>;
     start(request: StartUploadRequest): Promise<ApiOutcome<string[]>>;
     onProgress(listener: (progress: UploadProgress) => void): () => void;
+  };
+
+  avatars: {
+    selectAndUpload(
+      target: "USER" | "ORGANIZATION",
+    ): Promise<ApiOutcome<AvatarUpload | null>>;
+    load(avatarId: string): Promise<ApiOutcome<string>>;
   };
 
   ai: {
@@ -159,14 +195,22 @@ export const IPC_CHANNELS = {
   appVersion: "app:version",
   appPlatform: "app:platform",
   appOpenExternal: "app:open-external",
-  authLogin: "auth:login",
+  authLoginStart: "auth:login-start",
+  authLoginComplete: "auth:login-complete",
+  authEnrollmentStart: "auth:enrollment-start",
+  authEnrollmentConfirm: "auth:enrollment-confirm",
   authLogout: "auth:logout",
   authRestore: "auth:restore",
   authStorageWarning: "auth:storage-warning",
+  invitationInspect: "invitation:inspect",
+  invitationStart: "invitation:start",
+  invitationConfirm: "invitation:confirm",
   apiRequest: "api:request",
   uploadsSelect: "uploads:select",
   uploadsStart: "uploads:start",
   uploadsProgress: "uploads:progress",
+  avatarsSelectAndUpload: "avatars:select-and-upload",
+  avatarsLoad: "avatars:load",
   aiProviders: "ai:providers",
   aiPreviewContext: "ai:preview-context",
   aiRun: "ai:run",

@@ -12,16 +12,18 @@ WORKDIR /build
 COPY package.json bun.lock ./
 COPY apps/server/package.json apps/server/
 COPY apps/worker/package.json apps/worker/
+COPY apps/media-worker/package.json apps/media-worker/
 COPY apps/desktop/package.json apps/desktop/
 COPY packages/ai/package.json packages/ai/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
+COPY packages/markdown/package.json packages/markdown/
 COPY packages/reporting/package.json packages/reporting/
 COPY packages/standards/package.json packages/standards/
 COPY packages/ui/package.json packages/ui/
 
-RUN bun install --frozen-lockfile
+RUN bun install --frozen-lockfile --ignore-scripts
 
 COPY packages packages
 COPY apps/server apps/server

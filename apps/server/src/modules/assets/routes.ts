@@ -148,10 +148,11 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
       });
 
       const assetId = await app.db.transaction(async (tx) => {
-        const ref = await allocateReference(tx, "asset");
+        const ref = await allocateReference(tx, user.organizationId, "asset");
         const [row] = await tx
           .insert(schema.assets)
           .values({
+            organizationId: user.organizationId,
             ref,
             name: body.name,
             kind: body.kind,

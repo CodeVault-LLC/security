@@ -26,6 +26,7 @@
     "db:generate": "bun run --cwd packages/db generate",
     "db:migrate": "bun run --cwd packages/db migrate",
     "admin:create": "bun run scripts/bootstrap-admin.ts",
+    "mfa:rotate-key": "bun run scripts/rotate-mfa-key.ts",
     "seed:dev": "bun run scripts/seed-dev.ts",
     "verify:env": "bun run scripts/verify-env.ts",
     "e2e": "playwright test"

@@ -11,6 +11,7 @@ import {
   Evidence,
   IdParam,
   ListEvidenceQuery,
+  OkResponse,
   PaginatedResponse,
   UpdateEvidenceRequest,
   UploadInstructions,
@@ -54,6 +55,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
         body: CreateUploadRequest,
         response: { 200: UploadInstructions, 400: ErrorResponse },
       },
+      config: { rateLimit: { max: 30, timeWindow: "1 hour" } },
     },
     async (request) => {
       const user = requireAuthor(request);
@@ -81,6 +83,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
         objectKey,
         body.mimeType,
         body.sizeBytes,
+        body.sha256,
       );
 
       await app.db.insert(schema.artifacts).values({
@@ -130,6 +133,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
         multipartUploadId: instructions.multipartUploadId,
         partSizeBytes: instructions.partSizeBytes,
         partUrls: instructions.partUrls,
+        requiredHeaders: instructions.requiredHeaders,
         expiresAt: instructions.expiresAt,
       };
     },
@@ -207,7 +211,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
 
       await app.db
         .update(schema.artifacts)
-        .set({ status: "STORED", uploadId: null, updatedAt: sql`now()` })
+        .set({ status: "VERIFYING", uploadId: null, updatedAt: sql`now()` })
         .where(eq(schema.artifacts.id, artifact.id));
 
       await app.audit.write(
@@ -218,7 +222,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
           requestId: request.requestId,
         },
         {
-          action: "artifact.uploaded",
+          action: "artifact.verification_started",
           entityType: "artifact",
           entityId: artifact.id,
           caseId: artifact.caseId,
@@ -226,10 +230,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
         },
       );
 
-      // Previews are generated out of process: the file is untrusted, and
-      // decoding it is exactly the kind of work that should not happen inside
-      // the API process.
-      await app.jobs.send(JOB_QUEUES.artifactPreview, {
+      await app.jobs.send(JOB_QUEUES.artifactIntegrity, {
         artifactId: artifact.id,
         caseId: artifact.caseId,
       });
@@ -241,6 +242,50 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
       }
 
       return result;
+    },
+  );
+
+  app.post(
+    "/v1/uploads/:id/abort",
+    {
+      schema: {
+        params: IdParam,
+        response: { 200: OkResponse, 400: ErrorResponse, 404: ErrorResponse },
+      },
+      config: { rateLimit: { max: 60, timeWindow: "1 hour" } },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const [artifact] = await app.db
+        .select()
+        .from(schema.artifacts)
+        .where(eq(schema.artifacts.id, request.params.id))
+        .limit(1);
+      if (!artifact) throw notFound("Upload");
+      await requireCaseWrite(app.db, user, artifact.caseId);
+      if (artifact.status !== "PENDING") {
+        throw validationError("Only a pending upload can be aborted.");
+      }
+      if (artifact.uploadId) {
+        await app.storage.abortMultipartUpload(
+          artifact.objectKey,
+          artifact.uploadId,
+        );
+      } else {
+        await app.storage
+          .deleteObject(artifact.objectKey)
+          .catch(() => undefined);
+      }
+      await app.db
+        .update(schema.artifacts)
+        .set({
+          status: "DELETED",
+          uploadId: null,
+          deletedAt: sql`now()`,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(schema.artifacts.id, artifact.id));
+      return { ok: true as const };
     },
   );
 
@@ -329,12 +374,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
         filters.push(
           sql`${schema.evidence.caseId} IN (
             SELECT c.id FROM cases c
-            WHERE c.restricted = false
-               OR c.owner_id = ${user.id}
-               OR EXISTS (
-                 SELECT 1 FROM case_members m
-                 WHERE m.case_id = c.id AND m.user_id = ${user.id}
-               )
+            WHERE c.organization_id = ${user.organizationId}
           )`,
         );
       }
@@ -400,7 +440,11 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
       await requireCaseWrite(app.db, user, body.caseId);
 
       const evidenceId = await app.db.transaction(async (tx) => {
-        const ref = await allocateReference(tx, "evidence");
+        const ref = await allocateReference(
+          tx,
+          user.organizationId,
+          "evidence",
+        );
         const [row] = await tx
           .insert(schema.evidence)
           .values({

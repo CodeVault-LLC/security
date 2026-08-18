@@ -1,6 +1,7 @@
 import type { ErrorResponse } from "@codevault/contracts";
 
 import type { SessionStore } from "./session-store.js";
+import { normalizeServerUrl } from "./security.js";
 
 /**
  * API client.
@@ -70,13 +71,23 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
 
     async request<T>(path: string, request: RequestOptions = {}): Promise<T> {
       const session = options.sessionStore.current();
-      const baseUrl = request.serverUrl ?? session?.serverUrl;
+      const untrustedBaseUrl = request.serverUrl ?? session?.serverUrl;
 
-      if (baseUrl === undefined) {
+      if (untrustedBaseUrl === undefined) {
         throw new ApiError(
           0,
           "PROVIDER_UNAVAILABLE",
           "No CodeVault server is configured.",
+          null,
+          null,
+        );
+      }
+      const baseUrl = normalizeServerUrl(untrustedBaseUrl);
+      if (baseUrl === null) {
+        throw new ApiError(
+          0,
+          "VALIDATION",
+          "The CodeVault server URL is not allowed.",
           null,
           null,
         );

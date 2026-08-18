@@ -12,10 +12,11 @@ import type { WorkerContext } from "../context.js";
  * therefore generated out of process, only for formats with a bounded, safe
  * representation, and never by handing the file to a renderer.
  *
- * Images are re-encoded to a small raster thumbnail, which discards embedded
- * scripts, colour profiles and metadata along the way. Text is excerpted with a
- * hard byte cap and control characters stripped. Everything else — archives,
- * binaries, firmware, PDFs, SVG — gets metadata only in V1.
+ * Text is excerpted with a hard byte cap and control characters stripped.
+ * Every parser-driven format — including raster images, archives, binaries,
+ * firmware, PDFs, and SVG — gets metadata only until it has a dedicated,
+ * least-privilege process boundary. Native decoders must never run in this
+ * broadly privileged queue worker.
  */
 
 export interface ArtifactPreviewJobData {
@@ -25,12 +26,6 @@ export interface ArtifactPreviewJobData {
 
 /** Longest text excerpt retained, in bytes. */
 const TEXT_PREVIEW_BYTES = 16 * 1024;
-
-/** Thumbnail edge length in pixels. */
-const THUMBNAIL_EDGE = 480;
-
-/** Largest image the worker will attempt to decode. */
-const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
 
 const TEXT_MIME_PREFIXES = ["text/"];
 
@@ -43,21 +38,7 @@ const TEXT_MIME_TYPES = new Set([
   "application/x-sh",
 ]);
 
-/**
- * Image types we will re-encode.
- *
- * SVG is deliberately excluded: it is a document format with scripting, and
- * "sanitise SVG" is a losing game. It gets metadata only.
- */
-const RASTER_IMAGE_TYPES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-  "image/bmp",
-  "image/tiff",
-  "image/avif",
-]);
+type ArtifactRow = typeof schema.artifacts.$inferSelect;
 
 export async function generateArtifactPreview(
   context: WorkerContext,
@@ -79,12 +60,6 @@ export async function generateArtifactPreview(
 
   const mimeType = artifact.mimeType.toLowerCase();
 
-  if (RASTER_IMAGE_TYPES.has(mimeType)) {
-    await generateImageThumbnail(context, artifact);
-
-    return;
-  }
-
   const isText =
     TEXT_MIME_TYPES.has(mimeType) ||
     TEXT_MIME_PREFIXES.some((prefix) => mimeType.startsWith(prefix));
@@ -101,65 +76,23 @@ export async function generateArtifactPreview(
     .where(eq(schema.artifacts.id, artifact.id));
 }
 
-type ArtifactRow = typeof schema.artifacts.$inferSelect;
-
-async function generateImageThumbnail(
-  context: WorkerContext,
-  artifact: ArtifactRow,
-): Promise<void> {
-  if (artifact.sizeBytes > MAX_IMAGE_BYTES) {
-    await markNoPreview(context, artifact.id, "image too large to decode");
-
-    return;
-  }
-
-  try {
-    const { default: sharp } = await import("sharp");
-    const bytes = await context.storage.getObject(artifact.objectKey);
-
-    const thumbnail = await sharp(Buffer.from(bytes), {
-      // A decompression bomb is a plausible upload; caps stop it becoming an
-      // out-of-memory kill for the whole worker.
-      limitInputPixels: 40_000_000,
-      failOn: "error",
-    })
-      .rotate()
-      .resize(THUMBNAIL_EDGE, THUMBNAIL_EDGE, {
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      // WebP re-encoding drops every non-pixel chunk, including any embedded
-      // script or metadata the original carried.
-      .webp({ quality: 78 })
-      .toBuffer();
-
-    const previewKey = `${artifact.objectKey}.preview.webp`;
-
-    await context.storage.putObject(previewKey, thumbnail, "image/webp");
-
-    await context.db
-      .update(schema.artifacts)
-      .set({
-        previewKind: "IMAGE_THUMBNAIL",
-        previewObjectKey: previewKey,
-        updatedAt: sql`now()`,
-      })
-      .where(eq(schema.artifacts.id, artifact.id));
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    await markNoPreview(context, artifact.id, message);
-  }
-}
-
 async function generateTextExcerpt(
   context: WorkerContext,
   artifact: ArtifactRow,
 ): Promise<void> {
   try {
-    const bytes = await context.storage.getObject(artifact.objectKey);
-    const slice = bytes.slice(0, TEXT_PREVIEW_BYTES);
-    const decoded = new TextDecoder("utf-8", { fatal: false }).decode(slice);
+    const chunks: Buffer[] = [];
+    let remaining = TEXT_PREVIEW_BYTES;
+    const stream = await context.storage.getObjectStream(artifact.objectKey);
+    for await (const chunk of stream) {
+      if (remaining === 0) break;
+      const bounded = Buffer.from(chunk).subarray(0, remaining);
+      chunks.push(bounded);
+      remaining -= bounded.byteLength;
+    }
+    const decoded = new TextDecoder("utf-8", { fatal: false }).decode(
+      Buffer.concat(chunks),
+    );
 
     // Control characters are stripped so a preview cannot rewrite a terminal,
     // reorder text with bidirectional overrides, or corrupt a log line.

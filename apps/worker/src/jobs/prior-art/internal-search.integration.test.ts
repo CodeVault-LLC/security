@@ -44,30 +44,60 @@ function query(overrides: Partial<PriorArtQuery> = {}): PriorArtQuery {
 describeIntegration("internal prior-art search", () => {
   let handle: DatabaseHandle;
   let caseId: string;
+  let organizationId: string;
   let priorFindingId: string;
   let subjectFindingId: string;
 
   beforeAll(async () => {
     handle = createDatabase({ connectionString: connectionString as string });
 
-    const [owner] = await handle.db
-      .insert(schema.users)
-      .values({
-        email: `prior-art-${uuidv7()}@codevault.test`,
-        displayName: "Prior Art Fixture",
-        passwordHash: "not-a-real-hash",
-        role: "MEMBER",
-      })
-      .returning({ id: schema.users.id });
+    const [existingOrganization] = await handle.db
+      .select({ id: schema.organizations.id })
+      .from(schema.organizations)
+      .limit(1);
+    organizationId = existingOrganization?.id ?? uuidv7();
+    const owner = await handle.db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(schema.users)
+        .values({
+          email: `prior-art-${uuidv7()}@codevault.test`,
+          displayName: "Prior Art Fixture",
+          passwordHash: "not-a-real-hash",
+        })
+        .returning({ id: schema.users.id });
+
+      if (created === undefined) {
+        throw new Error("Could not create the fixture user.");
+      }
+
+      if (existingOrganization === undefined) {
+        await tx.insert(schema.organizations).values({
+          id: organizationId,
+          name: "Prior Art Tests",
+        });
+        await tx
+          .insert(schema.organizationSecurityPolicies)
+          .values({ organizationId });
+      }
+
+      await tx.insert(schema.organizationMemberships).values({
+        organizationId,
+        userId: created.id,
+        role: existingOrganization === undefined ? "ADMIN" : "MEMBER",
+      });
+
+      return created;
+    });
 
     if (owner === undefined) {
       throw new Error("Could not create the fixture user.");
     }
 
-    const caseRef = await allocateReference(handle.db, "case");
+    const caseRef = await allocateReference(handle.db, organizationId, "case");
     const [fixtureCase] = await handle.db
       .insert(schema.cases)
       .values({
+        organizationId,
         ref: caseRef,
         title: "Prior-art search fixture",
         profile: "STANDARD",
@@ -81,7 +111,11 @@ describeIntegration("internal prior-art search", () => {
 
     caseId = fixtureCase.id;
 
-    const priorRef = await allocateReference(handle.db, "finding");
+    const priorRef = await allocateReference(
+      handle.db,
+      organizationId,
+      "finding",
+    );
     const [prior] = await handle.db
       .insert(schema.findings)
       .values({
@@ -94,7 +128,11 @@ describeIntegration("internal prior-art search", () => {
       })
       .returning({ id: schema.findings.id });
 
-    const subjectRef = await allocateReference(handle.db, "finding");
+    const subjectRef = await allocateReference(
+      handle.db,
+      organizationId,
+      "finding",
+    );
     const [subject] = await handle.db
       .insert(schema.findings)
       .values({

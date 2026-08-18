@@ -187,7 +187,7 @@ export async function registerReportRoutes(app: AppInstance): Promise<void> {
             },
           });
 
-        const ref = await allocateReference(tx, "report");
+        const ref = await allocateReference(tx, user.organizationId, "report");
         const [report] = await tx
           .insert(schema.reports)
           .values({
