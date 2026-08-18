@@ -24,6 +24,7 @@ interface DevProcess {
 const PROCESSES: DevProcess[] = [
   { name: "server", directory: "apps/server" },
   { name: "worker", directory: "apps/worker" },
+  { name: "media", directory: "apps/media-worker" },
   { name: "desktop", directory: "apps/desktop" },
 ];
 

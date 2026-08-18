@@ -21,7 +21,7 @@ export default defineConfig({
           environment: "node",
           include: [
             "packages/{core,standards,contracts,db,reporting,ai,markdown}/src/**/*.test.ts",
-            "apps/{server,worker}/src/**/*.test.ts",
+            "apps/{server,worker,media-worker}/src/**/*.test.ts",
             "apps/desktop/src/{main,preload}/**/*.test.ts",
             "scripts/**/*.test.ts",
           ],
@@ -34,6 +34,10 @@ export default defineConfig({
           environment: "node",
           include: ["**/*.integration.test.ts"],
           exclude: ["**/node_modules/**"],
+          // Integration files exercise one intentionally singleton
+          // organization. Running files in parallel makes unrelated fixtures
+          // mutate the same organization between assertions.
+          fileParallelism: false,
           testTimeout: 30_000,
         },
       },

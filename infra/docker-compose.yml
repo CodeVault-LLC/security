@@ -29,6 +29,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    networks: [media-backend]
 
   # S3-compatible object storage for artifacts. Buckets are private; the API
   # hands out short-lived presigned URLs and never proxies file bytes.
@@ -49,6 +50,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    networks: [media-backend]
 
   objectstore-init:
     image: minio/mc:RELEASE.2025-04-16T18-13-26Z
@@ -61,7 +63,42 @@ services:
       mc mb --ignore-existing local/codevault-artifacts &&
       mc anonymous set none local/codevault-artifacts
       "
+    networks: [media-backend]
+
+  media-worker:
+    profiles: ["full"]
+    build:
+      context: ..
+      dockerfile: infra/media-worker.Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      objectstore-init:
+        condition: service_completed_successfully
+    environment:
+      MEDIA_DATABASE_URL: postgres://codevault:codevault_dev_password@postgres:5432/codevault
+      S3_ENDPOINT: http://objectstore:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: codevault-artifacts
+      MEDIA_S3_ACCESS_KEY_ID: codevault
+      MEDIA_S3_SECRET_ACCESS_KEY: codevault_dev_password
+      S3_FORCE_PATH_STYLE: "true"
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1770
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 32
+    mem_limit: 256m
+    cpus: 1.0
+    networks: [media-backend]
 
 volumes:
   postgres-data:
   objectstore-data:
+
+networks:
+  media-backend:
+    internal: true

@@ -121,11 +121,47 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
     {
       schema: {
         body: LoginCompleteRequest,
-        response: { 200: LoginResponse, 400: ErrorResponse },
+        response: {
+          200: LoginResponse,
+          400: ErrorResponse,
+          429: ErrorResponse,
+        },
       },
       config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
     },
     async (request, reply) => {
+      const challengeIdentity = await app.db.execute<{ email: string }>(sql`
+        SELECT account.email FROM mfa_challenges AS challenge
+        JOIN users AS account ON account.id = challenge.user_id
+        WHERE challenge.token_hash = ${hashToken(request.body.challengeToken)}
+          AND challenge.source_key = ${request.ip}
+          AND challenge.consumed_at IS NULL AND challenge.expires_at > now()
+        LIMIT 1
+      `);
+      const challengeEmail = challengeIdentity.rows[0]?.email;
+      if (challengeEmail) {
+        const throttle = await checkLoginThrottle(
+          app.db,
+          challengeEmail,
+          request.ip,
+          {
+            maxAttempts: app.config.auth.loginMaxAttempts,
+            windowMinutes: app.config.auth.loginAttemptWindowMinutes,
+          },
+        );
+        if (!throttle.allowed) {
+          return reply
+            .status(429)
+            .header("retry-after", String(throttle.retryAfterSeconds))
+            .send({
+              error: {
+                category: "RATE_LIMITED",
+                message: "Too many sign-in attempts. Try again shortly.",
+                requestId: request.requestId,
+              },
+            });
+        }
+      }
       const outcome = await app.db.transaction(async (tx) => {
         const result = await tx.execute<{
           challenge_id: string;
@@ -157,13 +193,14 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
           JOIN organization_security_policies AS policy ON policy.organization_id = membership.organization_id
           JOIN totp_credentials AS credential ON credential.user_id = account.id AND credential.replaced_at IS NULL
           WHERE challenge.token_hash = ${hashToken(request.body.challengeToken)}
+            AND challenge.source_key = ${request.ip}
             AND challenge.purpose = 'LOGIN' AND challenge.consumed_at IS NULL
             AND challenge.expires_at > now()
           FOR UPDATE OF challenge, account, credential
         `);
         const row = result.rows[0];
         if (row === undefined || row.disabled || row.attempt_count >= 5)
-          return { ok: false as const };
+          return { ok: false as const, email: row?.email ?? null };
         const secret = app.config.auth.mfaKeyring
           .decrypt(
             {
@@ -184,7 +221,7 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
             .update(schema.mfaChallenges)
             .set({ attemptCount: row.attempt_count + 1 })
             .where(eq(schema.mfaChallenges.id, row.challenge_id));
-          return { ok: false as const };
+          return { ok: false as const, email: row.email };
         }
         await tx
           .update(schema.mfaChallenges)
@@ -206,6 +243,9 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
         return { ok: true as const, session, row };
       });
       if (!outcome.ok) {
+        if (outcome.email) {
+          await recordLoginAttempt(app.db, outcome.email, request.ip, false);
+        }
         return reply.status(400).send({
           error: {
             category: "VALIDATION",

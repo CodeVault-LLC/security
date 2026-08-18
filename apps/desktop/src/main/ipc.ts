@@ -3,8 +3,12 @@ import { app, dialog, ipcMain, shell, type BrowserWindow } from "electron";
 import type {
   AiContextPreview,
   AiRunWithProposals,
+  InviteInspection,
+  LoginStartResponse,
   LoginResponse,
   PreparedAiRun,
+  RecoveryCodeBundle,
+  TotpEnrollmentResponse,
 } from "@codevault/contracts";
 
 import {
@@ -18,6 +22,7 @@ import { ApiError, type ApiClient } from "./api-client.js";
 import type { ProviderRegistry } from "./agents/registry.js";
 import { DEFAULT_ENVIRONMENT_ALLOWLIST } from "./agents/types.js";
 import { hashSelection, runUploads } from "./file-uploads.js";
+import { loadAvatarDataUrl, selectAndUploadAvatar } from "./avatar-uploads.js";
 import { isExternalUrlAllowed } from "./security.js";
 import type { SessionStore } from "./session-store.js";
 
@@ -92,6 +97,15 @@ function failure(error: unknown): ApiOutcome<never> {
 
 export function registerIpcHandlers(dependencies: IpcDependencies): void {
   const { sessionStore, apiClient, providers } = dependencies;
+  let pendingLogin: {
+    serverUrl: string;
+    challengeToken: string;
+  } | null = null;
+  let pendingInvitation: { serverUrl: string; token: string } | null = null;
+  let pendingEnrollment: {
+    serverUrl: string;
+    enrollmentToken: string;
+  } | null = null;
 
   /** Registers a handler that refuses messages from an untrusted sender. */
   const handle = <T>(
@@ -139,7 +153,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     return true;
   });
 
-  handle(IPC_CHANNELS.authLogin, async (payload) => {
+  handle(IPC_CHANNELS.authLoginStart, async (payload) => {
     const request = payload as {
       serverUrl?: unknown;
       email?: unknown;
@@ -155,8 +169,8 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
 
     try {
-      const response = await apiClient.request<LoginResponse>(
-        "/v1/auth/login",
+      const response = await apiClient.request<LoginStartResponse>(
+        "/v1/auth/login/start",
         {
           method: "POST",
           body: { email: request.email, password: request.password },
@@ -164,14 +178,50 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
           anonymous: true,
         },
       );
+      pendingLogin = {
+        serverUrl: request.serverUrl,
+        challengeToken: response.challengeToken,
+      };
+      return {
+        ok: true as const,
+        data: { challenge: response.challenge, expiresAt: response.expiresAt },
+      };
+    } catch (error: unknown) {
+      pendingLogin = null;
+      return failure(error);
+    }
+  });
 
+  handle(IPC_CHANNELS.authLoginComplete, async (payload) => {
+    const request = payload as { totp?: unknown };
+    if (
+      pendingLogin === null ||
+      typeof request.totp !== "string" ||
+      !/^[0-9]{6}$/u.test(request.totp)
+    ) {
+      return failure(new Error("invalid MFA completion payload"));
+    }
+    try {
+      const response = await apiClient.request<LoginResponse>(
+        "/v1/auth/login/complete",
+        {
+          method: "POST",
+          body: {
+            challengeToken: pendingLogin.challengeToken,
+            totp: request.totp,
+          },
+          serverUrl: pendingLogin.serverUrl,
+          anonymous: true,
+        },
+      );
+      const serverUrl = pendingLogin.serverUrl;
+      pendingLogin = null;
       const status = await sessionStore.save({
         token: response.token,
-        serverUrl: request.serverUrl,
+        serverUrl,
         expiresAt: response.expiresAt,
         userId: response.user.id,
       });
-
       const result: AuthResult = {
         user: response.user,
         persistent: status.persistent,
@@ -181,14 +231,113 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
             ? status.reason
             : null,
       };
-
       return { ok: true as const, data: result };
     } catch (error: unknown) {
       return failure(error);
     }
   });
 
+  handle(IPC_CHANNELS.invitationInspect, async (payload) => {
+    const request = payload as { serverUrl?: unknown; token?: unknown };
+    if (
+      typeof request.serverUrl !== "string" ||
+      typeof request.token !== "string"
+    )
+      return failure(new Error("invalid invitation payload"));
+    try {
+      const inspection = await apiClient.request<InviteInspection>(
+        "/v1/invitations/inspect",
+        {
+          method: "POST",
+          body: { token: request.token },
+          serverUrl: request.serverUrl,
+          anonymous: true,
+        },
+      );
+      pendingInvitation = {
+        serverUrl: request.serverUrl,
+        token: request.token,
+      };
+      pendingEnrollment = null;
+      return { ok: true as const, data: inspection };
+    } catch (error) {
+      pendingInvitation = null;
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.invitationStart, async (payload) => {
+    const request = payload as { displayName?: unknown; password?: unknown };
+    if (
+      pendingInvitation === null ||
+      typeof request.displayName !== "string" ||
+      typeof request.password !== "string"
+    )
+      return failure(new Error("invalid enrollment payload"));
+    try {
+      const enrollment = await apiClient.request<TotpEnrollmentResponse>(
+        "/v1/invitations/enrollment/start",
+        {
+          method: "POST",
+          body: {
+            token: pendingInvitation.token,
+            displayName: request.displayName,
+            password: request.password,
+          },
+          serverUrl: pendingInvitation.serverUrl,
+          anonymous: true,
+        },
+      );
+      pendingEnrollment = {
+        serverUrl: pendingInvitation.serverUrl,
+        enrollmentToken: enrollment.enrollmentToken,
+      };
+      return {
+        ok: true as const,
+        data: {
+          provisioningUri: enrollment.provisioningUri,
+          manualSecret: enrollment.manualSecret,
+          expiresAt: enrollment.expiresAt,
+        },
+      };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.invitationConfirm, async (payload) => {
+    const request = payload as { totp?: unknown };
+    if (
+      pendingEnrollment === null ||
+      typeof request.totp !== "string" ||
+      !/^[0-9]{6}$/u.test(request.totp)
+    )
+      return failure(new Error("invalid enrollment confirmation"));
+    try {
+      const result = await apiClient.request<RecoveryCodeBundle>(
+        "/v1/invitations/enrollment/confirm",
+        {
+          method: "POST",
+          body: {
+            enrollmentToken: pendingEnrollment.enrollmentToken,
+            totp: request.totp,
+          },
+          serverUrl: pendingEnrollment.serverUrl,
+          anonymous: true,
+        },
+      );
+      pendingInvitation = null;
+      pendingEnrollment = null;
+      return { ok: true as const, data: result };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
   handle(IPC_CHANNELS.authLogout, async () => {
+    pendingLogin = null;
+    pendingInvitation = null;
+    pendingEnrollment = null;
     try {
       await apiClient.request("/v1/auth/logout", { method: "POST" });
     } catch {
@@ -278,6 +427,37 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
 
     return results;
+  });
+
+  handle(IPC_CHANNELS.avatarsSelectAndUpload, async (payload) => {
+    if (payload !== "USER" && payload !== "ORGANIZATION")
+      return failure(new Error("invalid avatar target"));
+    const window = dependencies.window();
+    if (!window) return failure(new Error("window unavailable"));
+    try {
+      const result = await selectAndUploadAvatar({
+        window,
+        target: payload,
+        apiClient,
+        sessionStore,
+      });
+      return { ok: true as const, data: result };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.avatarsLoad, async (payload) => {
+    if (typeof payload !== "string" || !/^[0-9a-f-]{36}$/u.test(payload))
+      return failure(new Error("invalid avatar id"));
+    try {
+      return {
+        ok: true as const,
+        data: await loadAvatarDataUrl(sessionStore, payload),
+      };
+    } catch (error) {
+      return failure(error);
+    }
   });
 
   handle(IPC_CHANNELS.uploadsStart, async (payload) => {

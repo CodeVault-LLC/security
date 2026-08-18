@@ -236,38 +236,30 @@ export async function registerEnrollmentRoutes(
           secret,
           `totp:${credentialId}:${userId}`,
         );
-        await tx
-          .insert(schema.users)
-          .values({
-            id: userId,
-            email: row.email,
-            displayName: row.display_name,
-            passwordHash: row.password_hash,
-          });
-        await tx
-          .insert(schema.organizationMemberships)
-          .values({
-            organizationId: row.organization_id,
+        await tx.insert(schema.users).values({
+          id: userId,
+          email: row.email,
+          displayName: row.display_name,
+          passwordHash: row.password_hash,
+        });
+        await tx.insert(schema.organizationMemberships).values({
+          organizationId: row.organization_id,
+          userId,
+          role: row.role,
+        });
+        await tx.insert(schema.totpCredentials).values({
+          id: credentialId,
+          userId,
+          ...credentialEnvelope,
+          lastAcceptedCounter: counter,
+        });
+        await tx.insert(schema.mfaRecoveryCodes).values(
+          codes.map((code) => ({
             userId,
-            role: row.role,
-          });
-        await tx
-          .insert(schema.totpCredentials)
-          .values({
-            id: credentialId,
-            userId,
-            ...credentialEnvelope,
-            lastAcceptedCounter: counter,
-          });
-        await tx
-          .insert(schema.mfaRecoveryCodes)
-          .values(
-            codes.map((code) => ({
-              userId,
-              keyId: app.config.auth.mfaKeyring.activeKeyId,
-              digest: app.config.auth.mfaKeyring.digestRecoveryCode(code),
-            })),
-          );
+            keyId: app.config.auth.mfaKeyring.activeKeyId,
+            digest: app.config.auth.mfaKeyring.digestRecoveryCode(code),
+          })),
+        );
         await tx
           .update(schema.invites)
           .set({ acceptedAt: sql`now()`, acceptedByUserId: userId })
@@ -276,16 +268,14 @@ export async function registerEnrollmentRoutes(
           .update(schema.inviteEnrollments)
           .set({ consumedAt: sql`now()` })
           .where(eq(schema.inviteEnrollments.id, row.id));
-        await tx
-          .insert(schema.auditEvents)
-          .values({
-            organizationId: row.organization_id,
-            actorId: userId,
-            action: "user.enrolled",
-            entityType: "user",
-            entityId: userId,
-            after: { role: row.role, via: "invitation" },
-          });
+        await tx.insert(schema.auditEvents).values({
+          organizationId: row.organization_id,
+          actorId: userId,
+          action: "user.enrolled",
+          entityType: "user",
+          entityId: userId,
+          after: { role: row.role, via: "invitation" },
+        });
         return codes;
       });
       if (!outcome) {

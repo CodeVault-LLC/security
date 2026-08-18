@@ -1,6 +1,10 @@
 import { eq, sql } from "drizzle-orm";
 
 import { schema } from "@codevault/db";
+import {
+  ImageRejectedError,
+  sanitizeImage,
+} from "@codevault/media-worker/sanitize-image";
 
 import type { WorkerContext } from "../context.js";
 
@@ -26,11 +30,8 @@ export interface ArtifactPreviewJobData {
 /** Longest text excerpt retained, in bytes. */
 const TEXT_PREVIEW_BYTES = 16 * 1024;
 
-/** Thumbnail edge length in pixels. */
-const THUMBNAIL_EDGE = 480;
-
 /** Largest image the worker will attempt to decode. */
-const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const TEXT_MIME_PREFIXES = ["text/"];
 
@@ -49,15 +50,7 @@ const TEXT_MIME_TYPES = new Set([
  * SVG is deliberately excluded: it is a document format with scripting, and
  * "sanitise SVG" is a losing game. It gets metadata only.
  */
-const RASTER_IMAGE_TYPES = new Set([
-  "image/png",
-  "image/jpeg",
-  "image/gif",
-  "image/webp",
-  "image/bmp",
-  "image/tiff",
-  "image/avif",
-]);
+const RASTER_IMAGE_TYPES = new Set(["image/png", "image/jpeg"]);
 
 export async function generateArtifactPreview(
   context: WorkerContext,
@@ -114,28 +107,12 @@ async function generateImageThumbnail(
   }
 
   try {
-    const { default: sharp } = await import("sharp");
     const bytes = await context.storage.getObject(artifact.objectKey);
-
-    const thumbnail = await sharp(Buffer.from(bytes), {
-      // A decompression bomb is a plausible upload; caps stop it becoming an
-      // out-of-memory kill for the whole worker.
-      limitInputPixels: 40_000_000,
-      failOn: "error",
-    })
-      .rotate()
-      .resize(THUMBNAIL_EDGE, THUMBNAIL_EDGE, {
-        fit: "inside",
-        withoutEnlargement: true,
-      })
-      // WebP re-encoding drops every non-pixel chunk, including any embedded
-      // script or metadata the original carried.
-      .webp({ quality: 78 })
-      .toBuffer();
+    const sanitized = await sanitizeImage(bytes);
 
     const previewKey = `${artifact.objectKey}.preview.webp`;
 
-    await context.storage.putObject(previewKey, thumbnail, "image/webp");
+    await context.storage.putObject(previewKey, sanitized.bytes, "image/webp");
 
     await context.db
       .update(schema.artifacts)
@@ -146,9 +123,9 @@ async function generateImageThumbnail(
       })
       .where(eq(schema.artifacts.id, artifact.id));
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : String(error);
-
-    await markNoPreview(context, artifact.id, message);
+    const reason =
+      error instanceof ImageRejectedError ? error.code : "PREVIEW_FAILED";
+    await markNoPreview(context, artifact.id, reason);
   }
 }
 

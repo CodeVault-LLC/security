@@ -27,7 +27,8 @@ and points at the code and the test that enforce it.
   from a target is rendered, indexed, sent to a model and printed into a PDF.
   It is assumed hostile everywhere.
 - **A compromised or malicious dependency** in the renderer or the server.
-- **An insider or a mistaken colleague** who should not see a particular case.
+- **An insider or a mistaken colleague** who must not alter organization rules,
+  identities, or research records beyond their assigned write authority.
 - **An attacker with the database**, through a backup or a stolen dump.
 - **The AI provider**, treated as an untrusted external process that receives
   exactly what policy allows and nothing more.
@@ -80,12 +81,29 @@ Certificate errors are refused outright.
 *Enforced by* `apps/server/src/auth/`, `apps/desktop/src/main/session-store.ts`.
 *Tested by* `apps/server/src/auth.integration.test.ts`.
 
+Password verification does not create a session. It creates a five-minute,
+hashed-at-rest challenge that must be completed with a replay-protected TOTP
+counter. Challenges are source-bound and throttled; recovery grants only a
+short-lived TOTP re-enrollment capability. Organization-wide mutations require
+the `ADMIN` membership role, and sensitive changes require recent MFA.
+
+TOTP is not phishing-resistant. A malicious site or endpoint process can relay
+or capture a password and current code, and a compromised live API process can
+use decrypted TOTP secrets. Passkeys/WebAuthn are the planned
+phishing-resistant successor; sessions record the MFA method to support that
+migration.
+
 ### 4. API ↔ PostgreSQL
 
-All access is parameterised through Drizzle or `sql` template literals. Case
-access is evaluated in SQL for list and search queries, so a restricted case
-cannot leak through a filter that was applied in application code after the
-rows were already fetched.
+All access is parameterised through Drizzle or `sql` template literals. The
+single organization is the read-clearance boundary: every active member can
+read every case, including restricted cases, while organization membership,
+case ownership/grants, and role govern writes. Root list, search, metric,
+evidence, and activity queries retain an explicit organization predicate.
+
+Role authority lives on organization memberships. A deferred database
+constraint prevents any committed transaction—including two racing admin
+changes—from leaving the organization without an enabled administrator.
 
 The audit table carries `DO INSTEAD NOTHING` rules for UPDATE and DELETE:
 history cannot be rewritten through the application, including by a bug.
@@ -100,24 +118,35 @@ proxies bytes. Object keys are opaque and derived from identifiers we control �
 never from the uploaded filename, which is attacker-supplied and would otherwise
 reach path handling, log lines and bucket listings.
 
-An upload cannot be marked complete unless the object exists and its size
-matches what was declared; a mismatch quarantines the artifact.
+An upload cannot become downloadable unless the object exists, its size
+matches, and a worker streams the entire object through SHA-256. Single-part
+uploads also bind content length, type, and checksum into the signed request.
+Mismatches are rejected and deleted.
 
 *Enforced by* `apps/server/src/modules/evidence/routes.ts`, `packages/core/src/crypto.ts`.
 *Tested by* `apps/server/src/evidence.integration.test.ts`.
 
 ### 6. Worker ↔ Untrusted artifacts
 
-Decoding uploaded files happens in a separate process from the one answering
-authenticated requests. Only formats with a bounded, safe representation get a
-preview: images are re-encoded to a small WebP raster, which discards embedded
-scripts and metadata; text is excerpted with a byte cap and control characters
-stripped. Archives, binaries, firmware, PDFs and SVG get metadata only.
+Decoding uploaded files happens in a dedicated non-root media container with a
+read-only filesystem, no capabilities, bounded CPU/memory/PIDs/time, narrow
+database functions, and prefix-limited object credentials. It independently
+checks JPEG/PNG signatures, blocks every libvips loader before reopening only
+the JPEG/PNG buffer loaders, caps pixels/edges/channels/pages, and publishes a
+new metadata-free WebP raster. Raw avatars are never served and are deleted
+after processing. Archives, binaries, firmware, PDFs, SVG, and other image
+formats get metadata only.
 
 SVG is deliberately excluded from image previews: it is a document format with
 scripting, and "sanitise SVG" is a losing game.
 
-*Enforced by* `apps/worker/src/jobs/artifact-preview.ts`.
+*Enforced by* `apps/media-worker/`, `apps/worker/src/jobs/artifact-preview.ts`,
+`packages/db/drizzle/0006_media_worker_least_privilege.sql`.
+
+Native decoders can contain unknown vulnerabilities even when patched. The
+container boundary limits blast radius but is not a proof of decoder safety.
+The pinned decoder is a release gate, decoder failures are monitored, and its
+credentials must never be reused by the API or general worker.
 
 ### 7. Desktop ↔ Claude Code
 
@@ -198,8 +227,17 @@ tracking pixel that would reveal an embargoed document had been opened.
 - **The AI provider sees what policy allows.** If a workspace enables INTERNAL
   content for a local provider, that content reaches the provider. The control
   is the policy and the visible context, not an assumption about the model.
-- **A restricted case is invisible, not encrypted.** Someone with database
-  access can read it. Per-case encryption is not in V1.
+- **Organization clearance is intentionally broad.** Every active member can
+  read every restricted case. Restricted remains publication and audit
+  metadata, not an intra-organization confidentiality boundary. Administrators
+  must remove or disable people whose clearance no longer applies.
+- **Recovery depends on identity verification and offline custody.** A stolen
+  unused recovery code can start MFA replacement, though it cannot directly
+  create a research-data session. Administrators need an out-of-band process
+  before initiating assisted recovery.
+- **Endpoint compromise remains out of scope.** Malware on a researcher's
+  workstation can capture displayed confidential data, passwords, TOTP codes,
+  recovery codes, and an active session.
 - **Prior-art coverage is bounded by the sources configured.** "No prior art
   found" means the checked sources returned no convincing match on a given date,
   which is what the interface says and what the badge's tooltip explains.

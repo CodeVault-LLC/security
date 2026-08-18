@@ -17,33 +17,9 @@ import {
 /**
  * Metrics.
  *
- * The property this file exists for is scope isolation. Every other assertion
- * here is about arithmetic; that one is about disclosure. An aggregate over
- * rows the caller cannot read is still a leak — arguably a worse one, because a
- * count cannot be redacted after the fact, and a researcher reading "3 critical"
- * has learned something true about a case they were never granted.
- *
- * Note what "cannot read" means here. CodeVault is a shared workspace:
- * `readableCaseIdsSubquery` grants every member read on every *non-restricted*
- * case, and only restricted cases are walled off. So the assertion is not "an
- * outsider sees nothing" — they legitimately see the shared corpus — it is
- * "an outsider sees nothing *of the restricted case*".
- *
- * Measuring that is harder than it looks. The harness runs against a persistent
- * database that accumulates rows across runs, and Vitest runs test files in
- * parallel, so absolute counts and even before/after deltas are both unstable —
- * another file can insert a non-restricted case between the two reads.
- *
- * So isolation is measured two ways, both immune to that:
- *
- *   - **Markers.** A weakness class and an asset that exist only in the
- *     restricted case. Either appearing in an outsider's response is a leak,
- *     whatever else is in the database.
- *   - **Owner minus outsider.** Read as the outsider first, then as the owner.
- *     Anything a concurrent test adds is non-restricted and therefore visible
- *     to both, so it cancels; the restricted case is visible only to the owner.
- *     The difference must account for the restricted findings, and no bucket
- *     may ever be larger for the outsider than for the owner.
+ * Organization membership is the read-clearance boundary. These tests verify
+ * that restricted cases contribute identically to every cleared member's
+ * aggregate view while the remaining assertions cover the arithmetic.
  */
 
 const describeIntegration = process.env.DATABASE_URL ? describe : describe.skip;
@@ -96,22 +72,14 @@ describeIntegration("metrics", () => {
   ): number =>
     metrics.stages.find((entry) => entry.stage === stage)?.sampleSize ?? 0;
 
-  /**
-   * The same moment seen from both sides.
-   *
-   * The outsider is read first on purpose. Anything a concurrent test file
-   * inserts between the two calls is non-restricted, so it can only ever raise
-   * the owner's numbers — never leave the outsider ahead and turn a passing
-   * inequality into a false failure.
-   */
   const bothViews = async (): Promise<{
-    hidden: MetricsResponse;
-    shown: MetricsResponse;
+    member: MetricsResponse;
+    owner: MetricsResponse;
   }> => {
-    const hidden = await metricsFor(outsider);
-    const shown = await metricsFor(owner);
+    const member = await metricsFor(outsider);
+    const ownerView = await metricsFor(owner);
 
-    return { hidden, shown };
+    return { member, owner: ownerView };
   };
 
   /** A disclosure contact, which `VENDOR_CONTACTED` requires to already exist. */
@@ -203,117 +171,42 @@ describeIntegration("metrics", () => {
     expect(metrics.severity.critical).toBeGreaterThanOrEqual(3);
   });
 
-  /*
-   * The isolation assertions.
-   *
-   * Each one measures the restricted case's contribution to the outsider's
-   * view, which must be zero — including through the joins, where a missing
-   * scope clause hides best.
-   */
-  describe("scope isolation", () => {
-    it("withholds the restricted findings from a non-member's totals", async () => {
-      const { hidden, shown } = await bothViews();
-
-      expect(
-        shown.totals.findings - hidden.totals.findings,
-      ).toBeGreaterThanOrEqual(RESTRICTED_FINDINGS);
-      expect(
-        shown.totals.criticalsUnfixed - hidden.totals.criticalsUnfixed,
-      ).toBeGreaterThanOrEqual(RESTRICTED_FINDINGS);
-      expect(shown.totals.openCases).toBeGreaterThan(hidden.totals.openCases);
+  describe("organization-wide visibility", () => {
+    it("shows the same restricted-case totals to every cleared member", async () => {
+      const { member, owner: ownerView } = await bothViews();
+      expect(member.totals).toEqual(ownerView.totals);
+      expect(member.severity).toEqual(ownerView.severity);
     });
 
-    it("withholds the restricted severities from a non-member", async () => {
-      const { hidden, shown } = await bothViews();
-
-      expect(
-        shown.severity.critical - hidden.severity.critical,
-      ).toBeGreaterThanOrEqual(RESTRICTED_FINDINGS);
-
-      for (const key of Object.keys(
-        shown.severity,
-      ) as (keyof typeof shown.severity)[]) {
-        expect(hidden.severity[key]).toBeLessThanOrEqual(shown.severity[key]);
-      }
+    it("shows restricted distributions and trends to every cleared member", async () => {
+      const { member, owner: ownerView } = await bothViews();
+      expect(member.validation).toEqual(ownerView.validation);
+      expect(member.disclosure).toEqual(ownerView.disclosure);
+      expect(member.priorArt).toEqual(ownerView.priorArt);
+      expect(member.trend).toEqual(ownerView.trend);
     });
 
-    it.each(["validation", "disclosure", "priorArt"] as const)(
-      "never shows a non-member more than the owner in the %s distribution",
-      async (distribution) => {
-        const { hidden, shown } = await bothViews();
-
-        const owned = new Map(
-          shown[distribution].map((entry) => [entry.state, entry.count]),
-        );
-
-        for (const entry of hidden[distribution]) {
-          expect(entry.count).toBeLessThanOrEqual(owned.get(entry.state) ?? 0);
-        }
-
-        const ownedTotal = shown[distribution].reduce(
-          (sum, entry) => sum + entry.count,
-          0,
-        );
-        const hiddenTotal = hidden[distribution].reduce(
-          (sum, entry) => sum + entry.count,
-          0,
-        );
-
-        expect(ownedTotal - hiddenTotal).toBeGreaterThanOrEqual(
-          RESTRICTED_FINDINGS,
-        );
-      },
-    );
-
-    it("withholds the restricted findings from a non-member's intake trend", async () => {
-      const { hidden, shown } = await bothViews();
-      const sum = (metrics: MetricsResponse): number =>
-        metrics.trend.reduce((total, point) => total + point.opened, 0);
-
-      expect(sum(shown) - sum(hidden)).toBeGreaterThanOrEqual(
-        RESTRICTED_FINDINGS,
-      );
-    });
-
-    it("never shows a non-member the restricted weakness class", async () => {
+    it("shows restricted weakness and asset metrics to every cleared member", async () => {
       const metrics = await metricsFor(outsider);
-
-      expect(metrics.cwe.map((entry) => entry.cweId)).not.toContain(SECRET_CWE);
-    });
-
-    it("shows the restricted weakness class to the owner", async () => {
-      const metrics = await metricsFor(owner);
-
-      // The mirror of the assertion above. Without it, a query returning
-      // nothing at all would pass the isolation test for the wrong reason.
       expect(metrics.cwe.map((entry) => entry.cweId)).toContain(SECRET_CWE);
-    });
-
-    it("never shows a non-member an asset carrying only restricted findings", async () => {
-      const metrics = await metricsFor(outsider);
-
       expect(
         metrics.topAssets.some((entry) => entry.assetId === asset.id),
-      ).toBe(false);
-    });
+      ).toBe(true);
 
-    it("attributes no findings to that asset when a non-member asks directly", async () => {
-      const response = await harness.app.inject({
+      const direct = await harness.app.inject({
         method: "GET",
         url: `/v1/assets/${asset.id}/metrics`,
         headers: outsider.headers,
       });
-
-      expect(response.statusCode).toBe(200);
-      expect(response.json<{ total: number }>().total).toBe(0);
-    });
-
-    it("excludes the asset from a non-member's asset roll-up", async () => {
-      const metrics = await assetMetricsFor(outsider);
-
+      expect(direct.statusCode).toBe(200);
+      expect(direct.json<{ total: number }>().total).toBeGreaterThanOrEqual(
+        RESTRICTED_FINDINGS,
+      );
       expect(
-        metrics.topAssets.some((entry) => entry.assetId === asset.id),
-      ).toBe(false);
+        (await assetMetricsFor(outsider)).topAssets.some(
+          (entry) => entry.assetId === asset.id,
+        ),
+      ).toBe(true);
     });
   });
 

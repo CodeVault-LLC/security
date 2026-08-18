@@ -215,8 +215,7 @@ async function uploadSingle(
     const requestInit: RequestInit & { duplex: "half" } = {
       method: "PUT",
       headers: {
-        "content-type": selection.mimeType,
-        "content-length": String(selection.sizeBytes),
+        ...instructions.requiredHeaders,
       },
       body: stream as unknown as ReadableStream<Uint8Array>,
       duplex: "half",

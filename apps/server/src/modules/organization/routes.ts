@@ -23,6 +23,26 @@ import {
 
 const Id = Type.Object({ id: Type.String({ format: "uuid" }) });
 
+const currentUserAvatarId = sql<string | null>`(
+  SELECT avatar.id FROM avatar_images AS avatar
+  WHERE avatar.target_user_id = ${schema.users.id} AND avatar.status = 'READY'
+  LIMIT 1
+)`;
+
+async function organizationAvatarId(app: AppInstance, organizationId: string) {
+  const [row] = await app.db
+    .select({ id: schema.avatarImages.id })
+    .from(schema.avatarImages)
+    .where(
+      and(
+        eq(schema.avatarImages.targetOrganizationId, organizationId),
+        eq(schema.avatarImages.status, "READY"),
+      ),
+    )
+    .limit(1);
+  return row?.id ?? null;
+}
+
 export async function registerOrganizationRoutes(
   app: AppInstance,
 ): Promise<void> {
@@ -40,6 +60,7 @@ export async function registerOrganizationRoutes(
           disabled: schema.users.disabled,
           joinedAt: schema.organizationMemberships.joinedAt,
           lastLoginAt: schema.users.lastLoginAt,
+          avatarId: currentUserAvatarId,
         })
         .from(schema.users)
         .innerJoin(
@@ -53,7 +74,7 @@ export async function registerOrganizationRoutes(
           ),
         )
         .orderBy(schema.users.displayName);
-      return { items: rows.map((row) => ({ ...row, avatarId: null })) };
+      return { items: rows };
     },
   );
 
@@ -76,6 +97,7 @@ export async function registerOrganizationRoutes(
           disabled: schema.users.disabled,
           joinedAt: schema.organizationMemberships.joinedAt,
           lastLoginAt: schema.users.lastLoginAt,
+          avatarId: currentUserAvatarId,
         })
         .from(schema.users)
         .innerJoin(
@@ -93,7 +115,7 @@ export async function registerOrganizationRoutes(
         )
         .limit(1);
       if (!row) throw notFound("User");
-      return { ...row, avatarId: null };
+      return row;
     },
   );
 
@@ -169,6 +191,7 @@ export async function registerOrganizationRoutes(
             disabled: schema.users.disabled,
             joinedAt: schema.organizationMemberships.joinedAt,
             lastLoginAt: schema.users.lastLoginAt,
+            avatarId: currentUserAvatarId,
           })
           .from(schema.users)
           .innerJoin(
@@ -182,7 +205,7 @@ export async function registerOrganizationRoutes(
       if (!row) throw notFound("User");
       if (request.body.disabled === true || request.body.role !== undefined)
         await revokeAllSessionsForUser(app.db, row.id);
-      return { ...row, avatarId: null };
+      return row;
     },
   );
 
@@ -195,7 +218,10 @@ export async function registerOrganizationRoutes(
         .select()
         .from(schema.organizations)
         .where(eq(schema.organizations.id, principal.organization.id));
-      return { ...organization!, avatarId: null };
+      return {
+        ...organization!,
+        avatarId: await organizationAvatarId(app, principal.organization.id),
+      };
     },
   );
 
@@ -214,7 +240,10 @@ export async function registerOrganizationRoutes(
         .set({ name: request.body.name.trim(), updatedAt: sql`now()` })
         .where(eq(schema.organizations.id, admin.organizationId))
         .returning();
-      return { ...organization!, avatarId: null };
+      return {
+        ...organization!,
+        avatarId: await organizationAvatarId(app, admin.organizationId),
+      };
     },
   );
 

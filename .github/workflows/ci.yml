@@ -111,6 +111,22 @@ jobs:
       - name: Audit
         run: bun audit --audit-level=moderate
 
+      - name: Verify reviewed image-decoder versions
+        run: bun run --cwd apps/media-worker verify:runtime
+
+      - name: Run adversarial image fixtures with a deadline
+        run: timeout 30s bunx vitest --run apps/media-worker/src/sanitize-image.test.ts
+
+      - name: Build isolated media image
+        run: docker build -f infra/media-worker.Dockerfile -t codevault-media-worker:ci .
+
+      - name: Verify isolated media image identity and native runtime
+        run: |
+          test "$(docker image inspect codevault-media-worker:ci --format '{{.Config.User}}')" = "10002:10002"
+          docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --pids-limit 32 --memory 256m --entrypoint node codevault-media-worker:ci \
+            -e 'import("sharp").then((m) => { if (m.default.versions.sharp !== "0.35.3" || m.default.versions.vips !== "8.18.3" || process.getuid() !== 10002) process.exit(1); })'
+
   package:
     name: Package (${{ matrix.os }})
     # Packaging runs on tags only: each platform must be built and signed on its

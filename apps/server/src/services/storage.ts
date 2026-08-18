@@ -27,6 +27,7 @@ export interface PresignedUpload {
   multipartUploadId: string | null;
   partUrls: string[];
   partSizeBytes: number;
+  requiredHeaders: Record<string, string>;
   expiresAt: string;
 }
 
@@ -45,6 +46,7 @@ export interface ObjectStorage {
     objectKey: string,
     contentType: string,
     sizeBytes: number,
+    sha256Hex: string,
   ): Promise<PresignedUpload>;
   completeMultipartUpload(
     objectKey: string,
@@ -63,6 +65,7 @@ export interface ObjectStorage {
     contentType: string,
   ): Promise<void>;
   getObject(objectKey: string): Promise<Uint8Array>;
+  getObjectStream(objectKey: string): Promise<AsyncIterable<Uint8Array>>;
   deleteObject(objectKey: string): Promise<void>;
 }
 
@@ -83,7 +86,7 @@ export function createObjectStorage(config: ServerConfig): ObjectStorage {
     new Date(Date.now() + ttlSeconds * 1000).toISOString();
 
   return {
-    async createUpload(objectKey, contentType, sizeBytes) {
+    async createUpload(objectKey, contentType, sizeBytes, sha256Hex) {
       const useMultipart = sizeBytes > config.storage.multipartThresholdBytes;
 
       if (!useMultipart) {
@@ -93,6 +96,8 @@ export function createObjectStorage(config: ServerConfig): ObjectStorage {
             Bucket: bucket,
             Key: objectKey,
             ContentType: contentType,
+            ContentLength: sizeBytes,
+            ChecksumSHA256: Buffer.from(sha256Hex, "hex").toString("base64"),
           }),
           { expiresIn: ttlSeconds },
         );
@@ -103,6 +108,13 @@ export function createObjectStorage(config: ServerConfig): ObjectStorage {
           multipartUploadId: null,
           partUrls: [],
           partSizeBytes: sizeBytes,
+          requiredHeaders: {
+            "content-type": contentType,
+            "content-length": String(sizeBytes),
+            "x-amz-checksum-sha256": Buffer.from(sha256Hex, "hex").toString(
+              "base64",
+            ),
+          },
           expiresAt: expiryFrom(),
         };
       }
@@ -144,6 +156,7 @@ export function createObjectStorage(config: ServerConfig): ObjectStorage {
         multipartUploadId: created.UploadId,
         partUrls,
         partSizeBytes: partSize,
+        requiredHeaders: {},
         expiresAt: expiryFrom(),
       };
     },
@@ -229,6 +242,22 @@ export function createObjectStorage(config: ServerConfig): ObjectStorage {
       }
 
       return new Uint8Array(await result.Body.transformToByteArray());
+    },
+
+    async getObjectStream(objectKey) {
+      const result = await client.send(
+        new GetObjectCommand({ Bucket: bucket, Key: objectKey }),
+      );
+      const body = result.Body as unknown;
+      if (
+        body === undefined ||
+        typeof (body as { [Symbol.asyncIterator]?: unknown })[
+          Symbol.asyncIterator
+        ] !== "function"
+      ) {
+        throw new Error(`Object "${objectKey}" has no readable stream.`);
+      }
+      return body as AsyncIterable<Uint8Array>;
     },
 
     async deleteObject(objectKey) {

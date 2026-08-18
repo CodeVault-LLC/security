@@ -85,6 +85,7 @@ export function createFakeStorage(): FakeStorage {
       objectKey,
       _contentType,
       sizeBytes,
+      _sha256Hex,
     ): Promise<PresignedUpload> {
       return {
         strategy: "SINGLE",
@@ -92,6 +93,7 @@ export function createFakeStorage(): FakeStorage {
         multipartUploadId: null,
         partUrls: [],
         partSizeBytes: sizeBytes,
+        requiredHeaders: {},
         expiresAt: new Date(Date.now() + 900_000).toISOString(),
       };
     },
@@ -142,6 +144,17 @@ export function createFakeStorage(): FakeStorage {
       return stored;
     },
 
+    async getObjectStream(objectKey) {
+      const stored = objects.get(objectKey);
+      if (stored === undefined) throw new Error(`No object at ${objectKey}`);
+      return (async function* () {
+        const chunkSize = 64 * 1024;
+        for (let offset = 0; offset < stored.byteLength; offset += chunkSize) {
+          yield stored.subarray(offset, offset + chunkSize);
+        }
+      })();
+    },
+
     async deleteObject(objectKey) {
       objects.delete(objectKey);
     },
@@ -190,36 +203,38 @@ export async function createHarness(): Promise<TestHarness> {
   const dbHandle = createDatabase({ connectionString });
   const storage = createFakeStorage();
   const jobs = createFakeJobQueue();
-  const [existingOrganization] = await dbHandle.db
-    .select({ id: schema.organizations.id })
-    .from(schema.organizations)
-    .limit(1);
-  const organizationId = existingOrganization?.id ?? uuidv7();
+  const organizationId = await dbHandle.db.transaction(async (tx) => {
+    // Integration files share one database and may start together. Serialize
+    // singleton bootstrap so their read-then-insert cannot race.
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(1129270868, 2)`);
+    const [existingOrganization] = await tx
+      .select({ id: schema.organizations.id })
+      .from(schema.organizations)
+      .limit(1);
+    if (existingOrganization) return existingOrganization.id;
 
-  if (existingOrganization === undefined) {
+    const id = uuidv7();
     const harnessAdministratorId = uuidv7();
-
-    await dbHandle.db.transaction(async (tx) => {
-      await tx.insert(schema.organizations).values({
-        id: organizationId,
-        name: "CodeVault Test Organization",
-      });
-      await tx
-        .insert(schema.organizationSecurityPolicies)
-        .values({ organizationId });
-      await tx.insert(schema.users).values({
-        id: harnessAdministratorId,
-        email: `harness-admin-${harnessAdministratorId}@codevault.test`,
-        displayName: "Harness Administrator",
-        passwordHash: await hashPassword(TEST_PASSWORD),
-      });
-      await tx.insert(schema.organizationMemberships).values({
-        organizationId,
-        userId: harnessAdministratorId,
-        role: "ADMIN",
-      });
+    await tx.insert(schema.organizations).values({
+      id,
+      name: "CodeVault Test Organization",
     });
-  }
+    await tx
+      .insert(schema.organizationSecurityPolicies)
+      .values({ organizationId: id });
+    await tx.insert(schema.users).values({
+      id: harnessAdministratorId,
+      email: `harness-admin-${harnessAdministratorId}@codevault.test`,
+      displayName: "Harness Administrator",
+      passwordHash: await hashPassword(TEST_PASSWORD),
+    });
+    await tx.insert(schema.organizationMemberships).values({
+      organizationId: id,
+      userId: harnessAdministratorId,
+      role: "ADMIN",
+    });
+    return id;
+  });
 
   const app = await buildApp({
     config,

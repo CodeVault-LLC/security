@@ -42,6 +42,8 @@ export const OrganizationUser = Type.Object({
 export const OrganizationUserList = Type.Object({
   items: Type.Array(OrganizationUser),
 });
+export type OrganizationUser = Static<typeof OrganizationUser>;
+export type OrganizationUserList = Static<typeof OrganizationUserList>;
 
 export type OrganizationSettings = Static<typeof OrganizationSettings>;
 export type OrganizationSecurityPolicy = Static<

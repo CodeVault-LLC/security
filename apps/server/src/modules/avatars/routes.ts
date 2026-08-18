@@ -213,12 +213,21 @@ export async function registerAvatarRoutes(app: AppInstance): Promise<void> {
       if (!avatar?.sanitizedObjectKey) throw notFound("Avatar");
       const bytes = await app.storage.getObject(avatar.sanitizedObjectKey);
       assertWebpDerivative(bytes);
+      if (
+        avatar.sanitizedSha256 === null ||
+        !digestMatches(sha256Hex(bytes), avatar.sanitizedSha256)
+      ) {
+        throw new DomainError(
+          "SERVER_ERROR",
+          "The avatar derivative failed its integrity check.",
+        );
+      }
       return reply
         .header("Content-Type", "image/webp")
         .header("Content-Disposition", "inline")
         .header("X-Content-Type-Options", "nosniff")
         .header("Cache-Control", "private, max-age=300")
-        .header("ETag", `\"${avatar.sanitizedSha256 ?? avatar.id}\"`)
+        .header("ETag", `"${avatar.sanitizedSha256 ?? avatar.id}"`)
         .send(Buffer.from(bytes));
     },
   );

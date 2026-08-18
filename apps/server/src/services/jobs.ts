@@ -12,6 +12,7 @@ export const JOB_QUEUES = {
   priorArt: "prior-art-check",
   reportPdf: "report-pdf",
   artifactPreview: "artifact-preview",
+  artifactIntegrity: "artifact-integrity",
   intelligenceRefresh: "intelligence-refresh",
   artifactDelete: "artifact-delete",
 } as const;
@@ -38,6 +39,8 @@ export interface ArtifactPreviewJobData {
   caseId: string;
 }
 
+export type ArtifactIntegrityJobData = ArtifactPreviewJobData;
+
 export interface IntelligenceRefreshJobData {
   findingId: string;
   cveIds: string[];
@@ -53,6 +56,7 @@ export interface JobPayloadMap {
   "prior-art-check": PriorArtJobData;
   "report-pdf": ReportPdfJobData;
   "artifact-preview": ArtifactPreviewJobData;
+  "artifact-integrity": ArtifactIntegrityJobData;
   "intelligence-refresh": IntelligenceRefreshJobData;
   "artifact-delete": ArtifactDeleteJobData;
 }

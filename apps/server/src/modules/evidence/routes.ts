@@ -81,6 +81,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
         objectKey,
         body.mimeType,
         body.sizeBytes,
+        body.sha256,
       );
 
       await app.db.insert(schema.artifacts).values({
@@ -130,6 +131,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
         multipartUploadId: instructions.multipartUploadId,
         partSizeBytes: instructions.partSizeBytes,
         partUrls: instructions.partUrls,
+        requiredHeaders: instructions.requiredHeaders,
         expiresAt: instructions.expiresAt,
       };
     },
@@ -207,7 +209,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
 
       await app.db
         .update(schema.artifacts)
-        .set({ status: "STORED", uploadId: null, updatedAt: sql`now()` })
+        .set({ status: "VERIFYING", uploadId: null, updatedAt: sql`now()` })
         .where(eq(schema.artifacts.id, artifact.id));
 
       await app.audit.write(
@@ -218,7 +220,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
           requestId: request.requestId,
         },
         {
-          action: "artifact.uploaded",
+          action: "artifact.verification_started",
           entityType: "artifact",
           entityId: artifact.id,
           caseId: artifact.caseId,
@@ -226,10 +228,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
         },
       );
 
-      // Previews are generated out of process: the file is untrusted, and
-      // decoding it is exactly the kind of work that should not happen inside
-      // the API process.
-      await app.jobs.send(JOB_QUEUES.artifactPreview, {
+      await app.jobs.send(JOB_QUEUES.artifactIntegrity, {
         artifactId: artifact.id,
         caseId: artifact.caseId,
       });
@@ -329,12 +328,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
         filters.push(
           sql`${schema.evidence.caseId} IN (
             SELECT c.id FROM cases c
-            WHERE c.restricted = false
-               OR c.owner_id = ${user.id}
-               OR EXISTS (
-                 SELECT 1 FROM case_members m
-                 WHERE m.case_id = c.id AND m.user_id = ${user.id}
-               )
+            WHERE c.organization_id = ${user.organizationId}
           )`,
         );
       }

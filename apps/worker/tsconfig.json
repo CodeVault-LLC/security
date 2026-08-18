@@ -13,5 +13,6 @@
     // dialects we do not use that fail a full library check.
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.integration.test.ts"]
 }

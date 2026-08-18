@@ -126,6 +126,7 @@ export const InviteInspection = Type.Object({
   role: UserRoleSchema,
   expiresAt: Timestamp,
 });
+export type InviteInspection = Static<typeof InviteInspection>;
 export const StartInviteEnrollmentRequest = Type.Intersect([
   InviteTokenRequest,
   Type.Object({
@@ -139,6 +140,7 @@ export const TotpEnrollmentResponse = Type.Object({
   manualSecret: Type.String(),
   expiresAt: Timestamp,
 });
+export type TotpEnrollmentResponse = Static<typeof TotpEnrollmentResponse>;
 export const ConfirmInviteEnrollmentRequest = Type.Object({
   enrollmentToken: Type.String({ minLength: 32, maxLength: 512 }),
   totp: Type.String({ pattern: "^[0-9]{6}$" }),
@@ -146,6 +148,7 @@ export const ConfirmInviteEnrollmentRequest = Type.Object({
 export const RecoveryCodeBundle = Type.Object({
   recoveryCodes: Type.Array(Type.String(), { minItems: 10, maxItems: 10 }),
 });
+export type RecoveryCodeBundle = Static<typeof RecoveryCodeBundle>;
 
 export const RecoveryStartRequest = Type.Object({
   email: Type.String({ format: "email", maxLength: 320 }),

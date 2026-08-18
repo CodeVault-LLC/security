@@ -38,7 +38,11 @@ export function assertWebpDerivative(bytes: Uint8Array): void {
 
 export function validateDisplayFilename(filename: string): void {
   const length = Array.from(filename).length;
-  if (length < 1 || length > 255 || /[\u0000-\u001f\u007f]/u.test(filename)) {
+  const hasControlCharacter = Array.from(filename).some((character) => {
+    const code = character.codePointAt(0) ?? 0;
+    return code <= 0x1f || code === 0x7f;
+  });
+  if (length < 1 || length > 255 || hasControlCharacter) {
     throw validationError("The avatar filename is not valid.");
   }
 }

@@ -52,6 +52,7 @@ export const UploadInstructions = Type.Object({
   multipartUploadId: Type.Union([Type.String(), Type.Null()]),
   partSizeBytes: Type.Integer({ minimum: 1 }),
   partUrls: Type.Array(Type.String()),
+  requiredHeaders: Type.Record(Type.String(), Type.String()),
   expiresAt: Timestamp,
 });
 

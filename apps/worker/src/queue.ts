@@ -6,6 +6,7 @@ import {
 } from "@codevault/server/services/jobs";
 
 import type { WorkerContext } from "./context.js";
+import { verifyArtifactIntegrity } from "./jobs/artifact-integrity.js";
 import { generateArtifactPreview } from "./jobs/artifact-preview.js";
 import { refreshIntelligence } from "./jobs/intelligence-refresh.js";
 import { runPriorArtCheck } from "./jobs/prior-art.js";
@@ -40,6 +41,12 @@ const HANDLERS = [
     expireInSeconds: 300,
     run: runPriorArtCheck,
   } satisfies Handler<"prior-art-check">,
+  {
+    queue: JOB_QUEUES.artifactIntegrity,
+    concurrency: 2,
+    expireInSeconds: 3_600,
+    run: verifyArtifactIntegrity,
+  } satisfies Handler<"artifact-integrity">,
   {
     queue: JOB_QUEUES.artifactPreview,
     concurrency: 4,

@@ -5,14 +5,8 @@ import { Button, Input, Label } from "@codevault/ui";
 
 import { bridge } from "../../lib/bridge.js";
 import { useSession } from "../../lib/session.js";
-
-/**
- * Sign-in.
- *
- * There is no "create an account" link, and there never will be: accounts exist
- * only because an administrator issued an invitation. The screen says so
- * plainly rather than leaving a researcher hunting for a signup form.
- */
+import { InviteOnboarding } from "./invite-onboarding.js";
+import { MfaChallenge } from "./mfa-challenge.js";
 
 const DEFAULT_SERVER_KEY = "codevault.serverUrl";
 
@@ -25,29 +19,72 @@ export function LoginScreen(): React.JSX.Element {
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"LOGIN" | "MFA" | "INVITATION">("LOGIN");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const normalizedServer = serverUrl.trim().replace(/\/+$/, "");
+
+  if (mode === "INVITATION") {
+    return (
+      <InviteOnboarding
+        serverUrl={normalizedServer}
+        onBack={() => setMode("LOGIN")}
+      />
+    );
+  }
+  if (mode === "MFA") {
+    return (
+      <MfaChallenge
+        email={email}
+        busy={busy}
+        error={error}
+        onBack={() => {
+          setError(null);
+          setMode("LOGIN");
+        }}
+        onSubmit={async (totp) => {
+          setBusy(true);
+          setError(null);
+          try {
+            const outcome = await bridge().auth.loginComplete(totp);
+            if (!outcome.ok) {
+              setError(outcome.message);
+              return;
+            }
+            window.localStorage.setItem(DEFAULT_SERVER_KEY, normalizedServer);
+            signIn(outcome.data.user, outcome.data.storageWarning);
+          } catch {
+            setError("The CodeVault server could not be reached.");
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
+    );
+  }
 
   const submit = async (event: React.FormEvent): Promise<void> => {
     event.preventDefault();
     setBusy(true);
     setError(null);
-
     try {
-      const outcome = await bridge().auth.login(
-        serverUrl.trim().replace(/\/+$/, ""),
+      const outcome = await bridge().auth.loginStart(
+        normalizedServer,
         email.trim(),
         password,
       );
-
       if (!outcome.ok) {
         setError(outcome.message);
-
         return;
       }
-
-      window.localStorage.setItem(DEFAULT_SERVER_KEY, serverUrl.trim());
-      signIn(outcome.data.user, outcome.data.storageWarning);
+      if (outcome.data.challenge !== "MFA_REQUIRED") {
+        setError(
+          "This account must complete administrator-assisted MFA enrollment.",
+        );
+        return;
+      }
+      setPassword("");
+      setMode("MFA");
     } catch {
       setError("The CodeVault server could not be reached.");
     } finally {
@@ -68,11 +105,10 @@ export function LoginScreen(): React.JSX.Element {
               CodeVault
             </h1>
             <p className="text-[11px] text-text-muted">
-              Security research and coordinated disclosure
+              Protected organization access
             </p>
           </div>
         </div>
-
         <div className="space-y-3">
           <div>
             <Label htmlFor="server">Server</Label>
@@ -80,14 +116,12 @@ export function LoginScreen(): React.JSX.Element {
               id="server"
               value={serverUrl}
               onChange={(event) => setServerUrl(event.target.value)}
-              placeholder="https://codevault.internal"
               autoComplete="url"
               className="mt-1"
             />
           </div>
-
           <div>
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">Organization email</Label>
             <Input
               id="email"
               type="email"
@@ -97,7 +131,6 @@ export function LoginScreen(): React.JSX.Element {
               className="mt-1"
             />
           </div>
-
           <div>
             <Label htmlFor="password">Password</Label>
             <Input
@@ -110,7 +143,6 @@ export function LoginScreen(): React.JSX.Element {
             />
           </div>
         </div>
-
         {error === null ? null : (
           <p
             role="alert"
@@ -119,7 +151,6 @@ export function LoginScreen(): React.JSX.Element {
             {error}
           </p>
         )}
-
         <Button
           type="submit"
           variant="primary"
@@ -127,14 +158,18 @@ export function LoginScreen(): React.JSX.Element {
           className="mt-4 w-full"
           disabled={busy || email.length === 0 || password.length === 0}
         >
-          {busy ? "Signing in…" : "Sign in"}
+          {busy ? "Checking credentials…" : "Continue"}
         </Button>
-
+        <button
+          type="button"
+          className="mt-3 w-full text-[12px] text-accent hover:underline"
+          onClick={() => setMode("INVITATION")}
+        >
+          I have an organization invitation
+        </button>
         <p className="mt-4 border-t border-border pt-3 text-[11px] leading-relaxed text-text-muted">
-          CodeVault has no public registration. Accounts are created from an
-          administrator's invitation, and the first administrator is created on
-          the server with{" "}
-          <code className="font-mono text-[10.5px]">admin:create</code>.
+          Every account is invitation-only and protected by an authenticator.
+          There is no public registration.
         </p>
       </form>
     </div>

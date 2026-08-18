@@ -71,6 +71,17 @@
         "zustand": "^5.0.15",
       },
     },
+    "apps/media-worker": {
+      "name": "@codevault/media-worker",
+      "version": "1.0.0",
+      "dependencies": {
+        "@aws-sdk/client-s3": "^3.1111.0",
+        "@codevault/core": "workspace:*",
+        "@codevault/db": "workspace:*",
+        "drizzle-orm": "^0.45.2",
+        "sharp": "0.35.3",
+      },
+    },
     "apps/server": {
       "name": "@codevault/server",
       "version": "1.0.0",
@@ -103,13 +114,13 @@
         "@codevault/contracts": "workspace:*",
         "@codevault/core": "workspace:*",
         "@codevault/db": "workspace:*",
+        "@codevault/media-worker": "workspace:*",
         "@codevault/reporting": "workspace:*",
         "@codevault/server": "workspace:*",
         "@codevault/standards": "workspace:*",
         "drizzle-orm": "^0.45.2",
         "pg-boss": "^12.27.0",
         "playwright": "^1.62.1",
-        "sharp": "^0.35.3",
       },
     },
     "packages/ai": {
@@ -360,6 +371,8 @@
     "@codevault/desktop": ["@codevault/desktop@workspace:apps/desktop"],
 
     "@codevault/markdown": ["@codevault/markdown@workspace:packages/markdown"],
+
+    "@codevault/media-worker": ["@codevault/media-worker@workspace:apps/media-worker"],
 
     "@codevault/reporting": ["@codevault/reporting@workspace:packages/reporting"],
 

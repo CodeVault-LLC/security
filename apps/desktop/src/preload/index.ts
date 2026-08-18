@@ -53,12 +53,16 @@ const api: CodeVaultDesktopApi = {
   },
 
   auth: {
-    login: (serverUrl, email, password) =>
-      ipcRenderer.invoke(IPC_CHANNELS.authLogin, {
+    loginStart: (serverUrl, email, password) =>
+      ipcRenderer.invoke(IPC_CHANNELS.authLoginStart, {
         serverUrl,
         email,
         password,
-      }) as ReturnType<CodeVaultDesktopApi["auth"]["login"]>,
+      }) as ReturnType<CodeVaultDesktopApi["auth"]["loginStart"]>,
+    loginComplete: (totp) =>
+      ipcRenderer.invoke(IPC_CHANNELS.authLoginComplete, {
+        totp,
+      }) as ReturnType<CodeVaultDesktopApi["auth"]["loginComplete"]>,
     logout: () => ipcRenderer.invoke(IPC_CHANNELS.authLogout) as Promise<void>,
     restore: () =>
       ipcRenderer.invoke(IPC_CHANNELS.authRestore) as ReturnType<
@@ -68,6 +72,23 @@ const api: CodeVaultDesktopApi = {
       ipcRenderer.invoke(IPC_CHANNELS.authStorageWarning) as Promise<
         string | null
       >,
+  },
+
+  invitation: {
+    inspect: (serverUrl, token) =>
+      ipcRenderer.invoke(IPC_CHANNELS.invitationInspect, {
+        serverUrl,
+        token,
+      }) as ReturnType<CodeVaultDesktopApi["invitation"]["inspect"]>,
+    start: (displayName, password) =>
+      ipcRenderer.invoke(IPC_CHANNELS.invitationStart, {
+        displayName,
+        password,
+      }) as ReturnType<CodeVaultDesktopApi["invitation"]["start"]>,
+    confirm: (totp) =>
+      ipcRenderer.invoke(IPC_CHANNELS.invitationConfirm, {
+        totp,
+      }) as ReturnType<CodeVaultDesktopApi["invitation"]["confirm"]>,
   },
 
   api: {
@@ -89,6 +110,18 @@ const api: CodeVaultDesktopApi = {
       >,
     onProgress: (listener) =>
       subscribe<UploadProgress>(IPC_CHANNELS.uploadsProgress, listener),
+  },
+
+  avatars: {
+    selectAndUpload: (target) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.avatarsSelectAndUpload,
+        target,
+      ) as ReturnType<CodeVaultDesktopApi["avatars"]["selectAndUpload"]>,
+    load: (avatarId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.avatarsLoad, avatarId) as ReturnType<
+        CodeVaultDesktopApi["avatars"]["load"]
+      >,
   },
 
   ai: {

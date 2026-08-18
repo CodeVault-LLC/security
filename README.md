@@ -35,6 +35,7 @@ apps/
   desktop/   Electron client: hardened main process, narrow preload bridge, React renderer
   server/    Fastify API: auth, cases, findings, evidence, reports, AI, search, audit
   worker/    Background jobs: prior art, artifact previews, EPSS/KEV, PDF export
+  media-worker/ Isolated JPEG/PNG decoding and metadata-free avatar derivatives
 packages/
   core/      Domain rules: permissions, visibility, states, policy packs, identifiers
   standards/ CVSS 4.0 and 3.1, CWE, TLP, external identifier schemes
@@ -124,6 +125,8 @@ committed.
 - [`docs/architecture/threat-model.md`](docs/architecture/threat-model.md) —
   what is being protected, from whom, and which code and test enforce each
   boundary.
+- [`docs/architecture/organization-security.md`](docs/architecture/organization-security.md) —
+  organization roles, read clearance, mandatory MFA, and categorized settings.
 - [`docs/architecture/ai-security.md`](docs/architecture/ai-security.md) — the
   four gates every AI interaction passes through, and the list of fields a model
   can never write.

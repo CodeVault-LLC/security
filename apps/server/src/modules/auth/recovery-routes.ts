@@ -54,15 +54,13 @@ export async function registerRecoveryRoutes(app: AppInstance): Promise<void> {
         request.body.password,
       );
       if (!user || user.disabled || !matches) {
-        return reply
-          .status(400)
-          .send({
-            error: {
-              category: "VALIDATION",
-              message: INVALID_RECOVERY,
-              requestId: request.requestId,
-            },
-          });
+        return reply.status(400).send({
+          error: {
+            category: "VALIDATION",
+            message: INVALID_RECOVERY,
+            requestId: request.requestId,
+          },
+        });
       }
       const started = await app.db.transaction(async (tx) => {
         const result = await tx.execute<{
@@ -113,15 +111,13 @@ export async function registerRecoveryRoutes(app: AppInstance): Promise<void> {
           enrollment.manualSecret,
           `recovery:${id}:${user.id}`,
         );
-        await tx
-          .insert(schema.mfaRecoveryEnrollments)
-          .values({
-            id,
-            userId: user.id,
-            tokenHash: hashToken(token),
-            ...envelope,
-            expiresAt,
-          });
+        await tx.insert(schema.mfaRecoveryEnrollments).values({
+          id,
+          userId: user.id,
+          tokenHash: hashToken(token),
+          ...envelope,
+          expiresAt,
+        });
         await tx
           .update(schema.sessions)
           .set({ revokedAt: sql`now()` })
@@ -131,26 +127,22 @@ export async function registerRecoveryRoutes(app: AppInstance): Promise<void> {
               isNull(schema.sessions.revokedAt),
             ),
           );
-        await tx
-          .insert(schema.securityNotifications)
-          .values({
-            organizationId: matched.organization_id,
-            userId: user.id,
-            eventType: "RECOVERY_CODE_USED",
-            details: {},
-          });
+        await tx.insert(schema.securityNotifications).values({
+          organizationId: matched.organization_id,
+          userId: user.id,
+          eventType: "RECOVERY_CODE_USED",
+          details: {},
+        });
         return { token, expiresAt, enrollment };
       });
       if (!started) {
-        return reply
-          .status(400)
-          .send({
-            error: {
-              category: "VALIDATION",
-              message: INVALID_RECOVERY,
-              requestId: request.requestId,
-            },
-          });
+        return reply.status(400).send({
+          error: {
+            category: "VALIDATION",
+            message: INVALID_RECOVERY,
+            requestId: request.requestId,
+          },
+        });
       }
       return {
         enrollmentToken: started.token,
@@ -244,15 +236,13 @@ export async function registerRecoveryRoutes(app: AppInstance): Promise<void> {
           .delete(schema.mfaRecoveryCodes)
           .where(eq(schema.mfaRecoveryCodes.userId, row.user_id));
         const codes = newRecoveryCodes();
-        await tx
-          .insert(schema.mfaRecoveryCodes)
-          .values(
-            codes.map((code) => ({
-              userId: row.user_id,
-              keyId: app.config.auth.mfaKeyring.activeKeyId,
-              digest: app.config.auth.mfaKeyring.digestRecoveryCode(code),
-            })),
-          );
+        await tx.insert(schema.mfaRecoveryCodes).values(
+          codes.map((code) => ({
+            userId: row.user_id,
+            keyId: app.config.auth.mfaKeyring.activeKeyId,
+            digest: app.config.auth.mfaKeyring.digestRecoveryCode(code),
+          })),
+        );
         await tx
           .update(schema.mfaRecoveryEnrollments)
           .set({ consumedAt: sql`now()` })
@@ -266,26 +256,22 @@ export async function registerRecoveryRoutes(app: AppInstance): Promise<void> {
             : null,
           new Date(),
         );
-        await tx
-          .insert(schema.securityNotifications)
-          .values({
-            organizationId: row.organization_id,
-            userId: row.user_id,
-            eventType: "TOTP_REPLACED",
-            details: {},
-          });
+        await tx.insert(schema.securityNotifications).values({
+          organizationId: row.organization_id,
+          userId: row.user_id,
+          eventType: "TOTP_REPLACED",
+          details: {},
+        });
         return { row, codes, session };
       });
       if (!outcome) {
-        return reply
-          .status(400)
-          .send({
-            error: {
-              category: "VALIDATION",
-              message: INVALID_RECOVERY,
-              requestId: request.requestId,
-            },
-          });
+        return reply.status(400).send({
+          error: {
+            category: "VALIDATION",
+            message: INVALID_RECOVERY,
+            requestId: request.requestId,
+          },
+        });
       }
       return {
         token: outcome.session.token,

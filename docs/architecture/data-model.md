@@ -4,6 +4,18 @@ CodeVault models security research, not a ticket queue. This document explains
 the decisions that shape the schema and why the obvious alternatives were
 rejected.
 
+## Organization is the root
+
+Exactly one organization may exist in a deployment. It owns memberships,
+security policy, invitations, cases, assets, AI provider policy, reference
+sequences, avatars, and audit events. Users do not carry global authority;
+their `organization_memberships.role` is the source of truth.
+
+Every enabled user has one membership and clearance to read the organization's
+complete research corpus. `ADMIN`, `MEMBER`, and `VIEWER` control mutations,
+and case ownership or explicit grants refine case writes. A deferred database
+invariant guarantees at least one enabled administrator at transaction commit.
+
 ## Identifiers
 
 Primary keys are UUIDv7: the timestamp prefix keeps inserts index-friendly
@@ -107,8 +119,9 @@ An artifact row is metadata around an object in storage: an opaque key, a
 digest, a size, an uploader, a visibility. Bytes never enter PostgreSQL.
 
 The original filename is stored as data and never used to build a path. A
-`check` constraint requires the digest to be a SHA-256 hex string, and an upload
-cannot be completed unless the stored object matches the declared size.
+`check` constraint requires the digest to be a SHA-256 hex string. Completion
+moves the artifact to `VERIFYING`; only a streaming full-object digest match
+moves it to `STORED`, which is the only downloadable state.
 
 An evidence record groups artifacts and is only as shareable as the most
 restricted thing attached to it — quoting an internal capture inside a
@@ -144,7 +157,8 @@ sections, with `pg_trgm` for typo-tolerant name matching. Exact identifiers,
 references and digests are ranked above every text match, because a researcher
 who typed a SHA-256 meant that file.
 
-Case access is applied in SQL as a subquery, not as a filter over already-fetched
-rows: restricted cases never enter the result set at all.
+Organization access is applied in SQL as a subquery, not as a filter over
+already-fetched rows. Restricted cases remain visible to all cleared members,
+but records from a different organization cannot enter the result set.
 
 `pgvector` is optional and off. Nothing requires an embedding service to work.
