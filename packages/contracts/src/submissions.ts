@@ -290,6 +290,57 @@ export const SubmissionPackage = Type.Object({
 
 export type SubmissionPackage = Static<typeof SubmissionPackage>;
 
+export const SubmissionSendIntent = Type.Object(
+  {
+    submissionId: Uuid,
+    packageId: Uuid,
+    from: Type.String({ maxLength: 320 }),
+    to: Type.Array(Type.String({ maxLength: 320 }), { maxItems: 20 }),
+    cc: Type.Array(Type.String({ maxLength: 320 }), { maxItems: 20 }),
+    subject: MailSubject,
+    bodyText: Type.String({ maxLength: 500_000 }),
+    bodyUtf8Sha256: Sha256,
+    attachments: Type.Array(SubmissionAttachment),
+    cryptoMode: CryptoModeSchema,
+    publicKeyFingerprint: Type.Union([
+      Type.String({ pattern: "^(?:[0-9A-F]{40}|[0-9A-F]{64})$" }),
+      Type.Null(),
+    ]),
+    packageSha256: Sha256,
+    packageSizeBytes: Type.Integer({ minimum: 1 }),
+    rfcMessageId: Type.String({ maxLength: 998, pattern: "^<[^\\r\\n<>]+>$" }),
+  },
+  { additionalProperties: false },
+);
+
+export type SubmissionSendIntent = Static<typeof SubmissionSendIntent>;
+
+export const SubmissionDelivery = Type.Object(
+  {
+    id: Uuid,
+    submissionId: Uuid,
+    status: Type.Union(
+      ["QUEUED", "SENDING", "SENT", "FAILED", "DELIVERY_UNKNOWN"].map((value) =>
+        Type.Literal(value),
+      ),
+    ),
+    providerMessageId: Type.Union([
+      Type.String({ maxLength: 500 }),
+      Type.Null(),
+    ]),
+    providerThreadId: Type.Union([
+      Type.String({ maxLength: 500 }),
+      Type.Null(),
+    ]),
+    errorCategory: Type.Union([Type.String({ maxLength: 100 }), Type.Null()]),
+    createdAt: Timestamp,
+    updatedAt: Timestamp,
+  },
+  { additionalProperties: false },
+);
+
+export type SubmissionDelivery = Static<typeof SubmissionDelivery>;
+
 export const SubmissionValidationResult = Type.Object({
   submissionId: Uuid,
   revision: RevisionField,

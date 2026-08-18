@@ -152,7 +152,7 @@ export function createFakeJobQueue(): FakeJobQueue {
     sent,
     async start() {},
     async stop() {},
-    async send(queue, data) {
+    async send(queue, data, _options) {
       sent.push({ queue, data });
 
       return uuidv7();

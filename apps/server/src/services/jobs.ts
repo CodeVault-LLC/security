@@ -1,5 +1,9 @@
 import { PgBoss } from "pg-boss";
 
+export interface JobTransactionDatabase {
+  executeSql(text: string, values?: unknown[]): Promise<{ rows: unknown[] }>;
+}
+
 /**
  * Background job queue.
  *
@@ -14,6 +18,7 @@ export const JOB_QUEUES = {
   artifactPreview: "artifact-preview",
   intelligenceRefresh: "intelligence-refresh",
   artifactDelete: "artifact-delete",
+  gmailSend: "gmail-send",
 } as const;
 
 export type JobQueueName = (typeof JOB_QUEUES)[keyof typeof JOB_QUEUES];
@@ -49,12 +54,17 @@ export interface ArtifactDeleteJobData {
   previewObjectKey: string | null;
 }
 
+export interface GmailSendJobData {
+  deliveryId: string;
+}
+
 export interface JobPayloadMap {
   "prior-art-check": PriorArtJobData;
   "report-pdf": ReportPdfJobData;
   "artifact-preview": ArtifactPreviewJobData;
   "intelligence-refresh": IntelligenceRefreshJobData;
   "artifact-delete": ArtifactDeleteJobData;
+  "gmail-send": GmailSendJobData;
 }
 
 export interface JobQueue {
@@ -63,6 +73,7 @@ export interface JobQueue {
   send<Name extends JobQueueName>(
     queue: Name,
     data: JobPayloadMap[Name],
+    options?: { db?: JobTransactionDatabase; singletonKey?: string },
   ): Promise<string | null>;
   instance(): PgBoss;
 }
@@ -105,11 +116,17 @@ export function createJobQueue(options: JobQueueOptions): JobQueue {
       started = false;
     },
 
-    async send(queue, data) {
+    async send(queue, data, sendOptions) {
       return boss.send(queue, data, {
-        retryLimit: 3,
+        // Gmail delivery owns its ambiguity state machine. A generic queue
+        // retry could duplicate an email after a network timeout.
+        retryLimit: queue === JOB_QUEUES.gmailSend ? 0 : 3,
         retryDelay: 30,
         retryBackoff: true,
+        ...(sendOptions?.db === undefined ? {} : { db: sendOptions.db }),
+        ...(sendOptions?.singletonKey === undefined
+          ? {}
+          : { singletonKey: sendOptions.singletonKey }),
       });
     },
 

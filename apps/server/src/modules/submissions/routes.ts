@@ -1,4 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { Type } from "@sinclair/typebox";
 
 import {
@@ -11,6 +12,8 @@ import {
   SetSubmissionAttachmentsRequest,
   SubmissionDetail,
   SubmissionPackage,
+  SubmissionDelivery,
+  SubmissionSendIntent,
   SubmissionSealIntent,
   SubmissionSummary,
   SubmissionValidationResult,
@@ -22,6 +25,7 @@ import {
 } from "@codevault/contracts";
 import { conflict, DomainError, validationError } from "@codevault/core";
 import { allocateReference, schema } from "@codevault/db";
+import { uuidv7 } from "@codevault/core/crypto";
 
 import type { AppInstance } from "../../http/app-instance.js";
 import { actingUser, principalOf, requireAuthor } from "../../http/guards.js";
@@ -49,6 +53,25 @@ import {
 
 const CaseIdParam = Type.Object({ caseId: Uuid });
 const SubmissionIdParam = Type.Object({ id: Uuid });
+
+function deliveryView(row: typeof schema.submissionDeliveries.$inferSelect) {
+  if (row.status === "RECORDED_MANUALLY") {
+    throw new DomainError(
+      "SERVER_ERROR",
+      "An email delivery had an invalid status.",
+    );
+  }
+  return {
+    id: row.id,
+    submissionId: row.submissionId,
+    status: row.status,
+    providerMessageId: row.providerMessageId,
+    providerThreadId: row.providerThreadId,
+    errorCategory: row.errorCategory,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
 
 function assertRouteCrypto(
   route: CreateVendorRouteRequest,
@@ -947,6 +970,279 @@ export async function registerSubmissionRoutes(
         },
         createdAt: pkg.package.createdAt,
       };
+    },
+  );
+
+  app.get(
+    "/v1/submissions/:id/send-intent",
+    {
+      schema: {
+        params: SubmissionIdParam,
+        response: {
+          200: SubmissionSendIntent,
+          400: ErrorResponse,
+          409: ErrorResponse,
+        },
+      },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const existing = await requireSubmissionWrite(
+        app,
+        user,
+        request.params.id,
+      );
+      if (!["SEALED", "SENDING", "SEND_FAILED"].includes(existing.status)) {
+        throw conflict("Seal the approved email before sending it.");
+      }
+      const snapshot = existing.routeSnapshot as SubmissionRouteSnapshot;
+      if (snapshot.route.type !== "EMAIL") {
+        throw validationError(
+          "Only email submissions can be sent through Gmail.",
+        );
+      }
+      if (existing.mailboxConnectionId === null) {
+        throw conflict("Select an active Gmail mailbox before sending.");
+      }
+      const [mailbox] = await app.db
+        .select()
+        .from(schema.mailboxConnections)
+        .where(
+          and(
+            eq(schema.mailboxConnections.id, existing.mailboxConnectionId),
+            eq(schema.mailboxConnections.userId, user.id),
+            eq(schema.mailboxConnections.provider, "gmail"),
+            eq(schema.mailboxConnections.status, "ACTIVE"),
+          ),
+        )
+        .limit(1);
+      if (mailbox === undefined) {
+        throw conflict(
+          "The selected Gmail mailbox is unavailable or needs reauthorization.",
+        );
+      }
+      const [pkg] = await app.db
+        .select()
+        .from(schema.submissionPackages)
+        .where(eq(schema.submissionPackages.submissionId, existing.id))
+        .orderBy(desc(schema.submissionPackages.createdAt))
+        .limit(1);
+      if (pkg === undefined || pkg.rfcMessageId === null) {
+        throw conflict("The sealed email is missing its stable Message-ID.");
+      }
+      const manifest = pkg.manifest as SubmissionPackageManifest;
+      return {
+        submissionId: existing.id,
+        packageId: pkg.id,
+        from: mailbox.emailAddress,
+        to: snapshot.route.to,
+        cc: snapshot.route.cc,
+        subject: existing.subject,
+        bodyText: existing.bodyMarkdown,
+        bodyUtf8Sha256: manifest.bodyUtf8Sha256,
+        attachments: manifest.attachments,
+        cryptoMode: existing.cryptoMode,
+        publicKeyFingerprint: manifest.publicKeyFingerprint,
+        packageSha256: pkg.packageSha256,
+        packageSizeBytes: pkg.sizeBytes,
+        rfcMessageId: pkg.rfcMessageId,
+      };
+    },
+  );
+
+  app.post(
+    "/v1/submissions/:id/send",
+    {
+      schema: {
+        params: SubmissionIdParam,
+        response: {
+          200: SubmissionDelivery,
+          400: ErrorResponse,
+          409: ErrorResponse,
+        },
+      },
+      config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const principal = principalOf(request);
+      const existing = await requireSubmissionWrite(
+        app,
+        user,
+        request.params.id,
+      );
+      if (!["SEALED", "SENDING", "SEND_FAILED"].includes(existing.status)) {
+        throw conflict("This submission is not ready to send.");
+      }
+      const snapshot = existing.routeSnapshot as SubmissionRouteSnapshot;
+      if (
+        snapshot.route.type !== "EMAIL" ||
+        existing.mailboxConnectionId === null
+      ) {
+        throw validationError(
+          "A sealed email and active Gmail mailbox are required.",
+        );
+      }
+      const [mailbox] = await app.db
+        .select()
+        .from(schema.mailboxConnections)
+        .where(
+          and(
+            eq(schema.mailboxConnections.id, existing.mailboxConnectionId),
+            eq(schema.mailboxConnections.userId, user.id),
+            eq(schema.mailboxConnections.provider, "gmail"),
+            eq(schema.mailboxConnections.status, "ACTIVE"),
+          ),
+        )
+        .limit(1);
+      if (mailbox === undefined)
+        throw conflict("The selected Gmail mailbox is unavailable.");
+      const [pkg] = await app.db
+        .select()
+        .from(schema.submissionPackages)
+        .where(eq(schema.submissionPackages.submissionId, existing.id))
+        .orderBy(desc(schema.submissionPackages.createdAt))
+        .limit(1);
+      if (pkg === undefined || pkg.rfcMessageId === null) {
+        throw conflict("The sealed email is missing its stable Message-ID.");
+      }
+
+      const client = await app.dbHandle.pool.connect();
+      const txDb = drizzle(client, { schema });
+      let delivery: typeof schema.submissionDeliveries.$inferSelect | undefined;
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))",
+          [existing.id],
+        );
+        const [active] = await txDb
+          .select()
+          .from(schema.submissionDeliveries)
+          .where(
+            and(
+              eq(schema.submissionDeliveries.submissionId, existing.id),
+              inArray(schema.submissionDeliveries.status, [
+                "QUEUED",
+                "SENDING",
+                "DELIVERY_UNKNOWN",
+              ]),
+            ),
+          )
+          .limit(1);
+
+        if (active !== undefined && active.status !== "DELIVERY_UNKNOWN") {
+          await client.query("COMMIT");
+          return deliveryView(active);
+        }
+
+        if (active?.status === "DELIVERY_UNKNOWN") {
+          [delivery] = await txDb
+            .update(schema.submissionDeliveries)
+            .set({
+              status: "QUEUED",
+              errorCategory: null,
+              errorMessage: null,
+              revision: active.revision + 1,
+              updatedAt: new Date().toISOString(),
+            })
+            .where(eq(schema.submissionDeliveries.id, active.id))
+            .returning();
+        } else {
+          [delivery] = await txDb
+            .insert(schema.submissionDeliveries)
+            .values({
+              id: uuidv7(),
+              submissionId: existing.id,
+              packageId: pkg.id,
+              mailboxConnectionId: mailbox.id,
+              provider: "gmail",
+              status: "QUEUED",
+              senderAddress: mailbox.emailAddress,
+              recipients: { to: snapshot.route.to, cc: snapshot.route.cc },
+              routeSnapshot: snapshot,
+              createdBy: user.id,
+            })
+            .returning();
+          if (delivery === undefined)
+            serverFailure("Could not create the Gmail delivery.");
+          const [updated] = await txDb
+            .update(schema.submissions)
+            .set({
+              status: "SENDING",
+              revision: existing.revision + 1,
+              lastEditedBy: user.id,
+              updatedAt: new Date().toISOString(),
+            })
+            .where(
+              and(
+                eq(schema.submissions.id, existing.id),
+                eq(schema.submissions.revision, existing.revision),
+              ),
+            )
+            .returning();
+          if (updated === undefined)
+            throw conflict("The submission changed before it could be queued.");
+          await writeSubmissionRevision(txDb, updated, user.id);
+        }
+        if (delivery === undefined)
+          serverFailure("Could not queue the Gmail delivery.");
+
+        const transactionalDb = {
+          executeSql: async (text: string, values?: unknown[]) => {
+            const result = await client.query(
+              text,
+              values as never[] | undefined,
+            );
+            return { rows: result.rows };
+          },
+        };
+        const jobId = await app.jobs.send(
+          "gmail-send",
+          { deliveryId: delivery.id },
+          { db: transactionalDb, singletonKey: delivery.id },
+        );
+        if (jobId === null)
+          throw new DomainError(
+            "JOB_FAILED",
+            "Could not queue Gmail delivery.",
+          );
+        await app.audit.write(
+          txDb,
+          {
+            actorId: user.id,
+            sessionId: principal.session.id,
+            requestId: request.requestId,
+          },
+          {
+            action:
+              active === undefined
+                ? "submission.send_queued"
+                : "submission.send_retry_approved",
+            entityType: "submission_delivery",
+            entityId: delivery.id,
+            caseId: existing.caseId,
+            after: {
+              packageSha256: pkg.packageSha256,
+              mailboxConnectionId: mailbox.id,
+            },
+          },
+        );
+        await client.query("COMMIT");
+      } catch (error: unknown) {
+        await client.query("ROLLBACK").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+
+      app.events.publish({
+        type: "entity.changed",
+        entityType: "submission",
+        entityId: existing.id,
+        caseId: existing.caseId,
+      });
+      return deliveryView(delivery!);
     },
   );
 

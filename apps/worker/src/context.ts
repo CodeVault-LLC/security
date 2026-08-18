@@ -5,6 +5,8 @@ import {
   createObjectStorage,
   type ObjectStorage,
 } from "@codevault/server/services/storage";
+import { MailProviderRegistry } from "@codevault/server/mail/provider-registry";
+import { createGmailProvider } from "@codevault/server/mail/gmail-provider";
 
 /**
  * Worker context.
@@ -20,6 +22,7 @@ export interface WorkerContext {
   dbHandle: DatabaseHandle;
   db: Database;
   storage: ObjectStorage;
+  mailProviders: MailProviderRegistry;
   log(message: string): void;
 }
 
@@ -30,11 +33,16 @@ export function createWorkerContext(config: ServerConfig): WorkerContext {
     ssl: config.database.ssl,
   });
 
+  const mailProviders = new MailProviderRegistry();
+  if (config.gmail.enabled)
+    mailProviders.register(createGmailProvider(config.gmail));
+
   return {
     config,
     dbHandle,
     db: dbHandle.db,
     storage: createObjectStorage(config),
+    mailProviders,
     log(message: string) {
       console.warn(`[worker] ${message}`);
     },

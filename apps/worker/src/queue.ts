@@ -10,6 +10,7 @@ import { generateArtifactPreview } from "./jobs/artifact-preview.js";
 import { refreshIntelligence } from "./jobs/intelligence-refresh.js";
 import { runPriorArtCheck } from "./jobs/prior-art.js";
 import { generateReportPdf } from "./jobs/report-pdf.js";
+import { runGmailSend } from "./jobs/gmail-send.js";
 
 /**
  * Job registration.
@@ -53,6 +54,12 @@ const HANDLERS = [
     expireInSeconds: 900,
     run: generateReportPdf,
   } satisfies Handler<"report-pdf">,
+  {
+    queue: JOB_QUEUES.gmailSend,
+    concurrency: 2,
+    expireInSeconds: 120,
+    run: runGmailSend,
+  } satisfies Handler<"gmail-send">,
   {
     queue: JOB_QUEUES.intelligenceRefresh,
     concurrency: 2,

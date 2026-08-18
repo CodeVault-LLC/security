@@ -1,4 +1,4 @@
-import { relations } from "drizzle-orm";
+import { relations, sql } from "drizzle-orm";
 import {
   bigint,
   index,
@@ -300,6 +300,9 @@ export const submissionDeliveries = pgTable(
       table.mailboxConnectionId,
       table.providerThreadId,
     ),
+    uniqueIndex("submission_deliveries_active_key")
+      .on(table.submissionId)
+      .where(sql`${table.status} IN ('QUEUED', 'SENDING', 'DELIVERY_UNKNOWN')`),
   ],
 );
 

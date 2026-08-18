@@ -223,7 +223,7 @@ async function buildQuery(
   const assets = await db
     .select({
       name: schema.assets.name,
-      vendor: schema.assets.vendor,
+      vendor: schema.vendors.name,
       assetId: schema.assets.id,
       primary: schema.findingAssets.primary,
     })
@@ -232,6 +232,7 @@ async function buildQuery(
       schema.assets,
       eq(schema.assets.id, schema.findingAssets.assetId),
     )
+    .leftJoin(schema.vendors, eq(schema.vendors.id, schema.assets.vendorId))
     .where(eq(schema.findingAssets.findingId, data.findingId));
 
   const primary = assets.find((asset) => asset.primary) ?? assets[0];

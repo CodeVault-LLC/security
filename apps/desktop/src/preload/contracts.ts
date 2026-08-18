@@ -6,6 +6,7 @@ import type {
   PreparedAiRun,
   ServerEvent,
   SessionUser,
+  SubmissionDelivery,
 } from "@codevault/contracts";
 
 /**
@@ -146,6 +147,8 @@ export interface CodeVaultDesktopApi {
     ): Promise<ApiOutcome<ManualBundleResult>>;
     /** Seals email through a native exact-content confirmation. */
     seal(submissionId: string): Promise<ApiOutcome<ManualBundleResult>>;
+    /** Sends only after a second native review of the sealed package. */
+    send(submissionId: string): Promise<ApiOutcome<SubmissionDelivery>>;
   };
 
   signingKeys: {
@@ -199,6 +202,7 @@ export const IPC_CHANNELS = {
   uploadsProgress: "uploads:progress",
   submissionsDownloadManualBundle: "submissions:download-manual-bundle",
   submissionsSeal: "submissions:seal",
+  submissionsSend: "submissions:send",
   signingKeysList: "signing-keys:list",
   signingKeysImport: "signing-keys:import",
   signingKeysRemove: "signing-keys:remove",

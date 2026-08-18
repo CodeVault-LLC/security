@@ -57,6 +57,9 @@ describe("Gmail connection routes", () => {
       async send() {
         return { providerMessageId: "m1", providerThreadId: "t1" };
       },
+      async findByRfcMessageId() {
+        return null;
+      },
       async getHistory() {
         return { historyId: "1", messageIds: [], nextPageToken: null };
       },

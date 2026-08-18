@@ -1,3 +1,4 @@
+import { MailProviderError } from "./provider.js";
 import type {
   MailHistoryPage,
   MailIdentity,
@@ -39,9 +40,25 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) {
-      throw new Error(`Gmail request failed with status ${response.status}.`);
+      throw new MailProviderError(
+        response.status === 401 || response.status === 403
+          ? "GMAIL_REAUTH_REQUIRED"
+          : response.status === 429
+            ? "GMAIL_RATE_LIMITED"
+            : "GMAIL_REJECTED",
+        `Gmail request failed with status ${response.status}.`,
+        response.status === 408 ||
+          response.status === 429 ||
+          response.status >= 500,
+      );
     }
-    return asObject(await response.json());
+    const text = await response.text();
+    if (text.length === 0) return {};
+    try {
+      return asObject(JSON.parse(text) as unknown);
+    } catch {
+      throw new Error("Gmail returned an invalid JSON response.");
+    }
   }
 
   async function authenticated(
@@ -166,6 +183,28 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
       if (typeof data.id !== "string" || typeof data.threadId !== "string")
         throw new Error("Gmail did not confirm a message ID.");
       return { providerMessageId: data.id, providerThreadId: data.threadId };
+    },
+
+    async findByRfcMessageId(
+      accessToken,
+      rfcMessageId,
+    ): Promise<SentMessage | null> {
+      if (!/^<[^<>\r\n]+>$/.test(rfcMessageId)) {
+        throw new Error("Invalid RFC Message-ID.");
+      }
+      const url = new URL(
+        "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+      );
+      url.searchParams.set("q", `rfc822msgid:${rfcMessageId}`);
+      url.searchParams.set("maxResults", "2");
+      const data = await authenticated(accessToken, url.toString());
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      if (messages.length === 0) return null;
+      const first = asObject(messages[0]);
+      if (typeof first.id !== "string" || typeof first.threadId !== "string") {
+        throw new Error("Gmail returned an invalid reconciliation result.");
+      }
+      return { providerMessageId: first.id, providerThreadId: first.threadId };
     },
 
     async getHistory(

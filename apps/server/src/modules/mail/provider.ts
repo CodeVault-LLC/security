@@ -21,6 +21,17 @@ export interface SentMessage {
   providerThreadId: string;
 }
 
+export class MailProviderError extends Error {
+  constructor(
+    readonly category: string,
+    message: string,
+    readonly deliveryAmbiguous: boolean,
+  ) {
+    super(message);
+    this.name = "MailProviderError";
+  }
+}
+
 export interface MailHistoryPage {
   historyId: string;
   messageIds: string[];
@@ -49,6 +60,10 @@ export interface MailProvider {
     rawMessage: Uint8Array,
     threadId?: string,
   ): Promise<SentMessage>;
+  findByRfcMessageId(
+    accessToken: string,
+    rfcMessageId: string,
+  ): Promise<SentMessage | null>;
   getHistory(
     accessToken: string,
     startHistoryId: string,

@@ -258,4 +258,140 @@ describeIntegration("validated manual submissions", () => {
       .from(schema.disclosureEvents);
     expect(events.map((event) => event.type)).toContain("DETAILS_SENT");
   });
+
+  it("creates only one in-flight Gmail delivery for repeated native clicks", async () => {
+    const routeResponse = await harness.app.inject({
+      method: "POST",
+      url: `/v1/vendors/${vendor.id}/routes`,
+      headers: author.headers,
+      payload: {
+        name: "PSIRT Gmail",
+        type: "EMAIL",
+        to: ["security@example.test"],
+        cc: [],
+        subjectTemplate: "Security report {caseRef}",
+        encryptionPolicy: "FORBIDDEN",
+        publicKeyId: null,
+        maximumAttachmentBytes: 20_000_000,
+        acknowledgementBusinessDays: 5,
+        updateCadenceDays: 42,
+        requiredFields: ["reproduction"],
+      },
+    });
+    const emailRoute = routeResponse.json<VendorRoute>();
+    const mailboxId = uuidv7();
+    await harness.dbHandle.db.insert(schema.mailboxConnections).values({
+      id: mailboxId,
+      userId: author.id,
+      provider: "gmail",
+      externalAccountId: `google-${uuidv7()}`,
+      emailAddress: "researcher@example.test",
+      capabilities: ["SEND"],
+      grantedScopes: ["https://www.googleapis.com/auth/gmail.send"],
+      refreshTokenCiphertext: new Uint8Array([1]),
+      refreshTokenNonce: new Uint8Array(12),
+      refreshTokenAuthTag: new Uint8Array(16),
+      tokenKeyVersion: 1,
+    });
+
+    const created = await harness.app.inject({
+      method: "POST",
+      url: `/v1/cases/${researchCase.id}/submissions`,
+      headers: author.headers,
+      payload: {
+        vendorId: vendor.id,
+        routeId: emailRoute.id,
+        cryptoMode: "PLAIN",
+      },
+    });
+    let submission = created.json<SubmissionDetail>();
+    submission = (
+      await harness.app.inject({
+        method: "PATCH",
+        url: `/v1/submissions/${submission.id}`,
+        headers: author.headers,
+        payload: {
+          subject: "Private security report",
+          bodyMarkdown: "Reliable reproduction details",
+          manualFields: {},
+          mailboxConnectionId: mailboxId,
+          expectedRevision: submission.revision,
+        },
+      })
+    ).json<SubmissionDetail>();
+    submission = (
+      await harness.app.inject({
+        method: "POST",
+        url: `/v1/submissions/${submission.id}/attachments`,
+        headers: author.headers,
+        payload: {
+          artifactIds: [],
+          reportExportId,
+          expectedRevision: submission.revision,
+        },
+      })
+    ).json<SubmissionDetail>();
+    submission = (
+      await harness.app.inject({
+        method: "POST",
+        url: `/v1/submissions/${submission.id}/review`,
+        headers: author.headers,
+        payload: { expectedRevision: submission.revision },
+      })
+    ).json<SubmissionDetail>();
+    submission = (
+      await harness.app.inject({
+        method: "POST",
+        url: `/v1/submissions/${submission.id}/approve`,
+        headers: author.headers,
+        payload: { expectedRevision: submission.revision },
+      })
+    ).json<SubmissionDetail>();
+    const intent = (
+      await harness.app.inject({
+        method: "POST",
+        url: `/v1/submissions/${submission.id}/seal-intent`,
+        headers: author.headers,
+      })
+    ).json<SubmissionSealIntent>();
+    const bytes = new TextEncoder().encode(
+      "From: researcher@example.test\r\nMessage-ID: <stable@codevault.test>\r\n\r\nBody",
+    );
+    harness.storage.objects.set(
+      intent.uploadUrl.replace("memory://", ""),
+      bytes,
+    );
+    const digest = createHash("sha256").update(bytes).digest("hex");
+    const sealed = await harness.app.inject({
+      method: "POST",
+      url: `/v1/submissions/${submission.id}/seal`,
+      headers: author.headers,
+      payload: {
+        intentId: intent.id,
+        sha256: digest,
+        sizeBytes: bytes.byteLength,
+        rfcMessageId: "<stable@codevault.test>",
+      },
+    });
+    expect(sealed.statusCode, sealed.body).toBe(200);
+
+    const first = await harness.app.inject({
+      method: "POST",
+      url: `/v1/submissions/${submission.id}/send`,
+      headers: author.headers,
+    });
+    const second = await harness.app.inject({
+      method: "POST",
+      url: `/v1/submissions/${submission.id}/send`,
+      headers: author.headers,
+    });
+    expect(first.statusCode, first.body).toBe(200);
+    expect(second.statusCode, second.body).toBe(200);
+    expect(second.json<{ id: string }>().id).toBe(
+      first.json<{ id: string }>().id,
+    );
+    expect(
+      harness.jobs.sent.filter((job) => job.queue === "gmail-send"),
+    ).toHaveLength(1);
+  });
 });

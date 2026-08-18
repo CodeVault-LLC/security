@@ -1,4 +1,4 @@
-import { Download, LockKeyhole } from "lucide-react";
+import { Download, LockKeyhole, Send } from "lucide-react";
 
 import type {
   SubmissionDetail,
@@ -21,6 +21,7 @@ export function PackageReview({
   onApprove,
   onDownloadManualBundle,
   onSealEmail,
+  onSendEmail,
 }: {
   submission: SubmissionDetail;
   validation: SubmissionValidationResult | undefined;
@@ -29,6 +30,7 @@ export function PackageReview({
   onApprove: () => void;
   onDownloadManualBundle: () => void;
   onSealEmail: () => void;
+  onSendEmail: () => void;
 }): React.JSX.Element {
   const blocking = validation?.blocking ?? true;
   const route = submission.routeSnapshot.route;
@@ -121,6 +123,19 @@ export function PackageReview({
           >
             <LockKeyhole className="size-3" aria-hidden />
             Seal exact email
+          </Button>
+        ) : ["SEALED", "SEND_FAILED"].includes(submission.status) &&
+          route.type === "EMAIL" ? (
+          <Button
+            size="sm"
+            variant="danger"
+            loading={busy}
+            onClick={onSendEmail}
+          >
+            <Send className="size-3" aria-hidden />
+            {submission.status === "SEND_FAILED"
+              ? "Review and retry send"
+              : "Review and send now"}
           </Button>
         ) : (
           <p className="text-[12px] text-text-muted">

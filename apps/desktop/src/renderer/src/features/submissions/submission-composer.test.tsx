@@ -95,6 +95,7 @@ describe("submission release gates", () => {
         onApprove={vi.fn()}
         onDownloadManualBundle={vi.fn()}
         onSealEmail={vi.fn()}
+        onSendEmail={vi.fn()}
       />,
     );
     expect(
@@ -110,6 +111,7 @@ describe("submission release gates", () => {
         onApprove={vi.fn()}
         onDownloadManualBundle={vi.fn()}
         onSealEmail={vi.fn()}
+        onSendEmail={vi.fn()}
       />,
     );
     expect(

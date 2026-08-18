@@ -9,6 +9,8 @@ import type {
   LoginResponse,
   PreparedAiRun,
   SubmissionPackage,
+  SubmissionDelivery,
+  SubmissionSendIntent,
   SubmissionSealIntent,
 } from "@codevault/contracts";
 
@@ -502,6 +504,53 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
           sha256: result.sha256,
         },
       };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.submissionsSend, async (payload) => {
+    if (
+      typeof payload !== "string" ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(payload)
+    ) {
+      return failure(new Error("invalid submission id"));
+    }
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+    try {
+      const intent = await apiClient.request<SubmissionSendIntent>(
+        `/v1/submissions/${payload}/send-intent`,
+      );
+      const attachmentSummary =
+        intent.attachments.length === 0
+          ? "none"
+          : intent.attachments
+              .map(
+                (item) =>
+                  `${item.filename} (${item.sizeBytes} bytes, SHA-256 ${item.sha256})`,
+              )
+              .join("\n");
+      const confirmation = await dialog.showMessageBox(window, {
+        type: "warning",
+        buttons: ["Send now", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        title: "Send vendor email",
+        message: "Send this exact sealed email now? This cannot be undone.",
+        detail: `From: ${intent.from}\nTo: ${intent.to.join(", ")}\nCC: ${intent.cc.join(", ") || "none"}\nSubject (not encrypted): ${intent.subject}\n\nBody:\n${intent.bodyText}\n\nBody SHA-256: ${intent.bodyUtf8Sha256}\nCrypto: ${intent.cryptoMode}\nRecipient key: ${intent.publicKeyFingerprint ?? "none"}\nPackage: ${intent.packageSizeBytes} bytes, SHA-256 ${intent.packageSha256}\nMessage-ID: ${intent.rfcMessageId}\nAttachments:\n${attachmentSummary}`,
+        noLink: true,
+      });
+      if (confirmation.response !== 0) {
+        return failure(
+          new ApiError(400, "VALIDATION", "Send cancelled.", null, null),
+        );
+      }
+      const delivery = await apiClient.request<SubmissionDelivery>(
+        `/v1/submissions/${payload}/send`,
+        { method: "POST" },
+      );
+      return { ok: true as const, data: delivery };
     } catch (error: unknown) {
       return failure(error);
     }

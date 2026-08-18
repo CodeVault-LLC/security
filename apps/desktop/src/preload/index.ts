@@ -104,6 +104,11 @@ const api: CodeVaultDesktopApi = {
         IPC_CHANNELS.submissionsSeal,
         submissionId,
       ) as ReturnType<CodeVaultDesktopApi["submissions"]["seal"]>,
+    send: (submissionId: string) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.submissionsSend,
+        submissionId,
+      ) as ReturnType<CodeVaultDesktopApi["submissions"]["send"]>,
   },
 
   signingKeys: {

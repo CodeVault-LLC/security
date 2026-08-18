@@ -150,6 +150,12 @@ export function SubmissionDetailRoute({
     if (!outcome.ok) setError(outcome.message);
     else if (outcome.data.saved) await detail.refetch();
   };
+  const sendEmail = async (): Promise<void> => {
+    setError(null);
+    const outcome = await bridge().submissions.send(submission.id);
+    if (!outcome.ok) setError(outcome.message);
+    else await detail.refetch();
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -230,6 +236,7 @@ export function SubmissionDetailRoute({
             }
             onDownloadManualBundle={() => void downloadManualBundle()}
             onSealEmail={() => void sealEmail()}
+            onSendEmail={() => void sendEmail()}
           />
           <ManualDeliveryPanel
             submission={submission}
