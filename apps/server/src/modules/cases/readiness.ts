@@ -218,6 +218,32 @@ export async function evaluateCaseReadiness(
     });
   }
 
+  const submissions = await db
+    .select({ ref: schema.submissions.ref, status: schema.submissions.status })
+    .from(schema.submissions)
+    .where(eq(schema.submissions.caseId, caseId));
+  const activeSubmissions = submissions.filter(
+    (submission) => submission.status !== "CANCELLED",
+  );
+
+  if (activeSubmissions.length > 0) {
+    const pending = activeSubmissions.filter(
+      (submission) =>
+        submission.status !== "SENT" &&
+        submission.status !== "RECORDED_MANUALLY",
+    );
+
+    results.push({
+      id: "disclosure:submissions_delivered",
+      description: "Every prepared vendor submission has been delivered",
+      satisfied: pending.length === 0,
+      detail:
+        pending.length === 0
+          ? null
+          : `Not delivered: ${pending.map((item) => item.ref).join(", ")}`,
+    });
+  }
+
   return {
     caseId,
     satisfied: results.every((result) => result.satisfied),

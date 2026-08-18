@@ -271,6 +271,8 @@ export const SubmissionPackage = Type.Object({
   createdAt: Timestamp,
 });
 
+export type SubmissionPackage = Static<typeof SubmissionPackage>;
+
 export const SubmissionValidationResult = Type.Object({
   submissionId: Uuid,
   revision: RevisionField,
@@ -278,6 +280,10 @@ export const SubmissionValidationResult = Type.Object({
   blocking: Type.Boolean(),
   checkedAt: Timestamp,
 });
+
+export type SubmissionValidationResult = Static<
+  typeof SubmissionValidationResult
+>;
 
 export const RecordManualDeliveryRequest = Type.Object(
   {

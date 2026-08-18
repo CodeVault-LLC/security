@@ -185,6 +185,35 @@ export const submissionApprovals = pgTable(
   ],
 );
 
+/** One-time, short-lived authority to upload one exact package manifest. */
+export const submissionSealIntents = pgTable(
+  "submission_seal_intents",
+  {
+    id: primaryId(),
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references(() => submissions.id),
+    submissionRevision: integer("submission_revision").notNull(),
+    artifactId: uuid("artifact_id")
+      .notNull()
+      .references(() => artifacts.id),
+    manifest: jsonb("manifest").$type<Record<string, unknown>>().notNull(),
+    manifestSha256: text("manifest_sha256").notNull(),
+    expiresAt: timestampColumn("expires_at").notNull(),
+    consumedAt: timestampColumn("consumed_at"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    index("submission_seal_intents_submission_idx").on(
+      table.submissionId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const submissionPackages = pgTable(
   "submission_packages",
   {
@@ -373,6 +402,7 @@ export const submissionsRelations = relations(submissions, ({ one, many }) => ({
   revisions: many(submissionRevisions),
   attachments: many(submissionAttachments),
   approvals: many(submissionApprovals),
+  sealIntents: many(submissionSealIntents),
   packages: many(submissionPackages),
   deliveries: many(submissionDeliveries),
   messages: many(correspondenceMessages),
