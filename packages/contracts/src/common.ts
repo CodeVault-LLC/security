@@ -20,17 +20,23 @@ import {
   CLAIM_SOURCE_TYPES,
   CONFIDENCE_LEVELS,
   CONTENT_VISIBILITIES,
+  COORDINATION_STATES,
+  CRYPTO_MODES,
   DISCLOSURE_EVENT_TYPES,
   DISCLOSURE_STATES,
   ERROR_CATEGORIES,
+  ENCRYPTION_POLICIES,
   EXTERNAL_ID_STATES,
   POC_STATUSES,
+  MESSAGE_CLASSIFICATIONS,
   PRIOR_ART_STATES,
   REMEDIATION_STATES,
   REPORT_AUDIENCES,
   REVIEW_STATES,
   USER_ROLES,
+  SUBMISSION_STATUSES,
   VALIDATION_STATES,
+  VENDOR_ROUTE_TYPES,
 } from "@codevault/core";
 
 /**
@@ -75,6 +81,24 @@ export const Sha256 = Type.String({ pattern: "^[0-9a-f]{64}$" });
 
 export const ShortText = Type.String({ minLength: 1, maxLength: 200 });
 
+/** Header-safe mailbox syntax; provider APIs perform final address validation. */
+export const EmailAddress = Type.String({
+  minLength: 3,
+  maxLength: 320,
+  pattern: "^[^\\s@\\r\\n]+@[^\\s@\\r\\n]+\\.[^\\s@\\r\\n]+$",
+});
+
+export const HttpsUrl = Type.String({
+  minLength: 9,
+  maxLength: 2_048,
+  pattern: "^https://[^\\s\\r\\n]+$",
+});
+
+export const MailSubject = Type.String({
+  maxLength: 300,
+  pattern: "^[^\\r\\n]*$",
+});
+
 export const Markdown = Type.String({ maxLength: 200_000 });
 
 export const UserRoleSchema = enumOf(USER_ROLES);
@@ -99,6 +123,12 @@ export const DisclosureEventTypeSchema = enumOf(DISCLOSURE_EVENT_TYPES);
 export const AffectedRangeKindSchema = enumOf(AFFECTED_RANGE_KINDS);
 export const AffectedStatusSchema = enumOf(AFFECTED_STATUSES);
 export const ErrorCategorySchema = enumOf(ERROR_CATEGORIES);
+export const VendorRouteTypeSchema = enumOf(VENDOR_ROUTE_TYPES);
+export const EncryptionPolicySchema = enumOf(ENCRYPTION_POLICIES);
+export const CryptoModeSchema = enumOf(CRYPTO_MODES);
+export const SubmissionStatusSchema = enumOf(SUBMISSION_STATUSES);
+export const CoordinationStateSchema = enumOf(COORDINATION_STATES);
+export const MessageClassificationSchema = enumOf(MESSAGE_CLASSIFICATIONS);
 
 export const TlpLabelSchema = enumOf(TLP_LABELS);
 
