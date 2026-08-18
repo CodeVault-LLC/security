@@ -1,6 +1,7 @@
 import pg from "pg";
 
 import { parseMfaKeyring } from "../apps/server/src/auth/secret-keyring.js";
+import { environmentValueDetail } from "./verify-env-helpers.js";
 
 /**
  * Environment check.
@@ -28,10 +29,6 @@ const REQUIRED_VARIABLES = [
 
 /** Variables that are optional but change behaviour when absent. */
 const OPTIONAL_VARIABLES: Array<[string, string]> = [
-  [
-    "MEDIA_DATABASE_URL",
-    "media database least privilege cannot be checked (required in production)",
-  ],
   ["NVD_API_KEY", "NVD is queried without a key, at a much lower rate limit"],
   ["GITHUB_ADVISORY_TOKEN", "GitHub Security Advisories are skipped"],
   [
@@ -39,6 +36,12 @@ const OPTIONAL_VARIABLES: Array<[string, string]> = [
     "no browser origin is allowed, which is correct for the desktop client",
   ],
 ];
+
+const MEDIA_RUNTIME_VARIABLES = [
+  "MEDIA_DATABASE_URL",
+  "MEDIA_S3_ACCESS_KEY_ID",
+  "MEDIA_S3_SECRET_ACCESS_KEY",
+] as const;
 
 function checkVariables(): CheckResult[] {
   const results: CheckResult[] = [];
@@ -51,9 +54,7 @@ function checkVariables(): CheckResult[] {
       name,
       ok: present,
       detail: present
-        ? name.includes("SECRET") || name.includes("KEY")
-          ? "set"
-          : (value as string)
+        ? environmentValueDetail(name, value as string)
         : "missing",
     });
   }
@@ -66,6 +67,19 @@ function checkVariables(): CheckResult[] {
       name,
       ok: true,
       detail: present ? "set" : `not set — ${consequence}`,
+    });
+  }
+
+  for (const name of MEDIA_RUNTIME_VARIABLES) {
+    const present = Boolean(process.env[name]?.trim());
+    results.push({
+      name,
+      ok: process.env.NODE_ENV !== "production" || present,
+      detail: present
+        ? name.includes("SECRET") || name.includes("KEY")
+          ? "set"
+          : "set"
+        : "not set — dedicated media credentials are required in production",
     });
   }
 
@@ -135,7 +149,7 @@ async function checkDatabase(): Promise<CheckResult[]> {
 
     results.push({
       name: "migrations applied",
-      ok: Number(migrations.rows[0]?.count ?? 0) >= 6,
+      ok: Number(migrations.rows[0]?.count ?? 0) >= 8,
       detail: `${migrations.rows[0]?.count ?? 0} applied`,
     });
 

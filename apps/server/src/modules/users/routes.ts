@@ -269,8 +269,24 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
       const admin = requireOrganizationAdminWithRecentMfa(request);
       const principal = principalOf(request);
       const { email, role } = request.body;
-      const expiresInDays =
-        request.body.expiresInDays ?? app.config.auth.inviteTtlDays;
+      const [policy] = await app.db
+        .select({
+          inviteTtlHours: schema.organizationSecurityPolicies.inviteTtlHours,
+        })
+        .from(schema.organizationSecurityPolicies)
+        .where(
+          eq(
+            schema.organizationSecurityPolicies.organizationId,
+            admin.organizationId,
+          ),
+        )
+        .limit(1);
+      if (!policy) {
+        throw new DomainError(
+          "SERVER_ERROR",
+          "The organization security policy is missing.",
+        );
+      }
 
       const existing = await app.db
         .select({ id: schema.users.id })
@@ -284,7 +300,7 @@ export async function registerUserRoutes(app: AppInstance): Promise<void> {
 
       const token = generateOpaqueToken();
       const expiresAt = new Date(
-        Date.now() + expiresInDays * 24 * 60 * 60 * 1000,
+        Date.now() + policy.inviteTtlHours * 60 * 60 * 1000,
       ).toISOString();
 
       const [created] = await app.db

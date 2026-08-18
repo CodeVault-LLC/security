@@ -41,15 +41,20 @@ describeIntegration("streaming artifact integrity", () => {
   });
   afterAll(async () => harness.close());
 
-  async function begin(bytes: Uint8Array, declaredSha256: string) {
+  async function begin(
+    bytes: Uint8Array,
+    declaredSha256: string,
+    mimeType = "application/json",
+  ) {
     const started = await harness.app.inject({
       method: "POST",
       url: "/v1/uploads",
       headers: user.headers,
       payload: {
         caseId: researchCase.id,
-        filename: "sample.json",
-        mimeType: "application/json",
+        filename:
+          mimeType === "application/json" ? "sample.json" : "sample.png",
+        mimeType,
         sizeBytes: bytes.byteLength,
         sha256: declaredSha256,
         artifactKind: "HAR",
@@ -99,5 +104,25 @@ describeIntegration("streaming artifact integrity", () => {
       .where(eq(schema.artifacts.id, instructions.artifactId));
     expect(row?.status).toBe("REJECTED");
     expect(harness.storage.objects.has(instructions.objectKey)).toBe(false);
+  });
+
+  it("never invokes a native decoder for image evidence in the general worker", async () => {
+    const bytes = Buffer.from("not-even-a-real-png");
+    const instructions = await begin(
+      bytes,
+      createHash("sha256").update(bytes).digest("hex"),
+      "image/png",
+    );
+    await verifyArtifactIntegrity(context, {
+      artifactId: instructions.artifactId,
+      caseId: researchCase.id,
+    });
+    const [row] = await harness.dbHandle.db
+      .select()
+      .from(schema.artifacts)
+      .where(eq(schema.artifacts.id, instructions.artifactId));
+    expect(row?.status).toBe("STORED");
+    expect(row?.previewKind).toBe("NONE");
+    expect(row?.previewObjectKey).toBeNull();
   });
 });

@@ -208,6 +208,10 @@ export const mfaRecoveryEnrollments = pgTable(
       .unique()
       .references(() => users.id, { onDelete: "cascade" }),
     tokenHash: text("token_hash").notNull(),
+    purpose: text("purpose")
+      .$type<"RECOVERY" | "MIGRATED_ENROLLMENT">()
+      .notNull()
+      .default("RECOVERY"),
     keyId: text("key_id").notNull(),
     nonce: text("nonce").notNull(),
     ciphertext: text("ciphertext").notNull(),
@@ -255,18 +259,34 @@ export const securityNotifications = pgTable(
  * Attempts are counted per account and per source so a spray against many
  * accounts is slowed as effectively as a guess against one.
  */
+export type LoginAttemptStage = "PASSWORD" | "MFA";
+
 export const loginAttempts = pgTable(
   "login_attempts",
   {
     id: primaryId(),
     email: text("email").notNull(),
     sourceKey: text("source_key").notNull(),
+    stage: text("stage")
+      .$type<LoginAttemptStage>()
+      .notNull()
+      .default("PASSWORD"),
     successful: boolean("successful").notNull(),
     attemptedAt: createdAt(),
   },
   (table) => [
     index("login_attempts_email_idx").on(table.email, table.attemptedAt),
     index("login_attempts_source_idx").on(table.sourceKey, table.attemptedAt),
+    index("login_attempts_email_stage_idx").on(
+      table.email,
+      table.stage,
+      table.attemptedAt,
+    ),
+    index("login_attempts_source_stage_idx").on(
+      table.sourceKey,
+      table.stage,
+      table.attemptedAt,
+    ),
   ],
 );
 

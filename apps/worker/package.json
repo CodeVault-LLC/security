@@ -16,7 +16,6 @@
     "@codevault/contracts": "workspace:*",
     "@codevault/core": "workspace:*",
     "@codevault/db": "workspace:*",
-    "@codevault/media-worker": "workspace:*",
     "@codevault/reporting": "workspace:*",
     "@codevault/server": "workspace:*",
     "@codevault/standards": "workspace:*",

@@ -14,9 +14,8 @@ import { generateOpaqueToken } from "@codevault/core/crypto";
 import { schema } from "@codevault/db";
 
 import {
-  checkLoginThrottle,
+  reserveLoginAttempt,
   clearFailedAttempts,
-  recordLoginAttempt,
 } from "../../auth/login-throttle.js";
 import { verifyPassword } from "../../auth/password.js";
 import { createSession } from "../../auth/session.js";
@@ -43,10 +42,16 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
     async (request, reply) => {
       const email = request.body.email.trim().toLowerCase();
       const sourceKey = request.ip;
-      const throttle = await checkLoginThrottle(app.db, email, sourceKey, {
-        maxAttempts: app.config.auth.loginMaxAttempts,
-        windowMinutes: app.config.auth.loginAttemptWindowMinutes,
-      });
+      const throttle = await reserveLoginAttempt(
+        app.db,
+        email,
+        sourceKey,
+        "PASSWORD",
+        {
+          maxAttempts: app.config.auth.loginMaxAttempts,
+          windowMinutes: app.config.auth.loginAttemptWindowMinutes,
+        },
+      );
       if (!throttle.allowed) {
         return reply
           .status(429)
@@ -85,7 +90,7 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
         request.body.password,
       );
       const accepted = user !== undefined && !user.disabled && matches;
-      await recordLoginAttempt(app.db, email, sourceKey, accepted);
+      if (accepted) await clearFailedAttempts(app.db, email, "PASSWORD");
       if (!accepted) {
         return reply.status(401).send({
           error: {
@@ -140,10 +145,11 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
       `);
       const challengeEmail = challengeIdentity.rows[0]?.email;
       if (challengeEmail) {
-        const throttle = await checkLoginThrottle(
+        const throttle = await reserveLoginAttempt(
           app.db,
           challengeEmail,
           request.ip,
+          "MFA",
           {
             maxAttempts: app.config.auth.loginMaxAttempts,
             windowMinutes: app.config.auth.loginAttemptWindowMinutes,
@@ -243,9 +249,6 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
         return { ok: true as const, session, row };
       });
       if (!outcome.ok) {
-        if (outcome.email) {
-          await recordLoginAttempt(app.db, outcome.email, request.ip, false);
-        }
         return reply.status(400).send({
           error: {
             category: "VALIDATION",
@@ -254,7 +257,7 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
           },
         });
       }
-      await clearFailedAttempts(app.db, outcome.row.email);
+      await clearFailedAttempts(app.db, outcome.row.email, "MFA");
       return {
         token: outcome.session.token,
         expiresAt: outcome.session.expiresAt,
@@ -275,11 +278,34 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
     {
       schema: {
         body: StepUpRequest,
-        response: { 200: OkResponse, 400: ErrorResponse },
+        response: { 200: OkResponse, 400: ErrorResponse, 429: ErrorResponse },
       },
+      config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
     },
     async (request, reply) => {
       const principal = principalOf(request);
+      const throttle = await reserveLoginAttempt(
+        app.db,
+        principal.user.email,
+        request.ip,
+        "MFA",
+        {
+          maxAttempts: app.config.auth.loginMaxAttempts,
+          windowMinutes: app.config.auth.loginAttemptWindowMinutes,
+        },
+      );
+      if (!throttle.allowed) {
+        return reply
+          .status(429)
+          .header("retry-after", String(throttle.retryAfterSeconds))
+          .send({
+            error: {
+              category: "RATE_LIMITED",
+              message: "Too many MFA attempts. Try again shortly.",
+              requestId: request.requestId,
+            },
+          });
+      }
       const accepted = await app.db.transaction(async (tx) => {
         const result = await tx.execute<{
           id: string;
@@ -316,6 +342,8 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
           .where(eq(schema.sessions.id, principal.session.id));
         return true;
       });
+      if (accepted)
+        await clearFailedAttempts(app.db, principal.user.email, "MFA");
       return accepted
         ? { ok: true as const }
         : reply.status(400).send({

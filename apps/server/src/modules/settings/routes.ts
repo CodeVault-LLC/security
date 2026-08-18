@@ -2,7 +2,7 @@ import type { AppInstance } from "../../http/app-instance.js";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 
 import { ErrorResponse, OkResponse } from "@codevault/contracts";
-import { validationError } from "@codevault/core";
+import { DomainError, validationError } from "@codevault/core";
 import { schema } from "@codevault/db";
 import { Type } from "@sinclair/typebox";
 
@@ -11,6 +11,10 @@ import {
   verifyPassword,
   WeakPasswordError,
 } from "../../auth/password.js";
+import {
+  reserveLoginAttempt,
+  clearFailedAttempts,
+} from "../../auth/login-throttle.js";
 import { principalOf, requireRecentMfa } from "../../http/guards.js";
 
 const Profile = Type.Object({
@@ -53,21 +57,44 @@ export async function registerSettingsRoutes(app: AppInstance): Promise<void> {
     {
       schema: {
         body: Password,
-        response: { 200: OkResponse, 400: ErrorResponse, 403: ErrorResponse },
+        response: {
+          200: OkResponse,
+          400: ErrorResponse,
+          403: ErrorResponse,
+          429: ErrorResponse,
+        },
       },
+      config: { rateLimit: { max: 5, timeWindow: "15 minutes" } },
     },
     async (request) => {
       const principal = principalOf(request);
       requireRecentMfa(request);
+      const throttle = await reserveLoginAttempt(
+        app.db,
+        principal.user.email,
+        request.ip,
+        "PASSWORD",
+        {
+          maxAttempts: app.config.auth.loginMaxAttempts,
+          windowMinutes: app.config.auth.loginAttemptWindowMinutes,
+        },
+      );
+      if (!throttle.allowed) {
+        throw new DomainError(
+          "RATE_LIMITED",
+          "Too many password attempts. Try again shortly.",
+        );
+      }
       const [user] = await app.db
         .select({ hash: schema.users.passwordHash })
         .from(schema.users)
         .where(eq(schema.users.id, principal.user.id));
-      if (
-        !user ||
-        !(await verifyPassword(user.hash, request.body.currentPassword))
-      )
+      const currentPasswordAccepted =
+        user !== undefined &&
+        (await verifyPassword(user.hash, request.body.currentPassword));
+      if (!currentPasswordAccepted)
         throw validationError("The current password was not accepted.");
+      await clearFailedAttempts(app.db, principal.user.email, "PASSWORD");
       let passwordHash: string;
       try {
         passwordHash = await hashPassword(request.body.newPassword);

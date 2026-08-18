@@ -27,3 +27,16 @@ secrets. Suspected key compromise requires rotating the installation key,
 revoking sessions, notifying users, and requiring authenticator re-enrollment.
 TOTP is not phishing-resistant, so the long-term migration target is
 WebAuthn/passkeys.
+
+## Existing-account enrollment
+
+Migration 0004 revokes legacy password-only sessions. On the next successful
+password check, an account without a TOTP credential receives a short-lived,
+source-bound `MIGRATED_ENROLLMENT` challenge. The desktop completes a one-time
+TOTP setup, displays ten recovery codes once, and then requires a normal
+password-plus-TOTP sign-in. The enrollment challenge never creates a session
+and is consumed before the secret is issued.
+
+The bootstrap CLI refuses to print its TOTP seed, provisioning URI, or recovery
+codes to a captured stderr unless the operator explicitly supplies
+`--allow-noninteractive-secret-output`.

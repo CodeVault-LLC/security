@@ -11,6 +11,7 @@ import {
   Evidence,
   IdParam,
   ListEvidenceQuery,
+  OkResponse,
   PaginatedResponse,
   UpdateEvidenceRequest,
   UploadInstructions,
@@ -54,6 +55,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
         body: CreateUploadRequest,
         response: { 200: UploadInstructions, 400: ErrorResponse },
       },
+      config: { rateLimit: { max: 30, timeWindow: "1 hour" } },
     },
     async (request) => {
       const user = requireAuthor(request);
@@ -240,6 +242,50 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
       }
 
       return result;
+    },
+  );
+
+  app.post(
+    "/v1/uploads/:id/abort",
+    {
+      schema: {
+        params: IdParam,
+        response: { 200: OkResponse, 400: ErrorResponse, 404: ErrorResponse },
+      },
+      config: { rateLimit: { max: 60, timeWindow: "1 hour" } },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const [artifact] = await app.db
+        .select()
+        .from(schema.artifacts)
+        .where(eq(schema.artifacts.id, request.params.id))
+        .limit(1);
+      if (!artifact) throw notFound("Upload");
+      await requireCaseWrite(app.db, user, artifact.caseId);
+      if (artifact.status !== "PENDING") {
+        throw validationError("Only a pending upload can be aborted.");
+      }
+      if (artifact.uploadId) {
+        await app.storage.abortMultipartUpload(
+          artifact.objectKey,
+          artifact.uploadId,
+        );
+      } else {
+        await app.storage
+          .deleteObject(artifact.objectKey)
+          .catch(() => undefined);
+      }
+      await app.db
+        .update(schema.artifacts)
+        .set({
+          status: "DELETED",
+          uploadId: null,
+          deletedAt: sql`now()`,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(schema.artifacts.id, artifact.id));
+      return { ok: true as const };
     },
   );
 

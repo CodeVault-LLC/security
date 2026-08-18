@@ -42,6 +42,8 @@ export interface BuildAppOptions {
 const PUBLIC_ROUTES = new Set([
   "POST:/v1/auth/login/start",
   "POST:/v1/auth/login/complete",
+  "POST:/v1/auth/enrollment/start",
+  "POST:/v1/auth/enrollment/confirm",
   "POST:/v1/invitations/inspect",
   "POST:/v1/invitations/enrollment/start",
   "POST:/v1/invitations/enrollment/confirm",

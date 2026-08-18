@@ -63,6 +63,14 @@ const api: CodeVaultDesktopApi = {
       ipcRenderer.invoke(IPC_CHANNELS.authLoginComplete, {
         totp,
       }) as ReturnType<CodeVaultDesktopApi["auth"]["loginComplete"]>,
+    enrollmentStart: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.authEnrollmentStart) as ReturnType<
+        CodeVaultDesktopApi["auth"]["enrollmentStart"]
+      >,
+    enrollmentConfirm: (totp) =>
+      ipcRenderer.invoke(IPC_CHANNELS.authEnrollmentConfirm, {
+        totp,
+      }) as ReturnType<CodeVaultDesktopApi["auth"]["enrollmentConfirm"]>,
     logout: () => ipcRenderer.invoke(IPC_CHANNELS.authLogout) as Promise<void>,
     restore: () =>
       ipcRenderer.invoke(IPC_CHANNELS.authRestore) as ReturnType<

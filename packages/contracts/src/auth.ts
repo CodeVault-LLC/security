@@ -76,8 +76,6 @@ export type MeResponse = Static<typeof MeResponse>;
 export const CreateInviteRequest = Type.Object({
   email: Type.String({ format: "email", maxLength: 320 }),
   role: UserRoleSchema,
-  /** Days until expiry; defaults to seven. */
-  expiresInDays: Type.Optional(Type.Integer({ minimum: 1, maximum: 30 })),
 });
 
 export type CreateInviteRequest = Static<typeof CreateInviteRequest>;
@@ -141,6 +139,13 @@ export const TotpEnrollmentResponse = Type.Object({
   expiresAt: Timestamp,
 });
 export type TotpEnrollmentResponse = Static<typeof TotpEnrollmentResponse>;
+export const StartMigratedEnrollmentRequest = Type.Object({
+  challengeToken: Type.String({ minLength: 32, maxLength: 512 }),
+});
+export const ConfirmMigratedEnrollmentRequest = Type.Object({
+  enrollmentToken: Type.String({ minLength: 32, maxLength: 512 }),
+  totp: Type.String({ pattern: "^[0-9]{6}$" }),
+});
 export const ConfirmInviteEnrollmentRequest = Type.Object({
   enrollmentToken: Type.String({ minLength: 32, maxLength: 512 }),
   totp: Type.String({ pattern: "^[0-9]{6}$" }),

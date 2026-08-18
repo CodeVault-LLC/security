@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { schema } from "@codevault/db";
 
 import { hashToken } from "./auth/tokens.js";
+import { generateTotpAt } from "./auth/totp.js";
 import {
   clearLoginAttempts,
   createHarness,
@@ -107,6 +108,67 @@ describeIntegration("authentication boundary", () => {
       });
       expect([401, 404]).toContain(response.statusCode);
     }
+  });
+
+  it("lets a password-authenticated migrated account enroll MFA once", async () => {
+    const user = await harness.createUser();
+    await harness.dbHandle.db
+      .delete(schema.mfaRecoveryCodes)
+      .where(eq(schema.mfaRecoveryCodes.userId, user.id));
+    await harness.dbHandle.db
+      .delete(schema.totpCredentials)
+      .where(eq(schema.totpCredentials.userId, user.id));
+    await clearLoginAttempts(harness);
+
+    const login = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/login/start",
+      payload: { email: user.email, password: TEST_PASSWORD },
+    });
+    expect(login.statusCode).toBe(200);
+    const challenge = login.json<{
+      challenge: string;
+      challengeToken: string;
+    }>();
+    expect(challenge.challenge).toBe("ENROLLMENT_REQUIRED");
+
+    const start = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/enrollment/start",
+      payload: { challengeToken: challenge.challengeToken },
+    });
+    expect(start.statusCode).toBe(200);
+    const enrollment = start.json<{
+      enrollmentToken: string;
+      manualSecret: string;
+    }>();
+    const confirm = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/enrollment/confirm",
+      payload: {
+        enrollmentToken: enrollment.enrollmentToken,
+        totp: generateTotpAt(enrollment.manualSecret, Date.now()),
+      },
+    });
+    expect(confirm.statusCode).toBe(200);
+    expect(
+      confirm.json<{ recoveryCodes: string[] }>().recoveryCodes,
+    ).toHaveLength(10);
+    const credentials = await harness.dbHandle.db
+      .select({ id: schema.totpCredentials.id })
+      .from(schema.totpCredentials)
+      .where(eq(schema.totpCredentials.userId, user.id));
+    expect(credentials).toHaveLength(1);
+
+    const replay = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/enrollment/confirm",
+      payload: {
+        enrollmentToken: enrollment.enrollmentToken,
+        totp: generateTotpAt(enrollment.manualSecret, Date.now()),
+      },
+    });
+    expect(replay.statusCode).toBe(400);
   });
 
   async function me(token: string) {

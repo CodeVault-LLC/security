@@ -124,8 +124,22 @@ jobs:
         run: |
           test "$(docker image inspect codevault-media-worker:ci --format '{{.Config.User}}')" = "10002:10002"
           docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
-            --pids-limit 32 --memory 256m --entrypoint node codevault-media-worker:ci \
-            -e 'import("sharp").then((m) => { if (m.default.versions.sharp !== "0.35.3" || m.default.versions.vips !== "8.18.3" || process.getuid() !== 10002) process.exit(1); })'
+            --pids-limit 32 --memory 256m --cpus 1 --entrypoint node codevault-media-worker:ci \
+            -e 'import("sharp").then((m) => { if (m.default.versions.sharp !== "0.35.3" || m.default.versions.vips !== "8.18.3" || process.getuid() !== 10002 || process.env.VIPS_BLOCK_UNTRUSTED !== "1") process.exit(1); })'
+
+      - name: Refuse broad media credentials
+        run: |
+          if docker run --rm \
+            -e DATABASE_URL=postgres://broad \
+            -e S3_ENDPOINT=https://storage.invalid \
+            -e S3_BUCKET=test \
+            -e S3_ACCESS_KEY_ID=broad \
+            -e S3_SECRET_ACCESS_KEY=broad \
+            codevault-media-worker:ci >"$RUNNER_TEMP/media-credential-check.log" 2>&1; then
+            echo "media worker accepted broad credentials"
+            exit 1
+          fi
+          grep -q "Required media-worker setting MEDIA_DATABASE_URL is missing" "$RUNNER_TEMP/media-credential-check.log"
 
   package:
     name: Package (${{ matrix.os }})

@@ -11,15 +11,10 @@ function required(name: string): string {
   return value;
 }
 
-function mediaCredential(primary: string, developmentFallback: string): string {
-  return process.env[primary] ?? required(developmentFallback);
-}
-
 async function main(): Promise<void> {
   assertPatchedVips();
   const dbHandle = createDatabase({
-    connectionString:
-      process.env.MEDIA_DATABASE_URL ?? required("DATABASE_URL"),
+    connectionString: required("MEDIA_DATABASE_URL"),
     maxConnections: 1,
     ssl: process.env.DATABASE_SSL === "true",
   });
@@ -27,11 +22,8 @@ async function main(): Promise<void> {
     endpoint: required("S3_ENDPOINT"),
     region: process.env.S3_REGION ?? "us-east-1",
     bucket: required("S3_BUCKET"),
-    accessKeyId: mediaCredential("MEDIA_S3_ACCESS_KEY_ID", "S3_ACCESS_KEY_ID"),
-    secretAccessKey: mediaCredential(
-      "MEDIA_S3_SECRET_ACCESS_KEY",
-      "S3_SECRET_ACCESS_KEY",
-    ),
+    accessKeyId: required("MEDIA_S3_ACCESS_KEY_ID"),
+    secretAccessKey: required("MEDIA_S3_SECRET_ACCESS_KEY"),
     forcePathStyle: process.env.S3_FORCE_PATH_STYLE !== "false",
   });
   let stopping = false;

@@ -10,7 +10,7 @@
   "scripts": {
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "migrate": "bun run src/migrate.ts"
+    "migrate": "bun run src/migrate-cli.ts"
   },
   "dependencies": {
     "@codevault/core": "workspace:*",

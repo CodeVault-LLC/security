@@ -12,7 +12,11 @@ import {
   createTotpEnrollment,
   generateTotpAt,
 } from "../apps/server/src/auth/totp.js";
-import { bootstrapOrganization, parseArguments } from "./bootstrap-admin.js";
+import {
+  assertSecretOutputIsSafe,
+  bootstrapOrganization,
+  parseArguments,
+} from "./bootstrap-admin.js";
 
 const connectionString = process.env.DATABASE_URL;
 const describeIntegration = connectionString ? describe : describe.skip;
@@ -33,6 +37,8 @@ async function temporaryDatabase(): Promise<{ url: string; pool: pg.Pool }> {
     "0003_ai_intake.sql",
     "0004_organization_security_mfa.sql",
     "0005_serialize_final_admin_check.sql",
+    "0007_migrated_mfa_enrollment.sql",
+    "0008_login_attempt_stages.sql",
   ]) {
     await pool.query(
       await readFile(
@@ -67,6 +73,15 @@ describe("bootstrap argument parsing", () => {
         "Admin",
       ]),
     ).toMatchObject({ organization: "Acme", email: "a@b.test" });
+  });
+
+  it("refuses to print credentials to a captured stderr without opt-in", () => {
+    expect(() => assertSecretOutputIsSafe(false, false)).toThrow(
+      "Refusing to print enrollment secrets",
+    );
+    expect(() => assertSecretOutputIsSafe(undefined, false)).toThrow();
+    expect(() => assertSecretOutputIsSafe(false, true)).not.toThrow();
+    expect(() => assertSecretOutputIsSafe(true, false)).not.toThrow();
   });
 });
 
@@ -120,6 +135,12 @@ describeIntegration("organization bootstrap", () => {
       recovery_codes: 10,
       audit_events: 1,
     });
+    const credential = await pool.query<{ last_accepted_counter: string }>(
+      "SELECT last_accepted_counter::text FROM totp_credentials",
+    );
+    expect(credential.rows[0]?.last_accepted_counter).toBe(
+      String(Math.floor(now.getTime() / 30_000)),
+    );
     await expect(
       bootstrapOrganization(handle.db, {
         ...base,
@@ -127,6 +148,39 @@ describeIntegration("organization bootstrap", () => {
       }),
     ).rejects.toThrow("already exists");
 
+    await handle.close();
+    await pool.end();
+  });
+
+  it("stores the matched future-window counter to prevent bootstrap replay", async () => {
+    const { url, pool } = await temporaryDatabase();
+    const handle = createDatabase({ connectionString: url });
+    const keyring = parseMfaKeyring(
+      `test:${Buffer.alloc(32, 8).toString("base64")}`,
+      false,
+    );
+    const enrollment = createTotpEnrollment("Future", "admin@future.test");
+    const now = new Date("2026-08-18T10:00:00.000Z");
+    const futureCounter = Math.floor(now.getTime() / 30_000) + 1;
+    await bootstrapOrganization(handle.db, {
+      organization: "Future Organization",
+      email: "admin@future.test",
+      name: "Administrator",
+      password: "a-correct-horse-battery-staple",
+      keyring,
+      enrollment,
+      now,
+      totpToken: generateTotpAt(
+        enrollment.manualSecret,
+        now.getTime() + 30_000,
+      ),
+    });
+    const credential = await pool.query<{ last_accepted_counter: string }>(
+      "SELECT last_accepted_counter::text FROM totp_credentials",
+    );
+    expect(credential.rows[0]?.last_accepted_counter).toBe(
+      String(futureCounter),
+    );
     await handle.close();
     await pool.end();
   });

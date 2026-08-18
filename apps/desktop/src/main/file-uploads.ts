@@ -58,7 +58,14 @@ const MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
  * computed here, on the researcher's machine, and the server later verifies
  * that the object actually stored matches the size that was declared.
  */
-export async function hashSelection(path: string): Promise<UploadSelection> {
+export interface LocalUploadSelection extends UploadSelection {
+  /** Never crosses the preload bridge. */
+  path: string;
+}
+
+export async function hashSelection(
+  path: string,
+): Promise<Omit<LocalUploadSelection, "selectionId">> {
   const info = await stat(path);
   const hash = createHash("sha256");
   const stream = createReadStream(path, { highWaterMark: 1024 * 1024 });
@@ -81,7 +88,9 @@ export async function hashSelection(path: string): Promise<UploadSelection> {
 }
 
 export interface RunUploadsOptions {
-  request: StartUploadRequest;
+  request: Omit<StartUploadRequest, "selections"> & {
+    selections: LocalUploadSelection[];
+  };
   apiClient: ApiClient;
   onProgress: (progress: UploadProgress) => void;
 }
@@ -101,7 +110,7 @@ export async function runUploads(
 }
 
 async function uploadOne(
-  selection: UploadSelection,
+  selection: LocalUploadSelection,
   options: RunUploadsOptions,
 ): Promise<string> {
   const { apiClient, request, onProgress } = options;
@@ -162,6 +171,11 @@ async function uploadOne(
 
     return instructions.artifactId;
   } catch (error: unknown) {
+    await apiClient
+      .request(`/v1/uploads/${instructions.artifactId}/abort`, {
+        method: "POST",
+      })
+      .catch(() => undefined);
     onProgress({
       uploadId: instructions.artifactId,
       filename: selection.filename,
@@ -180,7 +194,7 @@ interface CompletedPart {
 }
 
 async function uploadSingle(
-  selection: UploadSelection,
+  selection: LocalUploadSelection,
   instructions: UploadInstructions,
   onProgress: (progress: UploadProgress) => void,
 ): Promise<CompletedPart[]> {
@@ -236,7 +250,7 @@ async function uploadSingle(
 }
 
 async function uploadMultipart(
-  selection: UploadSelection,
+  selection: LocalUploadSelection,
   instructions: UploadInstructions,
   onProgress: (progress: UploadProgress) => void,
 ): Promise<CompletedPart[]> {

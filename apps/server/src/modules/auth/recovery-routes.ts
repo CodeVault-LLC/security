@@ -115,9 +115,17 @@ export async function registerRecoveryRoutes(app: AppInstance): Promise<void> {
           id,
           userId: user.id,
           tokenHash: hashToken(token),
+          purpose: "RECOVERY",
           ...envelope,
           expiresAt,
         });
+        // Disable the compromised authenticator as soon as recovery begins.
+        // Confirmation reactivates this row only after the replacement code
+        // has been proved; abandoning recovery therefore fails closed.
+        await tx
+          .update(schema.totpCredentials)
+          .set({ replacedAt: sql`now()` })
+          .where(eq(schema.totpCredentials.userId, user.id));
         await tx
           .update(schema.sessions)
           .set({ revokedAt: sql`now()` })
@@ -195,6 +203,7 @@ export async function registerRecoveryRoutes(app: AppInstance): Promise<void> {
           JOIN organization_security_policies AS policy ON policy.organization_id = membership.organization_id
           JOIN totp_credentials AS credential ON credential.user_id = account.id
           WHERE enrollment.token_hash = ${hashToken(request.body.enrollmentToken)}
+            AND enrollment.purpose = 'RECOVERY'
             AND enrollment.consumed_at IS NULL AND enrollment.expires_at > now()
           FOR UPDATE OF enrollment, account, credential
         `);

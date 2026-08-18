@@ -15,6 +15,10 @@ the API.
 - Give `MEDIA_S3_*` credentials read/delete on `quarantine/avatars/*` and
   put/delete on `derivatives/avatars/*`. Deny bucket listing and all other
   prefixes. Never reuse the API's S3 credentials in production.
+- Enforce an `AbortIncompleteMultipartUpload` lifecycle rule on the artifact
+  bucket. The pinned development MinIO stack uses an hourly cleanup process for
+  incomplete uploads older than one day; production must enforce an equivalent
+  or stricter lifecycle or scheduled cleanup rule.
 - Run as UID/GID 10002, with a read-only root filesystem, `cap_drop: ALL`,
   `no-new-privileges`, a 32-process PID limit, 256 MiB memory, one CPU, and a
   size-capped `/tmp` tmpfs. Allow network egress only to PostgreSQL and the

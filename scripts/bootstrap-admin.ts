@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { stdin, stdout } from "node:process";
+import { stdin, stderr, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
@@ -47,6 +47,17 @@ export class BootstrapError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "BootstrapError";
+  }
+}
+
+export function assertSecretOutputIsSafe(
+  outputIsTty: boolean | undefined,
+  allowNoninteractiveSecretOutput: boolean,
+): void {
+  if (outputIsTty !== true && !allowNoninteractiveSecretOutput) {
+    throw new BootstrapError(
+      "Refusing to print enrollment secrets without --allow-noninteractive-secret-output.",
+    );
   }
 }
 
@@ -111,13 +122,12 @@ export async function bootstrapOrganization(
   }
 
   const now = input.now ?? new Date();
-  if (
-    validateTotpAt(
-      input.enrollment.manualSecret,
-      input.totpToken,
-      now.getTime(),
-    ) === null
-  ) {
+  const acceptedCounter = validateTotpAt(
+    input.enrollment.manualSecret,
+    input.totpToken,
+    now.getTime(),
+  );
+  if (acceptedCounter === null) {
     throw new BootstrapError("The authenticator code was not accepted.");
   }
 
@@ -166,7 +176,7 @@ export async function bootstrapOrganization(
       nonce: envelope.nonce,
       ciphertext: envelope.ciphertext,
       authTag: envelope.authTag,
-      lastAcceptedCounter: Math.floor(now.getTime() / 30_000),
+      lastAcceptedCounter: acceptedCounter,
     });
     await tx.insert(schema.mfaRecoveryCodes).values(
       recoveryCodes.map((code) => ({
@@ -248,6 +258,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  assertSecretOutputIsSafe(
+    stderr.isTTY,
+    parsed.allowNoninteractiveSecretOutput,
+  );
+
   const password = await promptHidden("Password: ");
   if ((await promptHidden("Confirm password: ")) !== password) {
     console.error("The passwords did not match.");
@@ -258,11 +273,6 @@ async function main(): Promise<void> {
   console.warn(`Manual authenticator secret: ${enrollment.manualSecret}`);
   console.warn(`Provisioning URI: ${enrollment.provisioningUri}`);
   const totpToken = await promptHidden("Authenticator code: ");
-  if (!stdout.isTTY && !parsed.allowNoninteractiveSecretOutput) {
-    throw new BootstrapError(
-      "Refusing bootstrap without --allow-noninteractive-secret-output.",
-    );
-  }
   const handle = createDatabase({ connectionString });
   try {
     const result = await bootstrapOrganization(handle.db, {

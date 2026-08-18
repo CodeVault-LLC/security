@@ -5,11 +5,13 @@ import { MeResponse, OkResponse } from "@codevault/contracts";
 import { revokeSession } from "../../auth/session.js";
 import { principalOf } from "../../http/guards.js";
 import { registerLoginRoutes } from "./login-routes.js";
+import { registerMigratedEnrollmentRoutes } from "./migrated-enrollment-routes.js";
 import { registerEnrollmentRoutes } from "./enrollment-routes.js";
 import { registerRecoveryRoutes } from "./recovery-routes.js";
 
 export async function registerAuthRoutes(app: AppInstance): Promise<void> {
   await registerLoginRoutes(app);
+  await registerMigratedEnrollmentRoutes(app);
   await registerEnrollmentRoutes(app);
   await registerRecoveryRoutes(app);
 

@@ -136,6 +136,10 @@ export function createObjectStorage(config: ServerConfig): ObjectStorage {
       const partUrls: string[] = [];
 
       for (let partNumber = 1; partNumber <= partCount; partNumber += 1) {
+        const contentLength = Math.min(
+          partSize,
+          sizeBytes - (partNumber - 1) * partSize,
+        );
         const url = await getSignedUrl(
           client,
           new UploadPartCommand({
@@ -143,6 +147,7 @@ export function createObjectStorage(config: ServerConfig): ObjectStorage {
             Key: objectKey,
             UploadId: created.UploadId,
             PartNumber: partNumber,
+            ContentLength: contentLength,
           }),
           { expiresIn: ttlSeconds },
         );

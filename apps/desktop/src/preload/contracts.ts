@@ -61,8 +61,8 @@ export interface ApiSuccess<T> {
 export type ApiOutcome<T> = ApiSuccess<T> | ApiFailure;
 
 export interface UploadSelection {
-  /** Absolute path, held in the main process only. */
-  path: string;
+  /** Opaque, one-use capability for a path held only by the main process. */
+  selectionId: string;
   filename: string;
   sizeBytes: number;
   mimeType: string;
@@ -112,6 +112,8 @@ export interface CodeVaultDesktopApi {
       password: string,
     ): Promise<ApiOutcome<LoginChallengeResult>>;
     loginComplete(totp: string): Promise<ApiOutcome<AuthResult>>;
+    enrollmentStart(): Promise<ApiOutcome<EnrollmentSetup>>;
+    enrollmentConfirm(totp: string): Promise<ApiOutcome<RecoveryCodeBundle>>;
     logout(): Promise<void>;
     /** Restores a persisted session at startup, if one is available. */
     restore(): Promise<ApiOutcome<AuthResult> | null>;
@@ -195,6 +197,8 @@ export const IPC_CHANNELS = {
   appOpenExternal: "app:open-external",
   authLoginStart: "auth:login-start",
   authLoginComplete: "auth:login-complete",
+  authEnrollmentStart: "auth:enrollment-start",
+  authEnrollmentConfirm: "auth:enrollment-confirm",
   authLogout: "auth:logout",
   authRestore: "auth:restore",
   authStorageWarning: "auth:storage-warning",

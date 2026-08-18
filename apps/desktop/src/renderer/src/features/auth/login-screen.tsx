@@ -6,7 +6,9 @@ import { Button, Input, Label } from "@codevault/ui";
 import { bridge } from "../../lib/bridge.js";
 import { useSession } from "../../lib/session.js";
 import { InviteOnboarding } from "./invite-onboarding.js";
+import { MigratedEnrollment } from "./migrated-enrollment.js";
 import { MfaChallenge } from "./mfa-challenge.js";
+import type { EnrollmentSetup } from "../../../../preload/contracts.js";
 
 const DEFAULT_SERVER_KEY = "codevault.serverUrl";
 
@@ -19,7 +21,10 @@ export function LoginScreen(): React.JSX.Element {
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"LOGIN" | "MFA" | "INVITATION">("LOGIN");
+  const [mode, setMode] = useState<
+    "LOGIN" | "MFA" | "INVITATION" | "ENROLLMENT"
+  >("LOGIN");
+  const [enrollment, setEnrollment] = useState<EnrollmentSetup | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const normalizedServer = serverUrl.trim().replace(/\/+$/, "");
@@ -62,6 +67,17 @@ export function LoginScreen(): React.JSX.Element {
       />
     );
   }
+  if (mode === "ENROLLMENT" && enrollment !== null) {
+    return (
+      <MigratedEnrollment
+        setup={enrollment}
+        onDone={() => {
+          setEnrollment(null);
+          setMode("LOGIN");
+        }}
+      />
+    );
+  }
 
   const submit = async (event: React.FormEvent): Promise<void> => {
     event.preventDefault();
@@ -77,10 +93,15 @@ export function LoginScreen(): React.JSX.Element {
         setError(outcome.message);
         return;
       }
-      if (outcome.data.challenge !== "MFA_REQUIRED") {
-        setError(
-          "This account must complete administrator-assisted MFA enrollment.",
-        );
+      if (outcome.data.challenge === "ENROLLMENT_REQUIRED") {
+        const setup = await bridge().auth.enrollmentStart();
+        if (!setup.ok) {
+          setError(setup.message);
+          return;
+        }
+        setPassword("");
+        setEnrollment(setup.data);
+        setMode("ENROLLMENT");
         return;
       }
       setPassword("");

@@ -103,4 +103,54 @@ describeIntegration("organization and personal settings APIs", () => {
       .where(eq(schema.users.id, admin.id));
     expect(adminRow?.name).not.toBe("Updated Member");
   });
+
+  it("rate limits repeated password reauthentication guesses", async () => {
+    const user = await harness.createUser();
+    const statuses: number[] = [];
+    const maxAttempts = Math.min(5, harness.config.auth.loginMaxAttempts);
+    for (let attempt = 0; attempt < maxAttempts + 1; attempt += 1) {
+      const response = await harness.app.inject({
+        method: "POST",
+        url: "/v1/settings/password",
+        headers: user.headers,
+        payload: {
+          currentPassword: "deliberately-wrong-password",
+          newPassword: "a-different-correct-horse-battery-staple",
+        },
+      });
+      statuses.push(response.statusCode);
+    }
+    expect(statuses.slice(0, maxAttempts)).toEqual(
+      Array(maxAttempts).fill(400),
+    );
+    expect(statuses[maxAttempts]).toBe(429);
+  });
+
+  it("uses the organization policy as the sole invitation lifetime", async () => {
+    await harness.dbHandle.db
+      .update(schema.organizationSecurityPolicies)
+      .set({ inviteTtlHours: 1 })
+      .where(
+        eq(
+          schema.organizationSecurityPolicies.organizationId,
+          admin.organizationId,
+        ),
+      );
+    const startedAt = Date.now();
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/organization/invitations",
+      headers: admin.headers,
+      payload: {
+        email: `ttl-${crypto.randomUUID()}@example.test`,
+        role: "MEMBER",
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const expiresAt = Date.parse(
+      response.json<{ invite: { expiresAt: string } }>().invite.expiresAt,
+    );
+    expect(expiresAt - startedAt).toBeGreaterThan(59 * 60_000);
+    expect(expiresAt - startedAt).toBeLessThanOrEqual(60 * 60_000 + 2_000);
+  });
 });
