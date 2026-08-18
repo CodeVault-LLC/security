@@ -60,7 +60,8 @@ docker compose -f infra/docker-compose.yml up -d
 set -a; . ./.env; set +a
 
 bun run db:migrate
-bun run admin:create --email you@example.com --name "Your Name"
+bun run admin:create --organization "Your Organization" \
+  --email you@example.com --name "Your Name"
 bun run verify:env
 
 # Optional: three realistic cases to look at
@@ -83,8 +84,15 @@ If the desktop client reports "Electron uninstall", the binary download did not
 complete during install. Run `bun run electron:install` to retry it; nothing
 else in the repository needs it.
 
-There is no registration page. The first administrator is created by the CLI
-above; everyone else arrives through an expiring, single-use invitation.
+There is no public registration page. The first administrator is created by the
+CLI above, which enrolls TOTP and prints ten one-time recovery codes only after
+the organization, membership, credential, and audit record commit atomically.
+Everyone else arrives through an expiring, single-use invitation and must enroll
+MFA before receiving a session.
+
+Rotate encrypted TOTP credentials after adding a new first entry to
+`MFA_ENCRYPTION_KEYS` with `bun run mfa:rotate-key`. Use `--dry-run` first; the
+command reports counts and never prints decrypted secrets.
 
 ## Checks
 

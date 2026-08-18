@@ -109,17 +109,15 @@ export class SecretKeyring {
       hkdfSync("sha256", this.#key(keyId), Buffer.alloc(0), RECOVERY_INFO, 32),
     );
 
-    return createHmac("sha256", digestKey)
-      .update(code, "utf8")
-      .digest("base64");
+    return createHmac("sha256", digestKey).update(code, "utf8").digest("hex");
   }
 
   verifyRecoveryCode(code: string, keyId: string, expected: string): boolean {
     let actual: Buffer;
     let stored: Buffer;
     try {
-      actual = Buffer.from(this.digestRecoveryCode(code, keyId), "base64");
-      stored = Buffer.from(expected, "base64");
+      actual = Buffer.from(this.digestRecoveryCode(code, keyId), "hex");
+      stored = Buffer.from(expected, "hex");
     } catch {
       return false;
     }

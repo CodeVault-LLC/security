@@ -125,7 +125,7 @@ export const totpCredentials = pgTable("totp_credentials", {
   ciphertext: text("ciphertext").notNull(),
   authTag: text("auth_tag").notNull(),
   lastAcceptedCounter: bigint("last_accepted_counter", { mode: "number" }),
-  enrolledAt: createdAt(),
+  enrolledAt: timestampColumn("enrolled_at").notNull().defaultNow(),
   replacedAt: timestampColumn("replaced_at"),
 });
 
