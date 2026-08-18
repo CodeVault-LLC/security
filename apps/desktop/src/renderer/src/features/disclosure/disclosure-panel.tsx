@@ -8,9 +8,13 @@ import {
   UserRound,
   Wrench,
 } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
-import type { DisclosureOverview } from "@codevault/contracts";
+import type {
+  DisclosureOverview,
+  SubmissionSummary,
+} from "@codevault/contracts";
 import { CONTENT_VISIBILITIES, DISCLOSURE_EVENT_TYPES } from "@codevault/core";
 import {
   Button,
@@ -41,6 +45,7 @@ import { MarkdownField } from "../markdown/markdown-field.js";
 import { MarkdownPreview } from "../markdown/markdown-preview.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../../lib/api.js";
 import { QueryError } from "../../components/query-boundary.js";
+import { CreateSubmissionDialog } from "../submissions/create-submission-dialog.js";
 
 /**
  * Disclosure coordination.
@@ -103,11 +108,17 @@ export function DisclosurePanel({
 }: DisclosurePanelProps): React.JSX.Element {
   const [eventOpen, setEventOpen] = useState(false);
   const [stakeholderOpen, setStakeholderOpen] = useState(false);
+  const [submissionOpen, setSubmissionOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
   const overview = useApiQuery<DisclosureOverview>(
     queryKeys.disclosure(caseId),
     `/v1/cases/${caseId}/disclosure`,
+  );
+  const submissions = useApiQuery<SubmissionSummary[]>(
+    queryKeys.submissions(caseId),
+    `/v1/cases/${caseId}/submissions`,
   );
 
   const setEmbargo = useApiMutation<
@@ -126,6 +137,52 @@ export function DisclosurePanel({
 
   return (
     <div className="space-y-4 p-4">
+      <Card>
+        <CardHeader>
+          <CardTitle>Vendor submissions</CardTitle>
+          {canEdit ? (
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => setSubmissionOpen(true)}
+            >
+              <Plus aria-hidden className="size-3" />
+              Prepare submission
+            </Button>
+          ) : null}
+        </CardHeader>
+        {submissions.data === undefined || submissions.data.length === 0 ? (
+          <CardBody className="text-[12px] text-text-muted">
+            No vendor package has been prepared. Route details are snapshotted
+            when a draft is created.
+          </CardBody>
+        ) : (
+          <ul className="divide-y divide-border">
+            {submissions.data.map((submission) => (
+              <li key={submission.id}>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px] hover:bg-surface-raised"
+                  onClick={() =>
+                    void navigate({
+                      to: "/submissions/$submissionId",
+                      params: { submissionId: submission.id },
+                    })
+                  }
+                >
+                  <Mono>{submission.ref}</Mono>
+                  <span className="min-w-0 flex-1 truncate">
+                    {submission.vendor.name}
+                  </span>
+                  <span className="text-text-muted">
+                    {humanise(submission.status)}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
       {data?.warnings.length ? (
         <Card className="border-warning/40">
           <CardBody className="space-y-1">
@@ -318,6 +375,18 @@ export function DisclosurePanel({
         open={stakeholderOpen}
         onOpenChange={setStakeholderOpen}
         caseId={caseId}
+      />
+      <CreateSubmissionDialog
+        caseId={caseId}
+        open={submissionOpen}
+        onOpenChange={setSubmissionOpen}
+        onCreated={(submission) => {
+          setSubmissionOpen(false);
+          void navigate({
+            to: "/submissions/$submissionId",
+            params: { submissionId: submission.id },
+          });
+        }}
       />
     </div>
   );

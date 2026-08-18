@@ -157,11 +157,18 @@ export async function loadSubmissionDetail(
       ),
     )
     .limit(1);
+  const [latestPackage] = await app.db
+    .select()
+    .from(schema.submissionPackages)
+    .where(eq(schema.submissionPackages.submissionId, submission.id))
+    .orderBy(desc(schema.submissionPackages.createdAt))
+    .limit(1);
 
   return {
     ...toSubmissionSummary(submission, vendor),
     routeSnapshot: submission.routeSnapshot as SubmissionRouteSnapshot,
     bodyMarkdown: submission.bodyMarkdown,
+    reportExportId: submission.reportExportId,
     manualFields: submission.manualFields as Record<string, string>,
     attachments: await loadSubmissionAttachments(app.db, submission),
     currentApproval:
@@ -181,6 +188,16 @@ export async function loadSubmissionDetail(
     plannedNextContactAt: submission.plannedNextContactAt,
     agreedDisclosureAt: submission.agreedDisclosureAt,
     vendorReference: submission.vendorReference,
+    latestPackage:
+      latestPackage === undefined
+        ? null
+        : {
+            id: latestPackage.id,
+            manifestSha256: latestPackage.manifestSha256,
+            packageSha256: latestPackage.packageSha256,
+            sizeBytes: latestPackage.sizeBytes,
+            createdAt: latestPackage.createdAt,
+          },
   };
 }
 

@@ -91,6 +91,16 @@ const api: CodeVaultDesktopApi = {
       subscribe<UploadProgress>(IPC_CHANNELS.uploadsProgress, listener),
   },
 
+  submissions: {
+    downloadManualBundle: (submissionId: string) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.submissionsDownloadManualBundle,
+        submissionId,
+      ) as ReturnType<
+        CodeVaultDesktopApi["submissions"]["downloadManualBundle"]
+      >,
+  },
+
   ai: {
     providers: () =>
       ipcRenderer.invoke(IPC_CHANNELS.aiProviders) as ReturnType<

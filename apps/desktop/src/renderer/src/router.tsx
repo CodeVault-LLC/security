@@ -22,6 +22,7 @@ import {
   SettingsRoute,
 } from "./routes/misc.js";
 import { ReportDetailRoute } from "./routes/report-detail.js";
+import { SubmissionDetailRoute } from "./routes/submission-detail.js";
 import { VendorDetailRoute, VendorsRoute } from "./routes/vendors.js";
 
 /**
@@ -127,6 +128,15 @@ const reportDetailRoute = createRoute({
   },
 });
 
+const submissionDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/submissions/$submissionId",
+  component: function SubmissionDetailPage() {
+    const { submissionId } = useParams({ from: "/submissions/$submissionId" });
+    return <SubmissionDetailRoute submissionId={submissionId} />;
+  },
+});
+
 const disclosureRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/disclosure",
@@ -169,6 +179,7 @@ const routeTree = rootRoute.addChildren([
   vendorDetailRoute,
   reportsRoute,
   reportDetailRoute,
+  submissionDetailRoute,
   disclosureRoute,
   activityRoute,
   metricsRoute,

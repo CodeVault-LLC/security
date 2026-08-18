@@ -111,6 +111,10 @@ export const queryKeys = {
   reportExports: (id: string) => ["report", id, "exports"] as const,
   reportTemplates: ["report-templates"] as const,
   disclosure: (caseId: string) => ["disclosure", caseId] as const,
+  submissions: (caseId: string) => ["submissions", caseId] as const,
+  submission: (id: string) => ["submission", id] as const,
+  submissionValidation: (id: string) =>
+    ["submission", id, "validation"] as const,
   priorArt: (findingId: string) => ["prior-art", findingId] as const,
   aiRuns: (filters: Record<string, unknown>) => ["ai-runs", filters] as const,
   aiPolicies: ["ai-policies"] as const,

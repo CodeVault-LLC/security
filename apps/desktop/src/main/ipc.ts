@@ -1,3 +1,5 @@
+import { writeFile } from "node:fs/promises";
+
 import { app, dialog, ipcMain, shell, type BrowserWindow } from "electron";
 
 import type {
@@ -5,6 +7,8 @@ import type {
   AiRunWithProposals,
   LoginResponse,
   PreparedAiRun,
+  SubmissionPackage,
+  SubmissionSealIntent,
 } from "@codevault/contracts";
 
 import {
@@ -18,6 +22,7 @@ import { ApiError, type ApiClient } from "./api-client.js";
 import type { ProviderRegistry } from "./agents/registry.js";
 import { DEFAULT_ENVIRONMENT_ALLOWLIST } from "./agents/types.js";
 import { hashSelection, runUploads } from "./file-uploads.js";
+import { buildAndSealManualPackage } from "./submissions/manual-package.js";
 import { isExternalUrlAllowed } from "./security.js";
 import type { SessionStore } from "./session-store.js";
 
@@ -293,6 +298,69 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       });
 
       return { ok: true as const, data: artifactIds };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.submissionsDownloadManualBundle, async (payload) => {
+    if (
+      typeof payload !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        payload,
+      )
+    ) {
+      return failure(new Error("invalid submission id"));
+    }
+
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+
+    const destination = await dialog.showSaveDialog(window, {
+      title: "Save sealed manual submission",
+      defaultPath: `codevault-submission-${payload.slice(0, 8)}.zip`,
+      filters: [{ name: "ZIP archive", extensions: ["zip"] }],
+      properties: ["createDirectory", "showOverwriteConfirmation"],
+    });
+    if (destination.canceled || destination.filePath === undefined) {
+      return {
+        ok: true as const,
+        data: { saved: false, packageId: null, sha256: null },
+      };
+    }
+
+    try {
+      const intent = await apiClient.request<SubmissionSealIntent>(
+        `/v1/submissions/${payload}/seal-intent`,
+        { method: "POST" },
+      );
+      const result = await buildAndSealManualPackage({
+        intent,
+        fetchImpl: async (url, init) =>
+          fetch(url, {
+            ...(init?.method === undefined ? {} : { method: init.method }),
+            ...(init?.headers === undefined ? {} : { headers: init.headers }),
+            ...(init?.body === undefined
+              ? {}
+              : { body: Buffer.from(init.body) }),
+          }),
+        beforeUpload: async (bytes) => {
+          await writeFile(destination.filePath!, bytes, { mode: 0o600 });
+        },
+        complete: (body) =>
+          apiClient.request<SubmissionPackage>(
+            `/v1/submissions/${payload}/seal`,
+            { method: "POST", body },
+          ),
+      });
+      return {
+        ok: true as const,
+        data: {
+          saved: true,
+          packageId: result.packageId,
+          sha256: result.sha256,
+        },
+      };
     } catch (error: unknown) {
       return failure(error);
     }

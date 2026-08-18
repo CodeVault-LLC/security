@@ -105,6 +105,7 @@ export const SubmissionDetail = Type.Object({
   ...SubmissionSummary.properties,
   routeSnapshot: SubmissionRouteSnapshot,
   bodyMarkdown: Markdown,
+  reportExportId: Type.Union([Uuid, Type.Null()]),
   manualFields: Type.Record(
     Type.String({ pattern: "^[a-z][a-z0-9_]*$" }),
     Type.String({ maxLength: 200_000 }),
@@ -114,6 +115,19 @@ export const SubmissionDetail = Type.Object({
   plannedNextContactAt: Type.Union([Timestamp, Type.Null()]),
   agreedDisclosureAt: Type.Union([Timestamp, Type.Null()]),
   vendorReference: Type.Union([Type.String({ maxLength: 300 }), Type.Null()]),
+  latestPackage: Type.Union([
+    Type.Object(
+      {
+        id: Uuid,
+        manifestSha256: Sha256,
+        packageSha256: Sha256,
+        sizeBytes: Type.Integer({ minimum: 1 }),
+        createdAt: Timestamp,
+      },
+      { additionalProperties: false },
+    ),
+    Type.Null(),
+  ]),
 });
 
 export type SubmissionDetail = Static<typeof SubmissionDetail>;

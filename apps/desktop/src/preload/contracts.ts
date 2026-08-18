@@ -73,6 +73,12 @@ export interface StartUploadRequest {
   selections: UploadSelection[];
 }
 
+export interface ManualBundleResult {
+  saved: boolean;
+  packageId: string | null;
+  sha256: string | null;
+}
+
 /**
  * What the renderer may say about a run.
  *
@@ -124,6 +130,13 @@ export interface CodeVaultDesktopApi {
     onProgress(listener: (progress: UploadProgress) => void): () => void;
   };
 
+  submissions: {
+    /** Builds, verifies, seals, and saves one manual disclosure bundle. */
+    downloadManualBundle(
+      submissionId: string,
+    ): Promise<ApiOutcome<ManualBundleResult>>;
+  };
+
   ai: {
     /** Detected local providers and their versions. */
     providers(): Promise<AiProviderStatus[]>;
@@ -167,6 +180,7 @@ export const IPC_CHANNELS = {
   uploadsSelect: "uploads:select",
   uploadsStart: "uploads:start",
   uploadsProgress: "uploads:progress",
+  submissionsDownloadManualBundle: "submissions:download-manual-bundle",
   aiProviders: "ai:providers",
   aiPreviewContext: "ai:preview-context",
   aiRun: "ai:run",
