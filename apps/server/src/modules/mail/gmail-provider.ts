@@ -50,6 +50,7 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
         response.status === 408 ||
           response.status === 429 ||
           response.status >= 500,
+        response.status,
       );
     }
     const text = await response.text();
@@ -279,6 +280,30 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
       if (typeof data.raw !== "string")
         throw new Error("Gmail omitted the raw message.");
       return base64UrlDecode(data.raw);
+    },
+
+    async getProfileHistoryId(accessToken): Promise<string> {
+      const data = await authenticated(
+        accessToken,
+        "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+      );
+      if (typeof data.historyId !== "string") {
+        throw new Error("Gmail omitted the profile history cursor.");
+      }
+      return data.historyId;
+    },
+
+    async getThreadMessageIds(accessToken, threadId): Promise<string[]> {
+      const url = new URL(
+        `https://gmail.googleapis.com/gmail/v1/users/me/threads/${encodeURIComponent(threadId)}`,
+      );
+      url.searchParams.set("format", "minimal");
+      const data = await authenticated(accessToken, url.toString());
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      return messages.flatMap((value) => {
+        const row = asObject(value);
+        return typeof row.id === "string" ? [row.id] : [];
+      });
     },
 
     async startWatch(accessToken, topicName) {

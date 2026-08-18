@@ -36,6 +36,7 @@ describe("Gmail configuration", () => {
     expect(config.gmail.enabled).toBe(true);
     if (config.gmail.enabled) {
       expect(config.gmail.tokenKeyring.keys.get(1)?.byteLength).toBe(32);
+      expect(config.gmail.pubsub).toBeNull();
     }
   });
 

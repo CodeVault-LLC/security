@@ -16,6 +16,7 @@ describe("Gmail connection routes", () => {
       clientSecret: "test-secret",
       redirectUri: "https://codevault.test/v1/mail/gmail/callback",
       tokenKeyring: { activeVersion: 1, keys: new Map([[1, randomBytes(32)]]) },
+      pubsub: null,
     };
     harness.app.mailProviders.register({
       id: "gmail",
@@ -68,6 +69,12 @@ describe("Gmail connection routes", () => {
       },
       async getMessageRaw() {
         return new Uint8Array();
+      },
+      async getProfileHistoryId() {
+        return "1";
+      },
+      async getThreadMessageIds() {
+        return [];
       },
       async startWatch() {
         return {

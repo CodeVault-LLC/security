@@ -46,6 +46,7 @@ const PUBLIC_ROUTES = new Set([
   "POST:/v1/invites/accept",
   "GET:/health",
   "GET:/v1/mail/gmail/callback",
+  "POST:/v1/mail/gmail/pubsub",
 ]);
 
 export async function buildApp(

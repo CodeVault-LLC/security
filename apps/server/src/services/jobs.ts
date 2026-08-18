@@ -19,6 +19,8 @@ export const JOB_QUEUES = {
   intelligenceRefresh: "intelligence-refresh",
   artifactDelete: "artifact-delete",
   gmailSend: "gmail-send",
+  gmailSync: "gmail-sync",
+  gmailWatchRenewal: "gmail-watch-renewal",
 } as const;
 
 export type JobQueueName = (typeof JOB_QUEUES)[keyof typeof JOB_QUEUES];
@@ -58,6 +60,14 @@ export interface GmailSendJobData {
   deliveryId: string;
 }
 
+export interface GmailSyncJobData {
+  connectionId?: string;
+}
+
+export interface GmailWatchRenewalJobData {
+  connectionId?: string;
+}
+
 export interface JobPayloadMap {
   "prior-art-check": PriorArtJobData;
   "report-pdf": ReportPdfJobData;
@@ -65,6 +75,8 @@ export interface JobPayloadMap {
   "intelligence-refresh": IntelligenceRefreshJobData;
   "artifact-delete": ArtifactDeleteJobData;
   "gmail-send": GmailSendJobData;
+  "gmail-sync": GmailSyncJobData;
+  "gmail-watch-renewal": GmailWatchRenewalJobData;
 }
 
 export interface JobQueue {

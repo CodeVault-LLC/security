@@ -56,6 +56,11 @@ export interface ServerConfig {
         clientSecret: string;
         redirectUri: string;
         tokenKeyring: TokenKeyring;
+        pubsub: null | {
+          topicName: string;
+          audience: string;
+          serviceAccountEmail: string;
+        };
       };
 }
 
@@ -161,6 +166,27 @@ export function loadConfig(env: Environment = process.env): ServerConfig {
         required(env, "MAIL_TOKEN_KEYRING"),
         integer(env, "MAIL_ACTIVE_TOKEN_KEY_VERSION", 1),
       ),
+      pubsub: (() => {
+        const values = {
+          topicName: optional(env, "GMAIL_PUBSUB_TOPIC"),
+          audience: optional(env, "GMAIL_PUBSUB_AUDIENCE"),
+          serviceAccountEmail: optional(
+            env,
+            "GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL",
+          ),
+        };
+        if (Object.values(values).every((value) => value === null)) return null;
+        if (Object.values(values).some((value) => value === null)) {
+          throw new ConfigError(
+            "Gmail Pub/Sub requires GMAIL_PUBSUB_TOPIC, GMAIL_PUBSUB_AUDIENCE, and GMAIL_PUBSUB_SERVICE_ACCOUNT_EMAIL together.",
+          );
+        }
+        return values as {
+          topicName: string;
+          audience: string;
+          serviceAccountEmail: string;
+        };
+      })(),
     };
   }
 

@@ -1,5 +1,7 @@
 import { and, eq, gt, isNull } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { Type } from "@sinclair/typebox";
+import { createHmac } from "node:crypto";
 
 import {
   ErrorResponse,
@@ -20,6 +22,10 @@ import {
   gmailScopes,
 } from "./gmail-oauth.js";
 import { decryptSecret, encryptSecret } from "./token-crypto.js";
+import {
+  decodePubSubNotification,
+  verifyGooglePushToken,
+} from "./gmail-notifications.js";
 
 const ConnectionList = Type.Object({ items: Type.Array(MailboxConnection) });
 const CallbackQuery = Type.Object({
@@ -27,6 +33,19 @@ const CallbackQuery = Type.Object({
   state: Uuid,
 });
 const ConnectionParam = Type.Object({ id: Uuid });
+const PubSubEnvelope = Type.Object(
+  {
+    message: Type.Object(
+      {
+        messageId: Type.String({ minLength: 1, maxLength: 500 }),
+        data: Type.String({ minLength: 1, maxLength: 8_192 }),
+      },
+      { additionalProperties: true },
+    ),
+    subscription: Type.Optional(Type.String({ maxLength: 1_000 })),
+  },
+  { additionalProperties: true },
+);
 
 function connectionView(row: typeof schema.mailboxConnections.$inferSelect) {
   return {
@@ -55,6 +74,84 @@ function gmailConfig(app: AppInstance) {
 }
 
 export async function registerMailRoutes(app: AppInstance): Promise<void> {
+  app.post(
+    "/v1/mail/gmail/pubsub",
+    {
+      schema: { body: PubSubEnvelope },
+      config: { rateLimit: { max: 1_000, timeWindow: "1 minute" } },
+    },
+    async (request, reply) => {
+      const config = gmailConfig(app);
+      if (config.pubsub === null) {
+        throw new DomainError(
+          "PROVIDER_UNAVAILABLE",
+          "Gmail push notifications are disabled.",
+        );
+      }
+      const authorization = request.headers.authorization;
+      if (authorization === undefined || !authorization.startsWith("Bearer ")) {
+        throw new DomainError(
+          "PERMISSION_DENIED",
+          "A verified Pub/Sub identity is required.",
+        );
+      }
+      try {
+        await verifyGooglePushToken(authorization.slice(7), {
+          audience: config.pubsub.audience,
+          serviceAccountEmail: config.pubsub.serviceAccountEmail,
+        });
+      } catch {
+        throw new DomainError(
+          "PERMISSION_DENIED",
+          "The Pub/Sub identity could not be verified.",
+        );
+      }
+      const notification = decodePubSubNotification(request.body);
+      const [connection] = await app.db
+        .select()
+        .from(schema.mailboxConnections)
+        .where(
+          and(
+            eq(schema.mailboxConnections.provider, "gmail"),
+            eq(schema.mailboxConnections.status, "ACTIVE"),
+            sql`lower(${schema.mailboxConnections.emailAddress}) = ${notification.emailAddress}`,
+            sql`${schema.mailboxConnections.capabilities} @> '["TRACK_REPLIES"]'::jsonb`,
+          ),
+        )
+        .limit(1);
+      // Acknowledge unknown mailboxes without revealing whether an address is connected.
+      if (connection === undefined) return reply.status(204).send(null);
+      const emailHash = createHmac(
+        "sha256",
+        config.tokenKeyring.keys.get(config.tokenKeyring.activeVersion)!,
+      )
+        .update(notification.emailAddress)
+        .digest("hex");
+      await app.db
+        .insert(schema.mailboxSyncEvents)
+        .values({
+          mailboxConnectionId: connection.id,
+          notificationId: notification.notificationId,
+          emailAddressHash: emailHash,
+          historyId: notification.historyId,
+          outcome: "ENQUEUED",
+        })
+        .onConflictDoNothing();
+      const queued = await app.jobs.send(
+        "gmail-sync",
+        { connectionId: connection.id },
+        { singletonKey: `${connection.id}:${notification.notificationId}` },
+      );
+      if (queued === null) {
+        throw new DomainError(
+          "JOB_FAILED",
+          "Could not queue Gmail synchronization.",
+        );
+      }
+      return reply.status(204).send(null);
+    },
+  );
+
   app.get(
     "/v1/mail/connections",
     { schema: { response: { 200: ConnectionList } } },

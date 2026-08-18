@@ -26,6 +26,7 @@ export class MailProviderError extends Error {
     readonly category: string,
     message: string,
     readonly deliveryAmbiguous: boolean,
+    readonly status: number | null = null,
   ) {
     super(message);
     this.name = "MailProviderError";
@@ -74,6 +75,8 @@ export interface MailProvider {
     messageId: string,
   ): Promise<ProviderMessageMetadata>;
   getMessageRaw(accessToken: string, messageId: string): Promise<Uint8Array>;
+  getProfileHistoryId(accessToken: string): Promise<string>;
+  getThreadMessageIds(accessToken: string, threadId: string): Promise<string[]>;
   startWatch(
     accessToken: string,
     topicName: string,

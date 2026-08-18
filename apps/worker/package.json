@@ -19,7 +19,9 @@
     "@codevault/reporting": "workspace:*",
     "@codevault/server": "workspace:*",
     "@codevault/standards": "workspace:*",
+    "@types/mailparser": "3.4.6",
     "drizzle-orm": "^0.45.2",
+    "mailparser": "3.9.15",
     "pg-boss": "^12.27.0",
     "playwright": "^1.62.1",
     "sharp": "^0.35.3"

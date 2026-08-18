@@ -392,6 +392,30 @@ export const correspondenceMessages = pgTable(
   ],
 );
 
+export const correspondenceMessageAttachments = pgTable(
+  "correspondence_message_attachments",
+  {
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => correspondenceMessages.id, { onDelete: "cascade" }),
+    artifactId: uuid("artifact_id")
+      .notNull()
+      .references(() => artifacts.id),
+    position: integer("position").notNull(),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("correspondence_message_attachments_artifact_key").on(
+      table.messageId,
+      table.artifactId,
+    ),
+    uniqueIndex("correspondence_message_attachments_position_key").on(
+      table.messageId,
+      table.position,
+    ),
+  ],
+);
+
 export const submissionsRelations = relations(submissions, ({ one, many }) => ({
   case: one(cases, { fields: [submissions.caseId], references: [cases.id] }),
   vendor: one(vendors, {
