@@ -427,6 +427,15 @@ export async function runGmailSend(
           providerMessageId: result.providerMessageId,
           providerThreadId: result.providerThreadId,
           rfcMessageId: row.pkg.rfcMessageId!,
+          inReplyTo:
+            (row.pkg.manifest as { threading?: { inReplyTo: string } | null })
+              .threading?.inReplyTo ?? null,
+          references:
+            (
+              row.pkg.manifest as {
+                threading?: { references: string[] } | null;
+              }
+            ).threading?.references ?? [],
           fromAddress: row.delivery.senderAddress!,
           toAddresses: row.delivery.recipients.to,
           ccAddresses: row.delivery.recipients.cc,

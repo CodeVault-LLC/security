@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFile, stat, writeFile } from "node:fs/promises";
 
 import { app, dialog, ipcMain, shell, type BrowserWindow } from "electron";
@@ -11,6 +11,7 @@ import type {
   SubmissionPackage,
   SubmissionDelivery,
   SubmissionSendIntent,
+  CorrespondenceDecryptIntent,
   SubmissionSealIntent,
 } from "@codevault/contracts";
 
@@ -28,6 +29,7 @@ import { hashSelection, runUploads } from "./file-uploads.js";
 import { buildAndSealManualPackage } from "./submissions/manual-package.js";
 import { buildAndSealEmailPackage } from "./submissions/package-builder.js";
 import type { SigningKeyStore } from "./crypto/signing-key-store.js";
+import { decryptPgpMimeMessage } from "./crypto/openpgp-message.js";
 import {
   isExternalUrlAllowed,
   isProtectedNativeOnlyApiPath,
@@ -551,6 +553,69 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
         { method: "POST" },
       );
       return { ok: true as const, data: delivery };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.correspondenceDecrypt, async (payload) => {
+    if (
+      typeof payload !== "string" ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(payload)
+    ) {
+      return failure(new Error("invalid correspondence id"));
+    }
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+    try {
+      const intent = await apiClient.request<CorrespondenceDecryptIntent>(
+        `/v1/correspondence/${payload}/decrypt-intent`,
+      );
+      const confirmation = await dialog.showMessageBox(window, {
+        type: "warning",
+        buttons: ["Decrypt locally", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        title: "Decrypt vendor correspondence",
+        message: "Decrypt this message on this workstation?",
+        detail: `From: ${intent.from}\nSubject (not encrypted): ${intent.subject}\n\nPlaintext will be shown in the app temporarily. It is not saved unless you explicitly save the reviewed plaintext to the case.`,
+        noLink: true,
+      });
+      if (confirmation.response !== 0) {
+        return failure(
+          new ApiError(400, "VALIDATION", "Decryption cancelled.", null, null),
+        );
+      }
+      const keys = await signingKeys.list();
+      if (keys.length !== 1)
+        throw new Error("Select exactly one local private key.");
+      if (keys[0]!.encrypted) {
+        throw new Error(
+          "Encrypted private keys require an interactive passphrase and cannot yet be used.",
+        );
+      }
+      const armoredKey = await signingKeys.armored(keys[0]!.fingerprint);
+      if (armoredKey === null)
+        throw new Error("The selected private key is unavailable.");
+      const response = await fetch(intent.downloadUrl, {
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!response.ok)
+        throw new Error("The encrypted message could not be downloaded.");
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (
+        bytes.byteLength !== intent.sizeBytes ||
+        createHash("sha256").update(bytes).digest("hex") !== intent.sha256
+      ) {
+        throw new Error(
+          "The encrypted message failed its digest or size check.",
+        );
+      }
+      const opened = await decryptPgpMimeMessage(bytes, armoredKey);
+      return {
+        ok: true as const,
+        data: { messageId: payload, ...opened },
+      };
     } catch (error: unknown) {
       return failure(error);
     }

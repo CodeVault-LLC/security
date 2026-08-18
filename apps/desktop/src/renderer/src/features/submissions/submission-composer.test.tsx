@@ -56,6 +56,7 @@ const submission: SubmissionDetail = {
   bodyMarkdown: "Details",
   reportExportId: null,
   mailboxConnectionId: null,
+  replyToMessageId: null,
   manualFields: {},
   attachments: [],
   currentApproval: null,

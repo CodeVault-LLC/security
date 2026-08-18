@@ -1158,6 +1158,9 @@ export async function registerSubmissionRoutes(
               mailboxConnectionId: mailbox.id,
               provider: "gmail",
               status: "QUEUED",
+              providerThreadId:
+                (pkg.manifest as SubmissionPackageManifest).threading
+                  ?.providerThreadId ?? null,
               senderAddress: mailbox.emailAddress,
               recipients: { to: snapshot.route.to, cc: snapshot.route.cc },
               routeSnapshot: snapshot,

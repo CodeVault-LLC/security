@@ -23,6 +23,7 @@ import { ManualDeliveryPanel } from "../features/submissions/manual-delivery-pan
 import { PackageReview } from "../features/submissions/package-review.js";
 import { SubmissionComposer } from "../features/submissions/submission-composer.js";
 import { SubmissionValidator } from "../features/submissions/submission-validator.js";
+import { CorrespondenceThread } from "../features/submissions/correspondence-thread.js";
 import { bridge } from "../lib/bridge.js";
 import {
   errorHeading,
@@ -211,6 +212,11 @@ export function SubmissionDetailRoute({
                 },
               )
             }
+          />
+          <CorrespondenceThread
+            submissionId={submission.id}
+            submissionStatus={submission.status}
+            submissionRevision={submission.revision}
           />
           <Card>
             <CardHeader>

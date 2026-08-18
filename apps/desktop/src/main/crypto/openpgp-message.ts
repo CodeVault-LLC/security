@@ -1,11 +1,14 @@
 import { createHash } from "node:crypto";
 
 import MailComposer from "nodemailer/lib/mail-composer/index.js";
+import { simpleParser } from "mailparser";
 import {
   createMessage,
+  decrypt,
   encrypt,
   readKey,
   readPrivateKey,
+  readMessage,
   type PrivateKey,
 } from "openpgp";
 
@@ -14,6 +17,52 @@ export interface MimeAttachment {
   mimeType: string;
   bytes: Uint8Array;
   sha256: string;
+}
+
+export interface DecryptedPgpMimeMessage {
+  bodyText: string;
+  attachmentCount: number;
+}
+
+/** Decrypts one RFC 3156 payload locally and returns text only, never HTML. */
+export async function decryptPgpMimeMessage(
+  raw: Uint8Array,
+  armoredPrivateKey: string,
+): Promise<DecryptedPgpMimeMessage> {
+  if (raw.byteLength > 100 * 1024 * 1024) {
+    throw new Error("Encrypted message is too large to decrypt safely.");
+  }
+  const text = Buffer.from(raw).toString("utf8");
+  const begin = text.indexOf("-----BEGIN PGP MESSAGE-----");
+  const endMarker = "-----END PGP MESSAGE-----";
+  const end = text.indexOf(endMarker, begin);
+  if (
+    begin < 0 ||
+    end < begin ||
+    text.indexOf("-----BEGIN PGP MESSAGE-----", begin + 1) >= 0
+  ) {
+    throw new Error(
+      "The message does not contain exactly one OpenPGP payload.",
+    );
+  }
+  const opened = await decrypt({
+    message: await readMessage({
+      armoredMessage: text.slice(begin, end + endMarker.length),
+    }),
+    decryptionKeys: await readPrivateKey({ armoredKey: armoredPrivateKey }),
+    format: "binary",
+  });
+  const parsed = await simpleParser(Buffer.from(opened.data), {
+    skipHtmlToText: false,
+    skipTextToHtml: true,
+    skipImageLinks: true,
+    skipTextLinks: true,
+    maxHtmlLengthToParse: 1_000_000,
+  });
+  return {
+    bodyText: (parsed.text ?? "").trim().slice(0, 1_000_000),
+    attachmentCount: parsed.attachments.length,
+  };
 }
 
 export interface BuildPgpMimeInput {
@@ -27,6 +76,10 @@ export interface BuildPgpMimeInput {
   recipientPublicKeys: string[];
   signingPrivateKey?: string | PrivateKey | null;
   messageId: string;
+  threading?: {
+    inReplyTo: string;
+    references: string[];
+  } | null;
   date?: Date;
 }
 
@@ -71,6 +124,12 @@ function outerHeaders(input: BuildPgpMimeInput): string[] {
     `Subject: ${header(input.subject)}`,
     `Date: ${(input.date ?? new Date()).toUTCString()}`,
     `Message-ID: ${header(input.messageId)}`,
+    ...(input.threading === undefined || input.threading === null
+      ? []
+      : [
+          `In-Reply-To: ${header(input.threading.inReplyTo)}`,
+          `References: ${input.threading.references.map(header).join(" ")}`,
+        ]),
     "MIME-Version: 1.0",
   ];
 }
@@ -89,6 +148,12 @@ export async function buildPgpMimeMessage(
       cc: input.cc,
       subject: input.subject,
       messageId: input.messageId,
+      ...(input.threading === undefined || input.threading === null
+        ? {}
+        : {
+            inReplyTo: input.threading.inReplyTo,
+            references: input.threading.references,
+          }),
       date: input.date ?? new Date(),
       text: input.bodyText,
       attachments: input.attachments.map((attachment) => ({

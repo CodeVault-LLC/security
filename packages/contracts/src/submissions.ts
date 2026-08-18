@@ -107,6 +107,7 @@ export const SubmissionDetail = Type.Object({
   bodyMarkdown: Markdown,
   reportExportId: Type.Union([Uuid, Type.Null()]),
   mailboxConnectionId: Type.Union([Uuid, Type.Null()]),
+  replyToMessageId: Type.Union([Uuid, Type.Null()]),
   manualFields: Type.Record(
     Type.String({ pattern: "^[a-z][a-z0-9_]*$" }),
     Type.String({ maxLength: 200_000 }),
@@ -217,6 +218,23 @@ export const SubmissionPackageManifest = Type.Object(
     cryptoMode: CryptoModeSchema,
     publicKeyFingerprint: Type.Union([
       Type.String({ pattern: "^(?:[0-9A-F]{40}|[0-9A-F]{64})$" }),
+      Type.Null(),
+    ]),
+    threading: Type.Union([
+      Type.Object(
+        {
+          providerThreadId: Type.String({ minLength: 1, maxLength: 500 }),
+          inReplyTo: Type.String({
+            maxLength: 998,
+            pattern: "^<[^\\r\\n<>]+>$",
+          }),
+          references: Type.Array(
+            Type.String({ maxLength: 998, pattern: "^<[^\\r\\n<>]+>$" }),
+            { maxItems: 100 },
+          ),
+        },
+        { additionalProperties: false },
+      ),
       Type.Null(),
     ]),
     sources: Type.Array(PackageSourceReference),
@@ -341,6 +359,14 @@ export const SubmissionDelivery = Type.Object(
 
 export type SubmissionDelivery = Static<typeof SubmissionDelivery>;
 
+export const CreateSubmissionReplyDraftRequest = Type.Object(
+  {
+    messageId: Type.Optional(Uuid),
+    expectedRevision: RevisionField,
+  },
+  { additionalProperties: false },
+);
+
 export const SubmissionValidationResult = Type.Object({
   submissionId: Uuid,
   revision: RevisionField,
@@ -391,9 +417,12 @@ export const CorrespondenceMessage = Type.Object(
     subject: MailSubject,
     bodyText: Type.Union([Type.String({ maxLength: 1_000_000 }), Type.Null()]),
     encrypted: Type.Boolean(),
+    rawArtifactId: Uuid,
+    attachments: Type.Array(SubmissionAttachment),
     classification: MessageClassificationSchema,
     receivedAt: Type.Union([Timestamp, Type.Null()]),
     sentAt: Type.Union([Timestamp, Type.Null()]),
+    reviewedPlaintextSavedAt: Type.Union([Timestamp, Type.Null()]),
     createdAt: Timestamp,
     revision: RevisionField,
   },
@@ -401,3 +430,56 @@ export const CorrespondenceMessage = Type.Object(
 );
 
 export type CorrespondenceMessage = Static<typeof CorrespondenceMessage>;
+
+export const CorrespondenceThread = Type.Object(
+  {
+    items: Type.Array(CorrespondenceMessage),
+    sync: Type.Union([
+      Type.Object({
+        status: Type.String({ maxLength: 100 }),
+        lastSuccessfulSyncAt: Type.Union([Timestamp, Type.Null()]),
+        watchExpiresAt: Type.Union([Timestamp, Type.Null()]),
+        errorCategory: Type.Union([
+          Type.String({ maxLength: 100 }),
+          Type.Null(),
+        ]),
+      }),
+      Type.Null(),
+    ]),
+  },
+  { additionalProperties: false },
+);
+
+export type CorrespondenceThread = Static<typeof CorrespondenceThread>;
+
+export const UpdateCorrespondenceClassificationRequest = Type.Object(
+  {
+    classification: MessageClassificationSchema,
+    expectedRevision: RevisionField,
+  },
+  { additionalProperties: false },
+);
+
+export const SaveReviewedPlaintextRequest = Type.Object(
+  {
+    bodyText: Type.String({ minLength: 1, maxLength: 1_000_000 }),
+    expectedRevision: RevisionField,
+  },
+  { additionalProperties: false },
+);
+
+export const CorrespondenceDecryptIntent = Type.Object(
+  {
+    messageId: Uuid,
+    subject: MailSubject,
+    from: Type.String({ maxLength: 320 }),
+    downloadUrl: Type.String({ minLength: 1, maxLength: 4_096 }),
+    sha256: Sha256,
+    sizeBytes: Type.Integer({ minimum: 1 }),
+  },
+  { additionalProperties: false },
+);
+
+export type CorrespondenceDecryptIntent = Static<
+  typeof CorrespondenceDecryptIntent
+>;

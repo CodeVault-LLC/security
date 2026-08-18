@@ -127,6 +127,14 @@ const api: CodeVaultDesktopApi = {
       ) as ReturnType<CodeVaultDesktopApi["signingKeys"]["remove"]>,
   },
 
+  correspondence: {
+    decrypt: (messageId: string) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.correspondenceDecrypt,
+        messageId,
+      ) as ReturnType<CodeVaultDesktopApi["correspondence"]["decrypt"]>,
+  },
+
   ai: {
     providers: () =>
       ipcRenderer.invoke(IPC_CHANNELS.aiProviders) as ReturnType<

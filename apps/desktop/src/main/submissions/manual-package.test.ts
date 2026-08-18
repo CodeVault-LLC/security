@@ -60,6 +60,7 @@ const intent: SubmissionSealIntent = {
     attachments: [],
     cryptoMode: "PLAIN",
     publicKeyFingerprint: null,
+    threading: null,
     sources: [],
     createdAt: "2026-08-18T12:00:00.000Z",
   },

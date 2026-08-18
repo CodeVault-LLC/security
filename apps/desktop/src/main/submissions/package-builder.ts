@@ -82,6 +82,7 @@ export async function buildAndSealEmailPackage(
         : [options.intent.publicKey.armoredKey],
     signingPrivateKey: options.signingPrivateKey ?? null,
     messageId: options.messageId,
+    threading: options.intent.manifest.threading,
     ...(options.date === undefined ? {} : { date: options.date }),
   });
   if (

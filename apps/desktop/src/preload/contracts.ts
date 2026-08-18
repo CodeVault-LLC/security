@@ -89,6 +89,12 @@ export interface SigningKeySummary {
   persistent: boolean;
 }
 
+export interface DecryptedCorrespondence {
+  messageId: string;
+  bodyText: string;
+  attachmentCount: number;
+}
+
 /**
  * What the renderer may say about a run.
  *
@@ -157,6 +163,11 @@ export interface CodeVaultDesktopApi {
     remove(fingerprint: string): Promise<ApiOutcome<{ ok: true }>>;
   };
 
+  correspondence: {
+    /** Decrypts only after native confirmation; plaintext is memory-only. */
+    decrypt(messageId: string): Promise<ApiOutcome<DecryptedCorrespondence>>;
+  };
+
   ai: {
     /** Detected local providers and their versions. */
     providers(): Promise<AiProviderStatus[]>;
@@ -206,6 +217,7 @@ export const IPC_CHANNELS = {
   signingKeysList: "signing-keys:list",
   signingKeysImport: "signing-keys:import",
   signingKeysRemove: "signing-keys:remove",
+  correspondenceDecrypt: "correspondence:decrypt",
   aiProviders: "ai:providers",
   aiPreviewContext: "ai:preview-context",
   aiRun: "ai:run",

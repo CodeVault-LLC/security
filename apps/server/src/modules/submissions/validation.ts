@@ -92,6 +92,7 @@ export interface SubmissionValidationInput {
   disclosureAllowed: boolean;
   tlpAllowsVendor: boolean;
   checkedAt: string;
+  isReply?: boolean;
 }
 
 export interface SubmissionValidationOutcome {
@@ -113,14 +114,14 @@ export function validateSubmission(
   };
   const route = input.routeSnapshot.route;
 
-  if (!input.approvedVendorReport) {
+  if (input.isReply !== true && !input.approvedVendorReport) {
     add(
       "BLOCKING",
       "VENDOR_REPORT_NOT_APPROVED",
       "reportExportId",
       "Approve the vendor report before preparing a delivery package.",
     );
-  } else if (!input.completedReportExport) {
+  } else if (input.isReply !== true && !input.completedReportExport) {
     add(
       "BLOCKING",
       "VENDOR_REPORT_EXPORT_INCOMPLETE",
@@ -174,7 +175,9 @@ export function validateSubmission(
     );
   }
 
-  for (const required of route.type === "EMAIL" ? route.requiredFields : []) {
+  for (const required of route.type === "EMAIL" && input.isReply !== true
+    ? route.requiredFields
+    : []) {
     if (input.requiredFieldContent[required] !== true) {
       add(
         "BLOCKING",

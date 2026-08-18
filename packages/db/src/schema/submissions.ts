@@ -63,6 +63,7 @@ export const submissions = pgTable(
       () => mailboxConnections.id,
       { onDelete: "set null" },
     ),
+    replyToMessageId: uuid("reply_to_message_id"),
     reportExportId: uuid("report_export_id").references(
       () => reportExports.id,
       { onDelete: "set null" },
@@ -412,6 +413,28 @@ export const correspondenceMessageAttachments = pgTable(
     uniqueIndex("correspondence_message_attachments_position_key").on(
       table.messageId,
       table.position,
+    ),
+  ],
+);
+
+export const correspondenceMessageRevisions = pgTable(
+  "correspondence_message_revisions",
+  {
+    id: primaryId(),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => correspondenceMessages.id, { onDelete: "cascade" }),
+    revision: integer("revision").notNull(),
+    bodyText: text("body_text").notNull(),
+    reviewedBy: uuid("reviewed_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("correspondence_message_revisions_key").on(
+      table.messageId,
+      table.revision,
     ),
   ],
 );

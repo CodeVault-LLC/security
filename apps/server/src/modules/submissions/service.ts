@@ -84,7 +84,10 @@ export async function loadSubmissionAttachments(
     toAttachment(artifact, link.sourceRevision),
   );
 
-  if (submission.reportExportId !== null) {
+  if (
+    submission.reportExportId !== null &&
+    submission.replyToMessageId === null
+  ) {
     const [reportArtifact] = await db
       .select({ artifact: schema.artifacts, report: schema.reports })
       .from(schema.reportExports)
@@ -170,6 +173,7 @@ export async function loadSubmissionDetail(
     bodyMarkdown: submission.bodyMarkdown,
     reportExportId: submission.reportExportId,
     mailboxConnectionId: submission.mailboxConnectionId,
+    replyToMessageId: submission.replyToMessageId,
     manualFields: submission.manualFields as Record<string, string>,
     attachments: await loadSubmissionAttachments(app.db, submission),
     currentApproval:
@@ -344,6 +348,7 @@ export async function evaluateSubmission(
     disclosureAllowed: researchCase?.disclosureEnabled === true,
     tlpAllowsVendor: reportExport?.report.audience === "VENDOR",
     checkedAt,
+    isReply: submission.replyToMessageId !== null,
   };
   const result = validateSubmission(input);
 
@@ -452,6 +457,24 @@ export async function buildManifest(
       sha256: item.sha256,
     })),
   ];
+  const replyTo =
+    submission.replyToMessageId === null
+      ? undefined
+      : await app.db.query.correspondenceMessages.findFirst({
+          where: (messages, { and, eq }) =>
+            and(
+              eq(messages.id, submission.replyToMessageId!),
+              eq(messages.submissionId, submission.id),
+            ),
+        });
+  if (
+    submission.replyToMessageId !== null &&
+    (replyTo === undefined || replyTo.providerThreadId === null)
+  ) {
+    throw conflict(
+      "The selected reply message no longer has Gmail threading metadata.",
+    );
+  }
   if (key !== undefined) {
     sources.push({
       kind: "VENDOR_KEY",
@@ -487,6 +510,16 @@ export async function buildManifest(
       attachments,
       cryptoMode: submission.cryptoMode,
       publicKeyFingerprint: key?.fingerprint ?? null,
+      threading:
+        replyTo === undefined || replyTo.providerThreadId === null
+          ? null
+          : {
+              providerThreadId: replyTo.providerThreadId,
+              inReplyTo: replyTo.rfcMessageId,
+              references: [
+                ...new Set([...replyTo.references, replyTo.rfcMessageId]),
+              ].slice(-100),
+            },
       sources,
       createdAt: new Date().toISOString(),
     },
