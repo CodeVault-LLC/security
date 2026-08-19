@@ -5,6 +5,26 @@
 key with `openssl rand -base64 32`; store it in the deployment secret manager,
 never in source control, logs, shell history, tickets, or database backups.
 
+The value is deliberately strict: each Base64 value must be the unmodified
+44-character output of `openssl rand -base64 32`, including its trailing `=`.
+Do not use URL-safe Base64, remove the padding, add whitespace, or include more
+than one `:` in an entry. A valid single-key value has this shape:
+
+```sh
+MFA_ENCRYPTION_KEYS=v1:<output-of-openssl-rand--base64-32>
+```
+
+For multiple keys, put the new active key first and separate entries with a
+comma, with no spaces:
+
+```sh
+MFA_ENCRYPTION_KEYS=v2:<new-key>,v1:<previous-key>
+```
+
+The repository's `.env.example` intentionally leaves this required secret
+unset. Generate and store a distinct key rather than copying a shared example
+value.
+
 ## Rotation
 
 1. Back up PostgreSQL and confirm restore procedures.
