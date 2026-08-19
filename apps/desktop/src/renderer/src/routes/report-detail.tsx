@@ -602,6 +602,7 @@ function SectionWorkspace({
           <div className="min-h-0 flex-1 overflow-hidden">
             <MarkdownEditor
               ref={editorRef}
+              ariaLabel={`${section.title} report section`}
               value={draft}
               onChange={(next) => {
                 onError(null);

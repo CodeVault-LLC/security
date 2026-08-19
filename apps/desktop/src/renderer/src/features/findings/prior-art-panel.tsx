@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
   EmptyState,
+  LoadingState,
   Mono,
   PriorArtBadge,
 } from "@codevault/ui";
@@ -123,7 +124,6 @@ export function PriorArtPanel({
 
   return (
     <div className="space-y-4 p-4">
-      <QueryError query={checks} />
       <Card>
         <CardHeader>
           <CardTitle>Prior art</CardTitle>
@@ -138,7 +138,7 @@ export function PriorArtPanel({
                     onError: (mutationError) => setError(mutationError.message),
                   })
                 }
-                disabled={startCheck.isPending}
+                loading={startCheck.isPending}
               >
                 {latest === undefined ? (
                   <ShieldQuestion aria-hidden className="size-3" />
@@ -155,10 +155,31 @@ export function PriorArtPanel({
           <CardBody className="text-[12px] text-danger">{error}</CardBody>
         )}
 
-        {latest === undefined ? (
+        {checks.error !== null ? (
+          <QueryError query={checks} className="m-3" />
+        ) : checks.isLoading ? (
+          <LoadingState label="Loading prior-art checks…" />
+        ) : latest === undefined ? (
           <EmptyState
             title="No prior-art check has been run"
             description="Search this workspace's findings and the external advisory databases for anything describing the same issue."
+            action={
+              canEdit ? (
+                <Button
+                  variant="primary"
+                  loading={startCheck.isPending}
+                  onClick={() =>
+                    startCheck.mutate(undefined, {
+                      onError: (mutationError) =>
+                        setError(mutationError.message),
+                    })
+                  }
+                >
+                  <ShieldQuestion aria-hidden className="size-3.5" />
+                  Check prior art
+                </Button>
+              ) : undefined
+            }
           />
         ) : (
           <CardBody className="space-y-3">

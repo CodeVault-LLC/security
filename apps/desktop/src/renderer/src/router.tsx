@@ -29,6 +29,7 @@ import {
   OrganizationUsersRoute,
 } from "./routes/organization.js";
 import {
+  PersonalAiRoute,
   PersonalAppearanceRoute,
   PersonalMailRoute,
   PersonalProfileRoute,
@@ -79,6 +80,11 @@ const caseDetailRoute = createRoute({
 const findingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/findings",
+  validateSearch: (search: Record<string, unknown>) => ({
+    assetId: typeof search.assetId === "string" ? search.assetId : undefined,
+    assetName:
+      typeof search.assetName === "string" ? search.assetName : undefined,
+  }),
   component: FindingsRoute,
 });
 
@@ -95,6 +101,12 @@ const findingDetailRoute = createRoute({
 const assetsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/assets",
+  validateSearch: (search: Record<string, unknown>) => ({
+    vendorId: typeof search.vendorId === "string" ? search.vendorId : undefined,
+    vendorName:
+      typeof search.vendorName === "string" ? search.vendorName : undefined,
+    create: search.create === true || search.create === "true",
+  }),
   component: AssetsRoute,
 });
 
@@ -187,6 +199,12 @@ const appearanceSettingsRoute = createRoute({
   component: PersonalAppearanceRoute,
 });
 
+const aiSettingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/settings/ai",
+  component: PersonalAiRoute,
+});
+
 const securitySettingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings/security",
@@ -250,6 +268,7 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
   profileSettingsRoute,
   appearanceSettingsRoute,
+  aiSettingsRoute,
   securitySettingsRoute,
   mailSettingsRoute,
   accountRoute,

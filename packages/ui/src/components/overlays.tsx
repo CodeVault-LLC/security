@@ -119,11 +119,11 @@ export const TabsList = forwardRef<
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
 >(function TabsList({ className, ...props }, ref) {
   return (
-    <div className="shrink-0 border-b border-border px-4 py-2.5">
+    <div className="shrink-0 overflow-x-auto border-b border-border px-4 py-2.5">
       <TabsPrimitive.List
         ref={ref}
         className={cn(
-          "inline-flex items-center gap-0.5 rounded-(--cv-radius-lg) border border-border",
+          "inline-flex min-w-max items-center gap-0.5 rounded-(--cv-radius-lg) border border-border",
           "bg-surface-raised p-0.5",
           className,
         )}
@@ -142,7 +142,7 @@ export const TabsTrigger = forwardRef<
       ref={ref}
       className={cn(
         "relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-(--cv-radius)",
-        "px-3 py-1 text-[12px] font-medium text-text-muted",
+        "min-h-9 px-3 py-1 text-[12px] font-medium text-text-muted",
         "transition-[background-color,color] duration-100",
         "hover:bg-surface-hover hover:text-text",
         "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
@@ -281,7 +281,7 @@ export function Select({
       <SelectPrimitive.Trigger
         aria-label={ariaLabel}
         className={cn(
-          "group flex h-7 w-full items-center justify-between gap-1.5",
+          "group flex h-10 w-full items-center justify-between gap-1.5",
           "rounded-(--cv-radius) border border-border bg-surface px-2",
           "text-left text-[13px] text-text",
           "transition-[background-color,border-color] duration-100",

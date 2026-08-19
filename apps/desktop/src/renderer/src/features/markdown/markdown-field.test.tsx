@@ -21,7 +21,12 @@ function renderField(props: Partial<Parameters<typeof MarkdownField>[0]> = {}) {
 
   return render(
     <QueryClientProvider client={client}>
-      <MarkdownField value="" draftKey="test:field" {...props} />
+      <MarkdownField
+        ariaLabel="Test Markdown"
+        value=""
+        draftKey="test:field"
+        {...props}
+      />
     </QueryClientProvider>,
   );
 }
@@ -171,17 +176,35 @@ describe("autosave", () => {
     });
   });
 
-  /**
-   * Once saved, the local copy is redundant. Leaving it behind means the next
-   * visit offers to "recover" text that is already stored.
-   */
-  it("clears the local draft once it has been saved", async () => {
+  it("keeps the local draft until the server value catches up", async () => {
     const user = userEvent.setup();
+    const onSave = vi.fn();
 
     writeDraft("test:field", "recovered");
-    renderField({ value: "stored", onSave: vi.fn(), autosaveMs: 50 });
+    const view = renderField({
+      value: "stored",
+      onSave,
+      autosaveMs: 50,
+    });
 
     await user.click(screen.getByRole("button", { name: "Restore" }));
+
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith("recovered");
+      expect(readDraft("test:field")?.text).toBe("recovered");
+    });
+
+    view.rerender(
+      <QueryClientProvider client={new QueryClient()}>
+        <MarkdownField
+          ariaLabel="Test Markdown"
+          value="recovered"
+          draftKey="test:field"
+          onSave={vi.fn()}
+          autosaveMs={50}
+        />
+      </QueryClientProvider>,
+    );
 
     await waitFor(() => {
       expect(readDraft("test:field")).toBeNull();
@@ -235,6 +258,12 @@ describe("read-only", () => {
 });
 
 describe("toolbar", () => {
+  it("gives the editor an accessible name", () => {
+    renderField({ value: "" });
+
+    expect(screen.getByRole("textbox", { name: "Test Markdown" })).toBeTruthy();
+  });
+
   it("offers the formatting actions a writer reaches for", () => {
     renderField({ value: "" });
 

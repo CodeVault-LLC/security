@@ -39,4 +39,5 @@ and is consumed before the secret is issued.
 
 The bootstrap CLI refuses to print its TOTP seed, provisioning URI, or recovery
 codes to a captured stderr unless the operator explicitly supplies
-`--allow-noninteractive-secret-output`.
+`--allow-noninteractive-secret-output`. On an interactive terminal it renders
+the provisioning URI as a QR code and prints the manual secret as a fallback.

@@ -332,6 +332,43 @@ describeIntegration("vendor directory routes", () => {
     expect(asset.legacyVendorName).toBeNull();
   });
 
+  it("filters the asset directory by linked vendor ID", async () => {
+    const vendor = await createVendor();
+    const otherVendor = await createVendor();
+
+    const linked = await harness.app.inject({
+      method: "POST",
+      url: "/v1/assets",
+      headers: author.headers,
+      payload: {
+        name: "Vendor-filtered appliance",
+        kind: "DEVICE",
+        vendorId: vendor.id,
+      },
+    });
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/assets",
+      headers: author.headers,
+      payload: {
+        name: "Other vendor appliance",
+        kind: "DEVICE",
+        vendorId: otherVendor.id,
+      },
+    });
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: `/v1/assets?vendorId=${vendor.id}`,
+      headers: author.headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(
+      response.json<{ items: AssetDetail[] }>().items.map((item) => item.id),
+    ).toEqual([linked.json<AssetDetail>().id]);
+  });
+
   it("does not let a read-only member mutate an asset linked to a restricted case", async () => {
     const reader = await harness.createUser({ role: "MEMBER" });
     const caseResponse = await harness.app.inject({

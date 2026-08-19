@@ -43,10 +43,10 @@ const buttonVariants = cva(
           "bg-transparent text-danger border border-danger/40 hover:bg-danger/10 active:bg-danger/20",
       },
       size: {
-        sm: "h-6 px-2 text-[12px]",
-        md: "h-7 px-2.5",
-        lg: "h-9 px-4",
-        icon: "h-7 w-7 p-0",
+        sm: "h-9 px-3 text-[12px]",
+        md: "h-10 px-3",
+        lg: "h-11 px-4",
+        icon: "h-10 w-10 p-0",
       },
     },
     defaultVariants: { variant: "secondary", size: "md" },
@@ -158,8 +158,8 @@ export const Input = forwardRef<
     <input
       ref={ref}
       className={cn(
-        "h-7 w-full rounded-(--cv-radius) border border-border bg-surface px-2 text-[13px]",
-        "placeholder:text-text-muted focus-visible:border-focus focus-visible:outline-none",
+        "h-10 w-full rounded-(--cv-radius) border border-border bg-surface px-3 text-[13px]",
+        "placeholder:text-text-muted focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
         "disabled:cursor-not-allowed disabled:opacity-60",
         className,
       )}
@@ -176,8 +176,8 @@ export const Textarea = forwardRef<
     <textarea
       ref={ref}
       className={cn(
-        "w-full rounded-(--cv-radius) border border-border bg-surface px-2 py-1.5 text-[13px]",
-        "placeholder:text-text-muted focus-visible:border-focus focus-visible:outline-none",
+        "w-full rounded-(--cv-radius) border border-border bg-surface px-3 py-2 text-[13px]",
+        "placeholder:text-text-muted focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
         className,
       )}
       {...props}
@@ -221,10 +221,7 @@ export function CardTitle({
 }: HTMLAttributes<HTMLHeadingElement>): React.JSX.Element {
   return (
     <h2
-      className={cn(
-        "text-[12px] font-semibold uppercase tracking-[0.08em] text-text-muted",
-        className,
-      )}
+      className={cn("text-[13px] font-semibold text-text", className)}
       {...props}
     />
   );
@@ -256,10 +253,7 @@ export function Label({
 }: LabelHTMLAttributes<HTMLLabelElement>): React.JSX.Element {
   return (
     <label
-      className={cn(
-        "block text-[11px] font-medium uppercase tracking-[0.07em] text-text-muted",
-        className,
-      )}
+      className={cn("block text-[12px] font-medium text-text-muted", className)}
       {...props}
     />
   );

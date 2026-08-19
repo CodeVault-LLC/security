@@ -188,7 +188,7 @@ export function RouteEditor({
         className="max-w-3xl"
       >
         <DialogBody className="max-h-[70vh] space-y-3 overflow-y-auto">
-          <div className="grid grid-cols-[1fr_180px] gap-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_220px]">
             <div>
               <Label htmlFor="route-name">Route name</Label>
               <Input
@@ -199,19 +199,31 @@ export function RouteEditor({
               />
             </div>
             <div>
-              <Label htmlFor="route-type">Type</Label>
-              <select
-                id="route-type"
-                className="mt-1 h-7 w-full rounded-(--cv-radius) border border-border bg-surface px-2 text-[13px]"
-                value={type}
-                disabled={route !== undefined}
-                onChange={(event) =>
-                  setType(event.target.value as "EMAIL" | "MANUAL")
-                }
+              <Label>Type</Label>
+              <div
+                role="group"
+                aria-label="Disclosure route type"
+                className="mt-1 grid grid-cols-2 rounded-(--cv-radius) border border-border bg-surface-raised p-0.5"
               >
-                <option value="EMAIL">Email</option>
-                <option value="MANUAL">Manual portal</option>
-              </select>
+                <Button
+                  type="button"
+                  variant={type === "EMAIL" ? "primary" : "ghost"}
+                  disabled={route !== undefined}
+                  aria-pressed={type === "EMAIL"}
+                  onClick={() => setType("EMAIL")}
+                >
+                  Email
+                </Button>
+                <Button
+                  type="button"
+                  variant={type === "MANUAL" ? "primary" : "ghost"}
+                  disabled={route !== undefined}
+                  aria-pressed={type === "MANUAL"}
+                  onClick={() => setType("MANUAL")}
+                >
+                  Manual portal
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -250,7 +262,7 @@ export function RouteEditor({
             />
           )}
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div>
               <Label htmlFor="route-ack">Acknowledgement (business days)</Label>
               <Input
@@ -346,7 +358,7 @@ interface EmailFieldsProps {
 function EmailFields(props: EmailFieldsProps): React.JSX.Element {
   return (
     <div className="space-y-3 rounded-(--cv-radius) border border-border p-3">
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <Label htmlFor="route-to">To (comma-separated)</Label>
           <Input
@@ -379,12 +391,12 @@ function EmailFields(props: EmailFieldsProps): React.JSX.Element {
           case reference.
         </p>
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
           <Label htmlFor="route-encryption">Encryption policy</Label>
           <select
             id="route-encryption"
-            className="mt-1 h-7 w-full rounded-(--cv-radius) border border-border bg-surface px-2 text-[13px]"
+            className="mt-1 h-10 w-full rounded-(--cv-radius) border border-border bg-surface px-3 text-[13px] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
             value={props.encryptionPolicy}
             onChange={(event) =>
               props.setEncryptionPolicy(
@@ -401,7 +413,7 @@ function EmailFields(props: EmailFieldsProps): React.JSX.Element {
           <Label htmlFor="route-key">Verified public key</Label>
           <select
             id="route-key"
-            className="mt-1 h-7 w-full rounded-(--cv-radius) border border-border bg-surface px-2 text-[13px]"
+            className="mt-1 h-10 w-full rounded-(--cv-radius) border border-border bg-surface px-3 text-[13px] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
             value={props.publicKeyId}
             onChange={(event) => props.setPublicKeyId(event.target.value)}
           >
@@ -520,7 +532,7 @@ function ManualFields(props: ManualFieldsProps): React.JSX.Element {
         {props.fields.map((field, index) => (
           <div
             key={`${field.key}-${index}`}
-            className="grid grid-cols-[1fr_1fr_130px_auto] gap-1"
+            className="grid grid-cols-1 gap-2 border-b border-border pb-3 sm:grid-cols-[1fr_1fr_130px_auto] sm:border-0 sm:pb-0"
           >
             <Input
               aria-label={`Field ${index + 1} key`}
@@ -540,7 +552,7 @@ function ManualFields(props: ManualFieldsProps): React.JSX.Element {
             />
             <select
               aria-label={`Field ${index + 1} source`}
-              className="h-7 rounded-(--cv-radius) border border-border bg-surface px-1 text-[11px]"
+              className="h-10 rounded-(--cv-radius) border border-border bg-surface px-2 text-[12px] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
               value={field.submissionField ?? ""}
               onChange={(event) =>
                 update(index, {
@@ -591,7 +603,7 @@ function ManualFields(props: ManualFieldsProps): React.JSX.Element {
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div>
           <Label htmlFor="route-extensions">Accepted extensions</Label>
           <Input

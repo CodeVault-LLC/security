@@ -9,12 +9,14 @@ import {
 import { useState } from "react";
 
 import type {
+  AssetSummary,
   VendorDetail,
   VendorRoute,
   VendorSummary,
 } from "@codevault/contracts";
 import {
   Button,
+  AssetKindIcon,
   Card,
   CardBody,
   CardHeader,
@@ -22,6 +24,7 @@ import {
   EmptyState,
   ErrorState,
   Input,
+  InlineError,
   LoadingState,
   Mono,
 } from "@codevault/ui";
@@ -30,6 +33,7 @@ import { PageHeader } from "../components/app-shell.js";
 import { PublicKeyPanel } from "../features/vendors/public-key-panel.js";
 import { RouteEditor } from "../features/vendors/route-editor.js";
 import { VendorDialog } from "../features/vendors/vendor-dialog.js";
+import { useDebouncedValue } from "../hooks/use-debounced-value.js";
 import { errorHeading, queryKeys, useApiQuery } from "../lib/api.js";
 import { formatDate } from "../lib/dates.js";
 import { humanise } from "../lib/format.js";
@@ -40,14 +44,22 @@ interface VendorPage {
   nextCursor: string | null;
 }
 
+interface AssetPage {
+  items: AssetSummary[];
+  nextCursor: string | null;
+}
+
 export function VendorsRoute(): React.JSX.Element {
   const user = useSession((state) => state.user);
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [limit, setLimit] = useState(200);
+  const debouncedQuery = useDebouncedValue(query, 220);
   const vendors = useApiQuery<VendorPage>(
-    queryKeys.vendors({ query }),
-    `/v1/vendors?limit=200${query.trim().length === 0 ? "" : `&query=${encodeURIComponent(query.trim())}`}`,
+    queryKeys.vendors({ query: debouncedQuery, limit }),
+    `/v1/vendors?limit=${limit}${debouncedQuery.trim().length === 0 ? "" : `&query=${encodeURIComponent(debouncedQuery.trim())}`}`,
   );
+  const editable = canWrite(user);
 
   return (
     <div className="flex h-full flex-col">
@@ -55,7 +67,7 @@ export function VendorsRoute(): React.JSX.Element {
         title="Vendors"
         description="Organizations, disclosure routes, response expectations, and independently verified public keys."
         actions={
-          canWrite(user) ? (
+          editable ? (
             <Button variant="primary" onClick={() => setCreateOpen(true)}>
               <Plus aria-hidden className="size-3.5" />
               New vendor
@@ -63,7 +75,7 @@ export function VendorsRoute(): React.JSX.Element {
           ) : undefined
         }
       />
-      <div className="border-b border-border p-3">
+      <div className="flex items-center gap-3 border-b border-border p-3">
         <Input
           aria-label="Search vendors"
           value={query}
@@ -71,6 +83,11 @@ export function VendorsRoute(): React.JSX.Element {
           placeholder="Search by name or reference"
           className="max-w-md"
         />
+        <span className="ml-auto text-[11px] text-text-muted" role="status">
+          {vendors.isFetching && vendors.data !== undefined
+            ? "Updating…"
+            : `${vendors.data?.items.length ?? 0} vendor${vendors.data?.items.length === 1 ? "" : "s"}`}
+        </span>
       </div>
       {vendors.isLoading ? (
         <LoadingState label="Loading vendors…" />
@@ -78,11 +95,40 @@ export function VendorsRoute(): React.JSX.Element {
         <ErrorState
           title={errorHeading(vendors.error)}
           description={vendors.error.message}
+          action={
+            <Button
+              variant="secondary"
+              loading={vendors.isFetching}
+              onClick={() => void vendors.refetch()}
+            >
+              Try again
+            </Button>
+          }
         />
       ) : (vendors.data?.items.length ?? 0) === 0 ? (
         <EmptyState
-          title="No vendors found"
-          description="Add a vendor before creating a disclosure route."
+          title={
+            query.trim().length > 0 ? "No vendors match" : "No vendors yet"
+          }
+          description={
+            query.trim().length > 0
+              ? "Clear the search to return to the full vendor directory."
+              : editable
+                ? "Add a vendor before creating a disclosure route."
+                : "No vendors are available to you. An editor can add the first vendor."
+          }
+          action={
+            query.trim().length > 0 ? (
+              <Button variant="secondary" onClick={() => setQuery("")}>
+                Clear search
+              </Button>
+            ) : editable ? (
+              <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                <Plus aria-hidden className="size-3.5" />
+                New vendor
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -91,26 +137,37 @@ export function VendorsRoute(): React.JSX.Element {
               <li key={vendor.id}>
                 <Link
                   to={`/vendors/${vendor.id}`}
-                  className="flex items-center gap-3 px-4 py-2 hover:bg-surface-hover"
+                  className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-2.5 hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus lg:grid-cols-[8rem_minmax(12rem,1fr)_auto_10rem]"
                 >
-                  <Mono className="w-24 shrink-0 text-[11px] text-text-muted">
+                  <Mono className="text-[11px] text-text-muted max-lg:row-start-2">
                     {vendor.ref}
                   </Mono>
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-medium">
+                  <span className="min-w-0 truncate text-[13px] font-medium max-lg:col-span-2 max-lg:row-start-1">
                     {vendor.name}
                   </span>
                   {vendor.builtIn ? (
-                    <span className="rounded border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] text-warning">
-                      Starter data — verify before use
+                    <span className="text-[11px] text-warning">
+                      Verify before use
                     </span>
                   ) : null}
-                  <span className="w-36 shrink-0 text-right text-[11px] text-text-muted">
+                  <span className="shrink-0 text-right text-[11px] text-text-muted">
                     Reviewed {formatDate(vendor.sourceReviewedAt)}
                   </span>
                 </Link>
               </li>
             ))}
           </ul>
+          {vendors.data?.nextCursor === null ? null : (
+            <div className="flex justify-center border-t border-border p-3">
+              <Button
+                variant="secondary"
+                loading={vendors.isFetching}
+                onClick={() => setLimit((current) => current + 200)}
+              >
+                Load more vendors
+              </Button>
+            </div>
+          )}
         </div>
       )}
       <VendorDialog open={createOpen} onOpenChange={setCreateOpen} />
@@ -128,6 +185,10 @@ export function VendorDetailRoute({
     queryKeys.vendor(vendorId),
     `/v1/vendors/${vendorId}`,
   );
+  const linkedAssets = useApiQuery<AssetPage>(
+    queryKeys.assets({ vendorId, preview: true }),
+    `/v1/assets?vendorId=${encodeURIComponent(vendorId)}&limit=5`,
+  );
   const [routeEditorOpen, setRouteEditorOpen] = useState(false);
   const [editingRoute, setEditingRoute] = useState<VendorRoute | undefined>();
 
@@ -138,6 +199,15 @@ export function VendorDetailRoute({
         title={errorHeading(vendor.error)}
         description={
           vendor.error?.message ?? "That vendor could not be loaded."
+        }
+        action={
+          <Button
+            variant="secondary"
+            loading={vendor.isFetching}
+            onClick={() => void vendor.refetch()}
+          >
+            Try again
+          </Button>
         }
       />
     );
@@ -150,6 +220,20 @@ export function VendorDetailRoute({
       <PageHeader
         title={data.name}
         description={`${data.ref} · ${data.assetCount} linked asset${data.assetCount === 1 ? "" : "s"}`}
+        actions={
+          editable ? (
+            <Button
+              variant="primary"
+              onClick={() => {
+                setEditingRoute(undefined);
+                setRouteEditorOpen(true);
+              }}
+            >
+              <Plus aria-hidden className="size-3.5" />
+              Add disclosure route
+            </Button>
+          ) : undefined
+        }
       />
       <div className="min-h-0 flex-1 overflow-y-auto p-4">
         {data.builtIn ? (
@@ -189,41 +273,116 @@ export function VendorDetailRoute({
           </Card>
           <Card>
             <CardHeader>
-              <CardTitle>Assets</CardTitle>
-            </CardHeader>
-            <CardBody>
-              <p className="text-[13px]">
-                {data.assetCount} linked asset{data.assetCount === 1 ? "" : "s"}
-              </p>
-              <p className="mt-1 text-[11px] text-text-muted">
-                Assets point to this vendor by immutable ID. A route is selected
-                when preparing each submission, not permanently on the asset.
-              </p>
-              <Button asChild size="sm" className="mt-3">
-                <Link to="/assets">View assets</Link>
+              <CardTitle>Linked assets</CardTitle>
+              <Button asChild variant="ghost" size="sm">
+                <Link
+                  to="/assets"
+                  search={{ vendorId: data.id, vendorName: data.name }}
+                >
+                  View all
+                </Link>
               </Button>
-            </CardBody>
+            </CardHeader>
+            {linkedAssets.error !== null ? (
+              <CardBody className="space-y-2">
+                <InlineError>
+                  Linked assets could not be loaded.{" "}
+                  {linkedAssets.error.message}
+                </InlineError>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  loading={linkedAssets.isFetching}
+                  onClick={() => void linkedAssets.refetch()}
+                >
+                  Try again
+                </Button>
+              </CardBody>
+            ) : linkedAssets.isLoading ? (
+              <LoadingState label="Loading linked assets…" className="py-4" />
+            ) : (linkedAssets.data?.items.length ?? 0) === 0 ? (
+              <CardBody className="space-y-3">
+                <p className="text-[12px] text-text-muted">
+                  No assets currently point to this vendor.
+                </p>
+                {editable ? (
+                  <Button asChild variant="secondary" size="sm">
+                    <Link
+                      to="/assets"
+                      search={{
+                        vendorId: data.id,
+                        vendorName: data.name,
+                        create: true,
+                      }}
+                    >
+                      <Plus aria-hidden className="size-3.5" />
+                      New linked asset
+                    </Link>
+                  </Button>
+                ) : null}
+              </CardBody>
+            ) : (
+              <>
+                <ul className="divide-y divide-border">
+                  {linkedAssets.data?.items.map((asset) => (
+                    <li key={asset.id}>
+                      <Link
+                        to={`/assets/${asset.id}`}
+                        className="grid min-h-12 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 px-3 py-2 text-[12px] hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
+                      >
+                        <AssetKindIcon kind={asset.kind} />
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">
+                            {asset.name}
+                          </span>
+                          <Mono className="text-[10.5px] text-text-muted">
+                            {asset.ref}
+                          </Mono>
+                        </span>
+                        <span className="text-[11px] text-text-muted">
+                          {asset.findingCount} finding
+                          {asset.findingCount === 1 ? "" : "s"}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+                <CardBody className="border-t border-border py-2 text-[11px] text-text-muted">
+                  Showing {linkedAssets.data?.items.length ?? 0} of{" "}
+                  {data.assetCount} linked asset
+                  {data.assetCount === 1 ? "" : "s"}. Disclosure routes are
+                  selected per submission, not on the asset.
+                </CardBody>
+              </>
+            )}
           </Card>
           <Card className="xl:col-span-2">
             <CardHeader>
               <CardTitle>Disclosure routes</CardTitle>
-              {editable ? (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setEditingRoute(undefined);
-                    setRouteEditorOpen(true);
-                  }}
-                >
-                  <Plus aria-hidden className="size-3.5" />
-                  Add route
-                </Button>
-              ) : null}
             </CardHeader>
             {data.routes.length === 0 ? (
-              <CardBody className="text-[12px] text-text-muted">
-                No disclosure routes recorded.
-              </CardBody>
+              <EmptyState
+                title="No disclosure routes recorded"
+                description={
+                  editable
+                    ? "Add the official email or manual portal used for coordinated disclosure."
+                    : "A workspace editor must add and verify the vendor's disclosure route."
+                }
+                action={
+                  editable ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setEditingRoute(undefined);
+                        setRouteEditorOpen(true);
+                      }}
+                    >
+                      <Plus aria-hidden className="size-3.5" />
+                      Add disclosure route
+                    </Button>
+                  ) : undefined
+                }
+              />
             ) : (
               <div className="divide-y divide-border">
                 {data.routes.map((route) => (
@@ -308,7 +467,7 @@ function RouteRecord({
 }): React.JSX.Element {
   return (
     <div className="p-3 text-[12px]">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         {route.type === "EMAIL" ? (
           <Mail aria-hidden className="size-4 text-text-muted" />
         ) : (
@@ -318,7 +477,7 @@ function RouteRecord({
         <span className={route.active ? "text-success" : "text-warning"}>
           {route.active ? "Active" : "Disabled — retained for history"}
         </span>
-        <span className="ml-auto text-[11px] text-text-muted">
+        <span className="w-full text-[11px] text-text-muted lg:ml-auto lg:w-auto">
           Ack {route.acknowledgementBusinessDays} business days
           {route.updateCadenceDays === null
             ? ""
@@ -331,7 +490,7 @@ function RouteRecord({
         ) : null}
       </div>
       {route.type === "EMAIL" ? (
-        <div className="mt-2 grid grid-cols-[120px_1fr] gap-1 text-[11px]">
+        <div className="mt-2 grid grid-cols-1 gap-1 text-[11px] sm:grid-cols-[120px_1fr]">
           <span className="text-text-muted">Recipients</span>
           <span>
             {route.to.join(", ")}

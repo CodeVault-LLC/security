@@ -1,6 +1,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 
+import { runMigrations } from "@codevault/db";
+
 /**
  * Starts the whole development stack.
  *
@@ -106,8 +108,21 @@ function start({ name, directory }: DevProcess): void {
   });
 }
 
-for (const definition of running) {
-  start(definition);
+async function main(): Promise<void> {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error("DATABASE_URL is not set.");
+  }
+
+  console.log("database │ applying migrations");
+  const migrations = await runMigrations(connectionString);
+  console.log(
+    `database │ ready (${migrations.applied.length} applied, ${migrations.skipped.length} already present)`,
+  );
+
+  for (const definition of running) {
+    start(definition);
+  }
 }
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -115,3 +130,10 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     stopAll(signal);
   });
 }
+
+main().catch((error: unknown) => {
+  console.error(
+    `database │ migration failed: ${error instanceof Error ? error.message : String(error)}`,
+  );
+  process.exitCode = 1;
+});

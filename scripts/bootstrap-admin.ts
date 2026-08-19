@@ -4,9 +4,15 @@ import { createInterface } from "node:readline/promises";
 import { pathToFileURL } from "node:url";
 
 import { sql } from "drizzle-orm";
+import * as QRCode from "qrcode";
 
 import { uuidv7 } from "@codevault/core/crypto";
-import { createDatabase, schema, type Database } from "@codevault/db";
+import {
+  createDatabase,
+  runMigrations,
+  schema,
+  type Database,
+} from "@codevault/db";
 
 import { hashPassword } from "../apps/server/src/auth/password.js";
 import {
@@ -59,6 +65,23 @@ export function assertSecretOutputIsSafe(
       "Refusing to print enrollment secrets without --allow-noninteractive-secret-output.",
     );
   }
+}
+
+export async function renderTotpEnrollment(
+  enrollment: TotpEnrollment,
+): Promise<string> {
+  const qrCode = await QRCode.toString(enrollment.provisioningUri, {
+    type: "terminal",
+    errorCorrectionLevel: "M",
+    margin: 1,
+    small: true,
+  });
+
+  return [
+    "Scan this QR code with your authenticator app:",
+    qrCode.trimEnd(),
+    `If scanning fails, enter this secret manually: ${enrollment.manualSecret}`,
+  ].join("\n");
 }
 
 export function parseArguments(
@@ -263,6 +286,11 @@ async function main(): Promise<void> {
     parsed.allowNoninteractiveSecretOutput,
   );
 
+  const migrations = await runMigrations(connectionString);
+  if (migrations.applied.length > 0) {
+    console.warn(`Applied ${migrations.applied.length} database migrations.`);
+  }
+
   const password = await promptHidden("Password: ");
   if ((await promptHidden("Confirm password: ")) !== password) {
     console.error("The passwords did not match.");
@@ -270,8 +298,7 @@ async function main(): Promise<void> {
     return;
   }
   const enrollment = createTotpEnrollment(parsed.organization, parsed.email);
-  console.warn(`Manual authenticator secret: ${enrollment.manualSecret}`);
-  console.warn(`Provisioning URI: ${enrollment.provisioningUri}`);
+  console.warn(await renderTotpEnrollment(enrollment));
   const totpToken = await promptHidden("Authenticator code: ");
   const handle = createDatabase({ connectionString });
   try {

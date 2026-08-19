@@ -46,6 +46,7 @@ export interface MarkdownEditorHandle {
 }
 
 export interface MarkdownEditorProps {
+  ariaLabel: string;
   value: string;
   onChange: (value: string) => void;
   readOnly?: boolean;
@@ -62,6 +63,7 @@ export const MarkdownEditor = forwardRef<
   MarkdownEditorProps
 >(function MarkdownEditor(
   {
+    ariaLabel,
     value,
     onChange,
     readOnly = false,
@@ -160,6 +162,7 @@ export const MarkdownEditor = forwardRef<
       highlightActiveLine(),
       markdown(),
       editorTheme,
+      EditorView.contentAttributes.of({ "aria-label": ariaLabel }),
       EditorView.lineWrapping,
       ...(placeholder === undefined ? [] : [placeholderExtension(placeholder)]),
       keymap.of([
@@ -259,7 +262,7 @@ export const MarkdownEditor = forwardRef<
     // The editor is created once per mount; external value changes are applied
     // through the effect below so local typing is never interrupted.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [readOnly, showLineNumbers, placeholder]);
+  }, [ariaLabel, readOnly, showLineNumbers, placeholder]);
 
   useEffect(() => {
     const view = viewRef.current;

@@ -1,4 +1,5 @@
 import { Eye, Sparkles } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
 import type {
@@ -14,19 +15,20 @@ import type {
 } from "@codevault/contracts";
 import {
   Button,
-  ButtonGroup,
   cn,
   Dialog,
   DialogBody,
   DialogContent,
   DialogFooter,
   InlineError,
+  LoadingState,
   Mono,
   Select,
   VisibilityBadge,
 } from "@codevault/ui";
 
 import { bridge } from "../../lib/bridge.js";
+import { useAiProviderPreference } from "../../hooks/use-ai-provider-preference.js";
 import {
   configuredAiProviderStatuses,
   normalizeAiProviderStatuses,
@@ -82,22 +84,34 @@ export function AiToolbar({
   onCompleted,
   disabled = false,
   className,
-}: AiToolbarProps): React.JSX.Element | null {
+}: AiToolbarProps): React.JSX.Element {
   const [runningAction, setRunningAction] = useState<AiActionId | null>(null);
+  const [selectedAction, setSelectedAction] = useState<AiActionId | null>(
+    actions[0]?.id ?? null,
+  );
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<AiContextPreview | null>(null);
   const [previewFor, setPreviewFor] = useState<AiActionId | null>(null);
   const [model, setModel] = useState<AiModelId | null>(null);
   const [effort, setEffort] = useState<AiEffort | null>(null);
-  const [providerId, setProviderId] = useState<AiProviderId | null>(null);
+  const { providerId, setProviderId } = useAiProviderPreference();
   const [providers, setProviders] = useState<AiProviderStatus[] | null>(null);
+  const [providerError, setProviderError] = useState<string | null>(null);
+  const [providerRetry, setProviderRetry] = useState(0);
 
   useEffect(() => {
     void bridge()
       .ai.providers()
       .then((statuses) => setProviders(normalizeAiProviderStatuses(statuses)))
-      .catch(() => setProviders([]));
-  }, []);
+      .catch((caught: unknown) => {
+        setProviders([]);
+        setProviderError(
+          caught instanceof Error
+            ? caught.message
+            : "The desktop AI provider service did not respond.",
+        );
+      });
+  }, [providerRetry]);
 
   const policies = useApiQuery<{ items: AiProviderPolicy[] }>(
     queryKeys.aiPolicies,
@@ -145,6 +159,12 @@ export function AiToolbar({
       }
 
       onCompleted(outcome.data);
+    } catch (caught: unknown) {
+      setError(
+        caught instanceof Error
+          ? `AI draft could not start. ${caught.message}`
+          : "AI draft could not start. Try again.",
+      );
     } finally {
       setRunningAction(null);
     }
@@ -154,74 +174,181 @@ export function AiToolbar({
     if (provider === undefined) return;
 
     setError(null);
+    setPreview(null);
     setPreviewFor(action);
 
-    const outcome = await bridge().ai.previewContext({
-      action,
-      targetType,
-      targetId,
-      providerId: provider.providerId,
-      ...preferences,
-    });
+    try {
+      const outcome = await bridge().ai.previewContext({
+        action,
+        targetType,
+        targetId,
+        providerId: provider.providerId,
+        ...preferences,
+      });
 
-    if (!outcome.ok) {
-      setError(outcome.message);
+      if (!outcome.ok) {
+        setError(outcome.message);
+        setPreviewFor(null);
+
+        return;
+      }
+
+      setPreview(outcome.data);
+    } catch (caught: unknown) {
+      setError(
+        caught instanceof Error
+          ? `AI context could not be loaded. ${caught.message}`
+          : "AI context could not be loaded. Try again.",
+      );
       setPreviewFor(null);
-
-      return;
     }
-
-    setPreview(outcome.data);
   };
 
-  if (
-    providers === null ||
-    policies.data === undefined ||
-    provider === undefined ||
-    policy === undefined
-  ) {
-    return null;
+  if (providers === null || policies.isLoading) {
+    return (
+      <LoadingState
+        label="Checking available AI drafting providers…"
+        {...(className === undefined ? {} : { className })}
+      />
+    );
   }
 
+  if (policies.error !== null) {
+    return (
+      <div className={cn("space-y-2", className)}>
+        <InlineError>
+          AI policy could not be loaded. {policies.error.message}
+        </InlineError>
+        <Button
+          variant="secondary"
+          loading={policies.isFetching}
+          onClick={() => void policies.refetch()}
+        >
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
+  if (providerError !== null) {
+    return (
+      <div className={cn("space-y-2", className)}>
+        <InlineError>
+          AI providers could not be checked. {providerError}
+        </InlineError>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setProviders(null);
+            setProviderError(null);
+            setProviderRetry((attempt) => attempt + 1);
+          }}
+        >
+          Try again
+        </Button>
+      </div>
+    );
+  }
+
+  if (provider === undefined || policy === undefined) {
+    return (
+      <details className={cn("group", className)}>
+        <summary className="flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-(--cv-radius) border border-border bg-surface px-3 text-[12px] text-text-muted hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus">
+          <Sparkles aria-hidden className="size-4" />
+          Draft with AI unavailable
+        </summary>
+        <div className="mt-2 flex flex-wrap items-center gap-2 px-1 text-[11px] text-text-muted">
+          <p className="min-w-0 flex-1">
+            No permitted provider is available. Configure one here, or ask an
+            administrator to update the workspace policy.
+          </p>
+          <Button asChild variant="secondary" size="sm">
+            <Link to="/settings/ai">Open AI settings</Link>
+          </Button>
+        </div>
+      </details>
+    );
+  }
+
+  const action =
+    actions.find((item) => item.id === selectedAction) ?? actions[0];
+  const previewPending = previewFor !== null && preview === null;
+
   return (
-    <div className={cn("flex flex-col gap-2", className)}>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-text-muted">
-          <Sparkles aria-hidden className="size-3" />
-          AI
-        </span>
+    <section
+      className={cn("flex flex-col gap-3", className)}
+      aria-labelledby="ai-drafting-title"
+    >
+      <div>
+        <h2
+          id="ai-drafting-title"
+          className="flex items-center gap-2 text-[14px] font-semibold"
+        >
+          <Sparkles aria-hidden className="size-4 text-accent" />
+          Draft with AI
+        </h2>
+        <p className="mt-1 max-w-2xl text-[12px] leading-5 text-text-muted">
+          AI prepares a reviewable proposal. It cannot contact a vendor or
+          publish anything.
+        </p>
+      </div>
 
-        {actions.map((action) => (
-          <ButtonGroup key={action.id}>
-            <Button
-              size="sm"
-              variant="secondary"
-              loading={runningAction === action.id}
-              disabled={disabled || runningAction !== null}
-              title={action.description}
-              onClick={() => void runAction(action.id)}
-            >
-              {action.label}
-            </Button>
-            <Button
-              size="sm"
-              variant="secondary"
-              className="w-6 px-0"
-              disabled={disabled || runningAction !== null}
-              title="View the exact context that would be sent"
-              aria-label={`View context for ${action.label}`}
-              onClick={() => void showContext(action.id)}
-            >
-              <Eye aria-hidden className="size-3" />
-            </Button>
-          </ButtonGroup>
-        ))}
+      {action === undefined ? (
+        <InlineError>
+          No drafting actions are available for this record.
+        </InlineError>
+      ) : (
+        <div className="grid grid-cols-1 items-end gap-2 lg:grid-cols-[minmax(14rem,1fr)_auto_auto]">
+          <div>
+            <span className="mb-1 block text-[12px] font-medium text-text-muted">
+              Draft
+            </span>
+            <Select
+              aria-label="AI drafting action"
+              value={action.id}
+              onValueChange={(value) => setSelectedAction(value as AiActionId)}
+              disabled={disabled || runningAction !== null || previewPending}
+              options={actions.map((item) => ({
+                value: item.id,
+                label: item.label,
+                description: item.description,
+              }))}
+            />
+          </div>
+          <Button
+            variant="secondary"
+            loading={previewPending}
+            disabled={disabled || runningAction !== null || previewPending}
+            onClick={() => void showContext(action.id)}
+          >
+            <Eye aria-hidden className="size-4" />
+            Review context
+          </Button>
+          <Button
+            variant="primary"
+            loading={runningAction === action.id}
+            disabled={disabled || runningAction !== null || previewPending}
+            onClick={() => void runAction(action.id)}
+          >
+            Create draft
+          </Button>
+        </div>
+      )}
 
-        <div className="ml-auto flex items-center gap-1.5">
+      <details className="group border-t border-border pt-2">
+        <summary className="flex min-h-9 cursor-pointer list-none items-center justify-between rounded-(--cv-radius) text-[12px] font-medium text-text-muted hover:text-text focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus">
+          Provider and reasoning options
+          <span className="font-normal group-open:hidden">
+            {provider.displayName} · {selectedModel}
+          </span>
+          <span className="hidden font-normal group-open:inline">
+            Hide options
+          </span>
+        </summary>
+        <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
           <Select
             aria-label="AI provider"
-            className="w-36"
-            disabled={disabled || runningAction !== null}
+            disabled={disabled || runningAction !== null || previewPending}
             value={provider.providerId}
             onValueChange={(value) => {
               setProviderId(value as AiProviderId);
@@ -236,8 +363,7 @@ export function AiToolbar({
 
           <Select
             aria-label="Model"
-            className="w-44"
-            disabled={disabled || runningAction !== null}
+            disabled={disabled || runningAction !== null || previewPending}
             value={selectedModel}
             onValueChange={(value) => setModel(value as AiModelId)}
             options={allowedModels.map((id) => ({ value: id, label: id }))}
@@ -245,8 +371,7 @@ export function AiToolbar({
 
           <Select
             aria-label="Reasoning effort"
-            className="w-40"
-            disabled={disabled || runningAction !== null}
+            disabled={disabled || runningAction !== null || previewPending}
             value={effort ?? AUTOMATIC_EFFORT}
             onValueChange={(value) =>
               setEffort(value === AUTOMATIC_EFFORT ? null : (value as AiEffort))
@@ -268,7 +393,7 @@ export function AiToolbar({
             ]}
           />
         </div>
-      </div>
+      </details>
 
       {error === null ? null : <InlineError>{error}</InlineError>}
 
@@ -283,11 +408,11 @@ export function AiToolbar({
       >
         <DialogContent
           width="max-w-3xl"
-          title="Context being sent"
+          title="Review AI context"
           description={
             previewFor === null
               ? undefined
-              : `Everything below is what ${previewFor} would send to the local provider.`
+              : "Review the exact material and execution settings before creating the draft."
           }
         >
           <DialogBody className="space-y-4">
@@ -423,12 +548,12 @@ export function AiToolbar({
                   void runAction(action);
                 }}
               >
-                Send and run
+                Run draft
               </Button>
             )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </section>
   );
 }

@@ -3,17 +3,16 @@ import { Sparkles } from "lucide-react";
 import type { FindingSummary } from "@codevault/contracts";
 
 import { cn } from "../lib/cn.js";
-import { PriorArtBadge, SeverityBadge, StateBadge } from "./badges.js";
+import { SeverityBadge, StateBadge } from "./badges.js";
 import { AssetKindIcon } from "./security.js";
 import { Mono } from "./primitives.js";
 
 /**
  * The finding header.
  *
- * Always shows the same eight facts: reference, title, severity, validation,
- * disclosure, affected asset, prior-art conclusion, and whether AI proposals
- * are waiting. It stays pinned while the researcher moves between tabs so that
- * "what state is this actually in?" is never more than a glance away.
+ * The header keeps identity and the two highest-signal states visible. The
+ * complete workflow state remains in the overview, where it can be changed
+ * without turning the title area into a badge inventory.
  */
 
 export interface FindingHeaderProps {
@@ -34,35 +33,30 @@ export function FindingHeader({
         className,
       )}
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <Mono className="text-text-muted">{finding.ref}</Mono>
             <Mono className="text-text-muted">·</Mono>
             <Mono className="text-text-muted">{finding.caseRef}</Mono>
           </div>
-          <h1 className="mt-0.5 truncate text-[15px] font-semibold leading-tight">
+          <h1 className="mt-1 text-[18px] font-semibold leading-tight tracking-[-0.015em] text-balance">
             {finding.title}
           </h1>
         </div>
         {actions}
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[12px] text-text-muted">
         <SeverityBadge severity={finding.severity} score={finding.score} />
         <StateBadge kind="validation" state={finding.validationState} />
-        <StateBadge kind="remediation" state={finding.remediationState} />
-        <StateBadge kind="disclosure" state={finding.disclosureState} />
-        <PriorArtBadge state={finding.priorArtState} />
 
         {finding.primaryAsset === null ? (
-          <span className="inline-flex items-center gap-1 rounded-(--cv-radius) border border-dashed border-border px-1.5 py-0.5 text-[11px] text-text-muted">
-            No primary asset
-          </span>
+          <span>No primary asset</span>
         ) : (
-          <span className="inline-flex items-center gap-1 rounded-(--cv-radius) border border-border bg-surface-raised px-1.5 py-0.5 text-[11px]">
+          <span className="inline-flex min-w-0 items-center gap-1">
             <AssetKindIcon kind={finding.primaryAsset.kind} />
-            <span className="max-w-56 truncate">
+            <span className="max-w-64 truncate text-text">
               {finding.primaryAsset.name}
             </span>
             <Mono className="text-text-muted">
@@ -72,7 +66,7 @@ export function FindingHeader({
         )}
 
         {finding.pendingProposalCount > 0 ? (
-          <span className="inline-flex items-center gap-1 rounded-(--cv-radius) border border-accent/50 bg-accent/10 px-1.5 py-0.5 text-[11px] text-accent">
+          <span className="inline-flex items-center gap-1 text-accent">
             <Sparkles aria-hidden className="size-3" />
             {finding.pendingProposalCount} AI proposal
             {finding.pendingProposalCount === 1 ? "" : "s"} pending

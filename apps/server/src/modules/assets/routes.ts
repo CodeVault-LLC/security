@@ -70,6 +70,10 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
         );
       }
 
+      if (request.query.vendorId !== undefined) {
+        filters.push(eq(schema.assets.vendorId, request.query.vendorId));
+      }
+
       if (request.query.query !== undefined) {
         const pattern = `%${request.query.query}%`;
 

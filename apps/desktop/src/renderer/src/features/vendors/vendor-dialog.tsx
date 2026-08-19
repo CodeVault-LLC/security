@@ -58,7 +58,7 @@ export function VendorPicker({
       <div className="flex gap-1">
         <select
           aria-label="Vendor"
-          className="h-7 min-w-0 flex-1 rounded-(--cv-radius) border border-border bg-surface px-2 text-[13px] focus-visible:border-focus focus-visible:outline-none disabled:opacity-60"
+          className="h-10 min-w-0 flex-1 rounded-(--cv-radius) border border-border bg-surface px-3 text-[13px] focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus disabled:opacity-60"
           value={value ?? ""}
           onChange={(event) =>
             onValueChange(

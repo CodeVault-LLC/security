@@ -6,6 +6,22 @@
  */
 @import "@codevault/ui/tokens.css";
 
+:root {
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+html {
+  caret-color: var(--cv-accent);
+  scrollbar-color: var(--cv-border-strong) var(--cv-background);
+  scrollbar-width: thin;
+}
+
+a {
+  text-underline-offset: 3px;
+}
+
 /*
  * Text selection.
  *
@@ -82,6 +98,16 @@
     background: none;
     -webkit-text-fill-color: currentColor;
   }
+}
+
+/* A manual accessibility preference supplements the operating-system setting. */
+:root[data-motion="reduced"] *,
+:root[data-motion="reduced"] *::before,
+:root[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  scroll-behavior: auto !important;
+  transition-duration: 0.01ms !important;
 }
 
 /*

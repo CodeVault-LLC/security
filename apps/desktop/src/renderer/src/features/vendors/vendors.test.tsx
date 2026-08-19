@@ -65,7 +65,7 @@ function renderWithApi(
 }
 
 describe("vendor trust UI", () => {
-  it("shows an unverified key as unusable for required encryption", async () => {
+  it("does not offer a key-selection action without a selection handler", async () => {
     renderWithApi(<PublicKeyPanel vendorId={VENDOR_ID} />, async () => ({
       ok: true,
       data: VENDOR,
@@ -73,8 +73,8 @@ describe("vendor trust UI", () => {
 
     expect(await screen.findByText("Not verified")).toBeTruthy();
     expect(
-      screen.getByRole("button", { name: "Use for encryption" }),
-    ).toHaveProperty("disabled", true);
+      screen.queryByRole("button", { name: "Use for encryption" }),
+    ).toBeNull();
     expect(
       screen.getByText("0123 4567 89AB CDEF 0123 4567 89AB CDEF 0123 4567"),
     ).toBeTruthy();

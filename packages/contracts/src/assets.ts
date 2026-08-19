@@ -161,6 +161,7 @@ export const ListAssetsQuery = Type.Object({
   ...PaginationQuery.properties,
   kind: Type.Optional(AssetKindSchema),
   caseId: Type.Optional(Uuid),
+  vendorId: Type.Optional(Uuid),
   query: Type.Optional(Type.String({ maxLength: 200 })),
 });
 

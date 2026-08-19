@@ -24,6 +24,7 @@ import {
   ErrorState,
   FindingHeader,
   LoadingState,
+  InlineError,
   Mono,
   Select,
   stateSelectOptions,
@@ -214,12 +215,12 @@ export function FindingDetailRoute({
         actions={
           <div className="flex items-center gap-2">
             <VisibilityBadge visibility={data.visibility} />
-            <Link
-              to={`/cases/${data.caseId}`}
-              className="text-[12px] text-text-muted hover:text-text hover:underline"
-            >
-              Open case
-            </Link>
+            {canEdit ? null : (
+              <span className="text-[11px] text-text-muted">Read only</span>
+            )}
+            <Button asChild variant="secondary" size="sm">
+              <Link to={`/cases/${data.caseId}`}>Open case</Link>
+            </Button>
           </div>
         }
       />
@@ -236,14 +237,20 @@ export function FindingDetailRoute({
 
         <TabsContent value="overview" className="p-4">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
-            <div className="space-y-4">
+            <FindingContextColumn
+              finding={data}
+              canEdit={canEdit}
+              onError={setError}
+            />
+
+            <div className="space-y-4 xl:col-start-1 xl:row-start-1">
               {canEdit ? (
                 <AiToolbar
                   targetType="FINDING"
                   targetId={data.id}
                   actions={AI_ACTIONS}
                   onCompleted={onAiCompleted}
-                  className="rounded-(--cv-radius-lg) border border-border bg-surface p-3"
+                  className="border-b border-border pb-4"
                 />
               ) : null}
 
@@ -272,93 +279,10 @@ export function FindingDetailRoute({
 
               <FindingContentEditor finding={data} canEdit={canEdit} />
             </div>
-
-            <div className="space-y-4">
-              <StatePanel finding={data} canEdit={canEdit} onError={setError} />
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Affected</CardTitle>
-                </CardHeader>
-                <CardBody className="space-y-2 text-[12px]">
-                  {data.assets.length === 0 ? (
-                    <p className="text-text-muted">No asset linked yet.</p>
-                  ) : (
-                    <ul className="space-y-1">
-                      {data.assets.map((asset) => (
-                        <li
-                          key={asset.assetId}
-                          className="flex items-center gap-2"
-                        >
-                          <Mono className="text-text-muted">
-                            {asset.assetRef}
-                          </Mono>
-                          <Link
-                            to={`/assets/${asset.assetId}`}
-                            className="min-w-0 flex-1 truncate hover:underline"
-                          >
-                            {asset.name}
-                          </Link>
-                          {asset.primary ? (
-                            <span className="text-[10px] uppercase text-accent">
-                              Primary
-                            </span>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {data.affectedRanges.length === 0 ? (
-                    <p className="text-text-muted">
-                      No affected-version conclusion recorded.
-                    </p>
-                  ) : (
-                    <ul className="space-y-1 border-t border-border pt-2">
-                      {data.affectedRanges.map((range) => (
-                        <li key={range.id}>
-                          <Mono>{range.expression}</Mono>{" "}
-                          <span className="text-text-muted">
-                            {range.status.replace(/_/g, " ").toLowerCase()}
-                          </span>
-                          {range.verifiedAt === null ? (
-                            <span className="ml-1 text-warning">
-                              (not verified)
-                            </span>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </CardBody>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Identifiers</CardTitle>
-                </CardHeader>
-                <CardBody className="text-[12px]">
-                  {data.identifiers.length === 0 ? (
-                    <p className="text-text-muted">None recorded.</p>
-                  ) : (
-                    <ul className="space-y-1">
-                      {data.identifiers.map((identifier) => (
-                        <li key={identifier.id} className="flex gap-2">
-                          <span className="w-16 shrink-0 text-text-muted">
-                            {identifier.scheme}
-                          </span>
-                          <Mono>{identifier.value}</Mono>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </CardBody>
-              </Card>
-            </div>
           </div>
 
           {error === null ? null : (
-            <p className="mt-3 text-[12px] text-danger">{error}</p>
+            <InlineError className="mt-3">{error}</InlineError>
           )}
         </TabsContent>
 
@@ -391,6 +315,111 @@ export function FindingDetailRoute({
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function FindingContextColumn({
+  finding,
+  canEdit,
+  onError,
+}: {
+  finding: FindingDetail;
+  canEdit: boolean;
+  onError: (message: string | null) => void;
+}): React.JSX.Element {
+  const primaryAsset = finding.assets.find((asset) => asset.primary);
+
+  return (
+    <aside className="space-y-4 xl:col-start-2 xl:row-start-1">
+      <StatePanel finding={finding} canEdit={canEdit} onError={onError} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Affected</CardTitle>
+        </CardHeader>
+        <CardBody className="space-y-2 text-[12px]">
+          {finding.assets.length === 0 ? (
+            <p className="text-text-muted">No asset linked yet.</p>
+          ) : (
+            <div className="space-y-2">
+              <ul className="space-y-1">
+                {finding.assets.map((asset) => (
+                  <li key={asset.assetId} className="flex items-center gap-2">
+                    <Mono className="text-text-muted">{asset.assetRef}</Mono>
+                    <Link
+                      to={`/assets/${asset.assetId}`}
+                      className="min-w-0 flex-1 truncate hover:underline"
+                    >
+                      {asset.name}
+                    </Link>
+                    {asset.primary ? (
+                      <span className="text-[10px] uppercase text-accent">
+                        Primary
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+              {primaryAsset === undefined ? null : (
+                <Button asChild variant="ghost" size="sm">
+                  <Link
+                    to="/findings"
+                    search={{
+                      assetId: primaryAsset.assetId,
+                      assetName: primaryAsset.name,
+                    }}
+                  >
+                    View findings on this asset
+                  </Link>
+                </Button>
+              )}
+            </div>
+          )}
+
+          {finding.affectedRanges.length === 0 ? (
+            <p className="text-text-muted">
+              No affected-version conclusion recorded.
+            </p>
+          ) : (
+            <ul className="space-y-1 border-t border-border pt-2">
+              {finding.affectedRanges.map((range) => (
+                <li key={range.id}>
+                  <Mono>{range.expression}</Mono>{" "}
+                  <span className="text-text-muted">
+                    {range.status.replace(/_/g, " ").toLowerCase()}
+                  </span>
+                  {range.verifiedAt === null ? (
+                    <span className="ml-1 text-warning">(not verified)</span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardBody>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Identifiers</CardTitle>
+        </CardHeader>
+        <CardBody className="text-[12px]">
+          {finding.identifiers.length === 0 ? (
+            <p className="text-text-muted">None recorded.</p>
+          ) : (
+            <ul className="space-y-1">
+              {finding.identifiers.map((identifier) => (
+                <li key={identifier.id} className="flex gap-2">
+                  <span className="w-16 shrink-0 text-text-muted">
+                    {identifier.scheme}
+                  </span>
+                  <Mono>{identifier.value}</Mono>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardBody>
+      </Card>
+    </aside>
   );
 }
 
@@ -434,33 +463,36 @@ function StatePanel({
           label="Validation"
           value={finding.validationState}
           options={stateSelectOptions("validation", VALIDATION_STATES)}
-          disabled={!canEdit}
+          disabled={!canEdit || update.isPending}
           onChange={(value) => change("validationState", value)}
         />
         <StateRow
           label="Remediation"
           value={finding.remediationState}
           options={stateSelectOptions("remediation", REMEDIATION_STATES)}
-          disabled={!canEdit}
+          disabled={!canEdit || update.isPending}
           onChange={(value) => change("remediationState", value)}
         />
         <StateRow
           label="Disclosure"
           value={finding.disclosureState}
           options={stateSelectOptions("disclosure", DISCLOSURE_STATES)}
-          disabled={!canEdit}
+          disabled={!canEdit || update.isPending}
           onChange={(value) => change("disclosureState", value)}
         />
         <StateRow
           label="Visibility"
           value={finding.visibility}
           options={visibilitySelectOptions(CONTENT_VISIBILITIES)}
-          disabled={!canEdit}
+          disabled={!canEdit || update.isPending}
           onChange={(value) => change("visibility", value)}
         />
-        <p className="text-[11px] text-text-muted">
-          Prior-art state is set from the Prior art tab, where the conclusion is
-          recorded against a specific check.
+        <p className="text-[11px] leading-4 text-text-muted" role="status">
+          {!canEdit
+            ? "You have read-only access. An editor can change workflow state."
+            : update.isPending
+              ? "Saving state…"
+              : "Prior-art state is set from its tab, where the conclusion stays attached to a specific check."}
         </p>
       </CardBody>
     </Card>
@@ -482,9 +514,7 @@ function StateRow({
 }): React.JSX.Element {
   return (
     <div className="grid grid-cols-[90px_1fr] items-center gap-2">
-      <span className="text-[11px] uppercase tracking-wide text-text-muted">
-        {label}
-      </span>
+      <span className="text-[12px] font-medium text-text-muted">{label}</span>
       <Select
         aria-label={label}
         value={value}
@@ -528,53 +558,151 @@ function FindingContentEditor({
           "reproductionMarkdown",
         ].includes(field.key),
       )
-    : FINDING_FIELDS;
+    : FINDING_FIELDS.filter((field) =>
+        [
+          "summaryMarkdown",
+          "impactMarkdown",
+          "remediationMarkdown",
+          "researcherNotesMarkdown",
+        ].includes(field.key),
+      );
+
+  const [activeField, setActiveField] = useState<
+    (typeof fields)[number]["key"]
+  >(fields[0]?.key ?? "summaryMarkdown");
+  const [localDrafts, setLocalDrafts] = useState<Record<string, string>>({});
+  const completedCount = fields.filter((field) => {
+    const stored =
+      (finding[field.key as keyof FindingDetail] as string | null) ?? "";
+
+    return (localDrafts[field.key] ?? stored).trim().length > 0;
+  }).length;
+  const failedField = fields.find((field) => field.key === savingField);
 
   return (
-    <div className="space-y-3">
-      {fields.map((field) => {
-        const stored =
-          (finding[field.key as keyof FindingDetail] as string | null) ?? "";
+    <section
+      aria-label={technicalOnly ? "Technical writing" : "Finding narrative"}
+      className="overflow-hidden rounded-(--cv-radius-lg) border border-border bg-surface"
+    >
+      <div className="grid min-w-0 grid-cols-1 lg:grid-cols-[14rem_minmax(0,1fr)]">
+        <div className="border-b border-border bg-surface-raised lg:border-b-0 lg:border-r">
+          <div className="flex items-center justify-between gap-2 px-3 py-2.5">
+            <div>
+              <h2 className="text-[13px] font-semibold">
+                {technicalOnly ? "Technical sections" : "Narrative sections"}
+              </h2>
+              <p className="mt-0.5 text-[10.5px] text-text-muted">
+                {completedCount} of {fields.length} started
+              </p>
+            </div>
+            {canEdit ? null : (
+              <span className="text-[10.5px] text-text-muted">Read only</span>
+            )}
+          </div>
 
-        return (
-          <Card key={field.key}>
-            <CardHeader>
-              <CardTitle>{field.label}</CardTitle>
-              <span className="text-[11px] text-text-muted">{field.hint}</span>
-            </CardHeader>
-            <CardBody>
-              {/*
-                Autosaved: the old per-field Save button meant eight of them on
-                a page, and a finding left unsaved because the researcher moved
-                on to the next box.
-              */}
-              <MarkdownField
-                value={stored}
-                readOnly={!canEdit}
-                draftKey={`finding:${finding.id}:${field.key}`}
-                caseId={finding.caseId}
-                minHeight={field.height}
-                placeholder={
-                  canEdit
-                    ? `${field.hint} Markdown, with tables and diagrams.`
-                    : "Empty."
-                }
-                saving={update.isPending && savingField === field.key}
-                error={
-                  update.error === null || savingField !== field.key
-                    ? null
-                    : `${errorHeading(update.error)}. ${update.error.message}`
-                }
-                onSave={(value) => {
-                  setSavingField(field.key);
-                  update.mutate({ field: field.key, value });
-                }}
-              />
-            </CardBody>
-          </Card>
-        );
-      })}
-    </div>
+          <nav
+            aria-label={
+              technicalOnly ? "Technical sections" : "Narrative sections"
+            }
+            className="flex overflow-x-auto border-t border-border p-1 lg:block lg:overflow-visible"
+          >
+            {fields.map((field) => {
+              const stored =
+                (finding[field.key as keyof FindingDetail] as string | null) ??
+                "";
+              const text = localDrafts[field.key] ?? stored;
+              const words =
+                text.trim().length === 0 ? 0 : text.trim().split(/\s+/).length;
+              const selected = activeField === field.key;
+
+              return (
+                <button
+                  key={field.key}
+                  id={`finding-section-tab-${field.key}`}
+                  type="button"
+                  aria-pressed={selected}
+                  aria-controls={`finding-section-panel-${field.key}`}
+                  onClick={() => setActiveField(field.key)}
+                  className={`min-h-12 min-w-44 rounded-(--cv-radius) px-2.5 py-2 text-left transition-colors duration-100 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus lg:mb-0.5 lg:w-full lg:min-w-0 ${
+                    selected
+                      ? "bg-surface text-text"
+                      : "text-text-muted hover:bg-surface-hover hover:text-text"
+                  }`}
+                >
+                  <span className="block truncate text-[12px] font-medium">
+                    {field.label}
+                  </span>
+                  <span className="mt-0.5 block text-[10.5px] tabular-nums">
+                    {words === 0 ? "Not started" : `${words} words`}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+        </div>
+
+        <div className="min-w-0 p-3">
+          {update.error === null ? null : (
+            <InlineError className="mb-3">
+              {failedField?.label ?? "This section"} could not be saved. Your
+              draft remains on this device. {update.error.message}
+            </InlineError>
+          )}
+
+          {fields.map((field) => {
+            const stored =
+              (finding[field.key as keyof FindingDetail] as string | null) ??
+              "";
+            const selected = activeField === field.key;
+
+            return (
+              <section
+                key={field.key}
+                id={`finding-section-panel-${field.key}`}
+                aria-labelledby={`finding-section-tab-${field.key}`}
+                hidden={!selected}
+              >
+                <div className="mb-3">
+                  <h3 className="text-[15px] font-semibold">{field.label}</h3>
+                  <p className="mt-1 max-w-3xl text-[11px] leading-5 text-text-muted text-pretty">
+                    {field.hint}
+                  </p>
+                </div>
+                <MarkdownField
+                  ariaLabel={field.label}
+                  value={stored}
+                  readOnly={!canEdit}
+                  draftKey={`finding:${finding.id}:${field.key}`}
+                  caseId={finding.caseId}
+                  minHeight={technicalOnly ? "26rem" : "22rem"}
+                  placeholder={
+                    canEdit
+                      ? `${field.hint} Markdown, with tables and diagrams.`
+                      : "Empty."
+                  }
+                  saving={update.isPending && savingField === field.key}
+                  error={
+                    update.error !== null && savingField === field.key
+                      ? "Save failed"
+                      : null
+                  }
+                  onChange={(value) =>
+                    setLocalDrafts((current) => ({
+                      ...current,
+                      [field.key]: value,
+                    }))
+                  }
+                  onSave={(value) => {
+                    setSavingField(field.key);
+                    update.mutate({ field: field.key, value });
+                  }}
+                />
+              </section>
+            );
+          })}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -637,6 +765,12 @@ function ProposalReview({
           {accept.error.message}
         </p>
       )}
+      {reject.error === null ? null : (
+        <p className="mt-1 text-[12px] text-danger">
+          <span className="font-medium">{errorHeading(reject.error)}.</span>{" "}
+          {reject.error.message}
+        </p>
+      )}
     </div>
   );
 }
@@ -666,6 +800,10 @@ function FindingHistory({
     return <QueryError query={activity} className="m-4" />;
   }
 
+  if (activity.isLoading) {
+    return <LoadingState label="Loading finding history…" />;
+  }
+
   if (items.length === 0) {
     return (
       <EmptyState
@@ -678,11 +816,9 @@ function FindingHistory({
   return (
     <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
       {items.map((event) => (
-        <li key={event.id} className="px-3 py-2 text-[12px]">
-          <div className="flex items-center gap-2">
-            <Mono className="w-56 shrink-0 text-text-muted">
-              {event.action}
-            </Mono>
+        <li key={event.id} className="px-3 py-2.5 text-[12px]">
+          <div className="grid grid-cols-1 gap-1 sm:grid-cols-[14rem_1fr_auto] sm:items-center sm:gap-2">
+            <Mono className="text-text-muted">{event.action}</Mono>
             <div className="flex-1">
               {event.actor ? (
                 <Avatar

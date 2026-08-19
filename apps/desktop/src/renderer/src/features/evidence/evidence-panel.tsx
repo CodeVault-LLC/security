@@ -14,6 +14,7 @@ import {
   EvidenceCard,
   Input,
   Label,
+  LoadingState,
   Select,
   visibilitySelectOptions,
 } from "@codevault/ui";
@@ -95,12 +96,22 @@ export function EvidencePanel({
         ) : null}
       </div>
 
-      <QueryError query={evidence} className="mx-4" />
-
-      {items.length === 0 ? (
+      {evidence.error !== null ? (
+        <QueryError query={evidence} />
+      ) : evidence.isLoading ? (
+        <LoadingState label="Loading evidence…" />
+      ) : items.length === 0 ? (
         <EmptyState
           title="No evidence yet"
           description="Screenshots, captures, source files, firmware images and proof-of-concept material all live here with their digests."
+          action={
+            canEdit ? (
+              <Button variant="primary" onClick={() => setUploadOpen(true)}>
+                <Upload aria-hidden className="size-3.5" />
+                Add evidence
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
@@ -286,7 +297,7 @@ function UploadDialog({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <Label>Kind</Label>
               <Select
@@ -313,6 +324,7 @@ function UploadDialog({
             <Label>Description (optional)</Label>
             <div className="mt-1">
               <MarkdownField
+                ariaLabel="Evidence description"
                 value={description}
                 onChange={setDescription}
                 draftKey={`evidence:new:${caseId}`}
@@ -334,12 +346,11 @@ function UploadDialog({
           </Button>
           <Button
             variant="primary"
-            disabled={
-              busy || selections.length === 0 || title.trim().length === 0
-            }
+            loading={busy || createEvidence.isPending}
+            disabled={selections.length === 0 || title.trim().length === 0}
             onClick={() => void upload()}
           >
-            {busy ? "Uploading…" : "Upload"}
+            Upload evidence
           </Button>
         </DialogFooter>
       </DialogContent>

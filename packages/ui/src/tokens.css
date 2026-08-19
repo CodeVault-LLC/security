@@ -176,6 +176,11 @@
     --cv-accent-contrast: oklch(17% 0.01 255);
     --cv-accent-hover: oklch(76% 0.14 250);
     --cv-focus: oklch(72% 0.16 250);
+    --cv-selection: color-mix(
+      in oklab,
+      var(--cv-accent) 52%,
+      var(--cv-surface)
+    );
 
     --cv-brand-blue: oklch(72% 0.17 255);
     --cv-brand-cyan: oklch(81% 0.14 210);
@@ -216,6 +221,7 @@
   --cv-accent-contrast: oklch(17% 0.01 255);
   --cv-accent-hover: oklch(76% 0.14 250);
   --cv-focus: oklch(72% 0.16 250);
+  --cv-selection: color-mix(in oklab, var(--cv-accent) 52%, var(--cv-surface));
 
   --cv-brand-blue: oklch(72% 0.17 255);
   --cv-brand-cyan: oklch(81% 0.14 210);
@@ -238,6 +244,72 @@
   --cv-tlp-clear: oklch(72% 0.01 250);
 
   color-scheme: dark;
+}
+
+/*
+ * Optional interface accents.
+ *
+ * These change only interactive emphasis. Status and severity colors remain
+ * stable, so choosing a palette cannot change the meaning of security data.
+ */
+:root[data-accent="ocean"] {
+  --cv-accent: oklch(52% 0.12 215);
+  --cv-accent-hover: oklch(46% 0.13 215);
+  --cv-focus: oklch(60% 0.14 215);
+}
+
+:root[data-accent="ember"] {
+  --cv-accent: oklch(56% 0.16 48);
+  --cv-accent-hover: oklch(50% 0.17 48);
+  --cv-focus: oklch(62% 0.17 48);
+}
+
+:root[data-accent="iris"] {
+  --cv-accent: oklch(53% 0.17 292);
+  --cv-accent-hover: oklch(47% 0.18 292);
+  --cv-focus: oklch(61% 0.17 292);
+}
+
+:root[data-theme="dark"][data-accent="ocean"] {
+  --cv-accent: oklch(76% 0.12 215);
+  --cv-accent-hover: oklch(82% 0.12 215);
+  --cv-focus: oklch(78% 0.14 215);
+}
+
+:root[data-theme="dark"][data-accent="ember"] {
+  --cv-accent: oklch(75% 0.15 55);
+  --cv-accent-hover: oklch(81% 0.14 55);
+  --cv-focus: oklch(77% 0.16 55);
+}
+
+:root[data-theme="dark"][data-accent="iris"] {
+  --cv-accent: oklch(76% 0.15 292);
+  --cv-accent-hover: oklch(82% 0.14 292);
+  --cv-focus: oklch(78% 0.17 292);
+}
+
+:root:not([data-theme="light"])[data-accent="ocean"] {
+  @media (prefers-color-scheme: dark) {
+    --cv-accent: oklch(76% 0.12 215);
+    --cv-accent-hover: oklch(82% 0.12 215);
+    --cv-focus: oklch(78% 0.14 215);
+  }
+}
+
+:root:not([data-theme="light"])[data-accent="ember"] {
+  @media (prefers-color-scheme: dark) {
+    --cv-accent: oklch(75% 0.15 55);
+    --cv-accent-hover: oklch(81% 0.14 55);
+    --cv-focus: oklch(77% 0.16 55);
+  }
+}
+
+:root:not([data-theme="light"])[data-accent="iris"] {
+  @media (prefers-color-scheme: dark) {
+    --cv-accent: oklch(76% 0.15 292);
+    --cv-accent-hover: oklch(82% 0.14 292);
+    --cv-focus: oklch(78% 0.17 292);
+  }
 }
 
 /* Tailwind utility bindings, so `bg-surface` and friends resolve to tokens. */

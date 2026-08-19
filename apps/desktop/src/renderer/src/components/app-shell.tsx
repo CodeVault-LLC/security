@@ -119,15 +119,21 @@ export function PageHeader({
   actions?: ReactNode;
 }): React.JSX.Element {
   return (
-    <header className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
+    <header className="flex min-h-[68px] flex-wrap items-start justify-between gap-3 border-b border-border px-4 py-3">
       <div className="min-w-0">
-        <h1 className="text-[15px] font-semibold leading-tight">{title}</h1>
+        <h1 className="text-[18px] font-semibold leading-tight tracking-[-0.015em] text-balance">
+          {title}
+        </h1>
         {description === undefined ? null : (
-          <p className="mt-0.5 text-[12px] text-text-muted">{description}</p>
+          <p className="mt-1 max-w-3xl text-[12px] leading-5 text-text-muted text-pretty">
+            {description}
+          </p>
         )}
       </div>
       {actions === undefined ? null : (
-        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+          {actions}
+        </div>
       )}
     </header>
   );

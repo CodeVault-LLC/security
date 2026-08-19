@@ -15,6 +15,7 @@ import {
   InlineError,
   Input,
   Label,
+  LoadingState,
   Mono,
   Select,
   Textarea,
@@ -106,13 +107,23 @@ export function IntakePanel({
         ) : null}
       </div>
 
-      <QueryError query={items} />
       {error === null ? null : <InlineError>{error.message}</InlineError>}
 
-      {pending.length === 0 ? (
+      {items.error !== null ? (
+        <QueryError query={items} />
+      ) : items.isLoading ? (
+        <LoadingState label="Loading intake drafts…" />
+      ) : pending.length === 0 ? (
         <EmptyState
           title="No findings waiting for review"
           description="Existing findings and future folder scans will appear here before they can change case data."
+          action={
+            canEdit ? (
+              <Button variant="secondary" onClick={() => setManualOpen(true)}>
+                Record existing finding
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <div className="space-y-3">

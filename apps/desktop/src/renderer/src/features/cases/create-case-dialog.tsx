@@ -175,9 +175,10 @@ export function CreateCaseDialog({
           <Button
             variant="primary"
             onClick={submit}
-            disabled={title.trim().length === 0 || create.isPending}
+            disabled={title.trim().length === 0}
+            loading={create.isPending}
           >
-            {create.isPending ? "Creating…" : "Create case"}
+            Create case
           </Button>
         </DialogFooter>
       </DialogContent>

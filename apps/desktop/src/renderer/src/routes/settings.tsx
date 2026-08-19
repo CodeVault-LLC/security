@@ -1,42 +1,55 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
+  Bot,
   Check,
   KeyRound,
   Laptop,
   Loader2,
   Mail,
-  Monitor,
-  Moon,
-  Palette,
   RefreshCw,
-  ShieldCheck,
   Smartphone,
-  Sun,
-  UserRound,
 } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import type {
+  AiProviderPolicy,
+  AiProviderStatus,
   GmailAuthorization,
   MailboxConnection,
   OrganizationUser,
 } from "@codevault/contracts";
 import { Button, cn, Input, Label } from "@codevault/ui";
 
-import { PageBody, PageHeader } from "../components/app-shell.js";
+import { PageBody } from "../components/app-shell.js";
 import { Avatar } from "../components/avatar.js";
 import { QueryError } from "../components/query-boundary.js";
+import { useAiProviderPreference } from "../hooks/use-ai-provider-preference.js";
 import { useTheme } from "../hooks/use-theme.js";
+import {
+  configuredAiProviderStatuses,
+  normalizeAiProviderStatuses,
+} from "../lib/ai-providers.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../lib/api.js";
 import { bridge } from "../lib/bridge.js";
 import { formatDateTime } from "../lib/dates.js";
 import { useSession } from "../lib/session.js";
 
-const SETTINGS_TABS = [
-  { to: "/settings/profile", label: "Profile", icon: UserRound },
-  { to: "/settings/appearance", label: "Appearance", icon: Palette },
-  { to: "/settings/security", label: "Security", icon: ShieldCheck },
-  { to: "/settings/mail", label: "Mail", icon: Mail },
+const SETTINGS_GROUPS = [
+  {
+    label: "Account",
+    items: [
+      { to: "/settings/profile", label: "Profile" },
+      { to: "/settings/security", label: "Security" },
+    ],
+  },
+  {
+    label: "Application",
+    items: [
+      { to: "/settings/appearance", label: "Appearance" },
+      { to: "/settings/ai", label: "AI" },
+      { to: "/settings/mail", label: "Mail" },
+    ],
+  },
 ] as const;
 
 function SettingsNav(): React.JSX.Element {
@@ -46,32 +59,39 @@ function SettingsNav(): React.JSX.Element {
 
   return (
     <nav
-      aria-label="Personal settings"
-      className="-mx-1 flex gap-1 overflow-x-auto border-b border-border px-1 pb-2 lg:mx-0 lg:flex-col lg:overflow-visible lg:border-b-0 lg:px-0 lg:pb-0"
+      aria-label="Settings"
+      className="-mx-1 flex gap-1 overflow-x-auto border-b border-border px-1 pb-2 lg:mx-0 lg:flex-col lg:gap-7 lg:overflow-visible lg:border-b-0 lg:px-0 lg:pb-0"
     >
-      {SETTINGS_TABS.map((tab) => {
-        const Icon = tab.icon;
-        const active = pathname === tab.to;
+      {SETTINGS_GROUPS.map((group) => (
+        <div key={group.label} className="contents lg:block">
+          <p className="mb-1 hidden px-2 text-[11px] font-medium text-text-muted lg:block">
+            {group.label}
+          </p>
+          <div className="contents lg:flex lg:flex-col lg:gap-0.5">
+            {group.items.map((item) => {
+              const active = pathname === item.to;
 
-        return (
-          <Link
-            key={tab.to}
-            to={tab.to}
-            aria-current={active ? "page" : undefined}
-            className={cn(
-              "flex min-h-10 shrink-0 items-center gap-2 rounded-(--cv-radius) px-3 text-[13px] font-medium",
-              "transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
-              "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
-              active
-                ? "bg-surface-hover text-text"
-                : "text-text-muted hover:bg-surface-hover hover:text-text",
-            )}
-          >
-            <Icon aria-hidden className="size-4 shrink-0" />
-            {tab.label}
-          </Link>
-        );
-      })}
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex min-h-10 shrink-0 items-center rounded-(--cv-radius) px-3 text-[13px] font-medium",
+                    "transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
+                    "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
+                    active
+                      ? "bg-surface-hover text-text"
+                      : "text-text-muted hover:bg-surface-hover hover:text-text",
+                  )}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </nav>
   );
 }
@@ -83,20 +103,19 @@ function PersonalPage(props: {
 }): React.JSX.Element {
   return (
     <div className="flex h-full flex-col">
-      <PageHeader
-        title="Settings"
-        description="Manage your personal account and this device."
-      />
       <PageBody className="bg-background [scrollbar-gutter:stable]">
-        <div className="mx-auto grid max-w-5xl gap-7 lg:grid-cols-[168px_minmax(0,720px)] lg:gap-12">
-          <div className="lg:sticky lg:top-0 lg:self-start">
+        <div className="mx-auto grid max-w-6xl gap-8 py-2 lg:grid-cols-[176px_minmax(0,780px)] lg:gap-14 lg:py-5">
+          <aside className="lg:sticky lg:top-5 lg:self-start">
+            <h1 className="mb-5 text-balance text-[18px] font-semibold tracking-[-0.02em]">
+              Settings
+            </h1>
             <SettingsNav />
-          </div>
+          </aside>
           <div className="min-w-0" aria-labelledby="settings-page-title">
-            <header className="pb-6">
+            <header className="pb-7 lg:pt-0.5">
               <h2
                 id="settings-page-title"
-                className="text-balance text-[22px] font-semibold tracking-[-0.02em]"
+                className="text-balance text-[20px] font-semibold tracking-[-0.02em]"
               >
                 {props.title}
               </h2>
@@ -104,7 +123,7 @@ function PersonalPage(props: {
                 {props.description}
               </p>
             </header>
-            <div className="border-b border-border">{props.children}</div>
+            <div>{props.children}</div>
           </div>
         </div>
       </PageBody>
@@ -119,14 +138,11 @@ function SettingsSection(props: {
   const titleId = useId();
 
   return (
-    <section
-      aria-labelledby={titleId}
-      className="grid gap-5 border-t border-border py-7 first:border-t-0 lg:grid-cols-[176px_minmax(0,1fr)] lg:gap-8"
-    >
+    <section aria-labelledby={titleId} className="border-t border-border py-7">
       <h3 id={titleId} className="text-[14px] font-semibold">
         {props.title}
       </h3>
-      <div className="min-w-0">{props.children}</div>
+      <div className="mt-4 min-w-0">{props.children}</div>
     </section>
   );
 }
@@ -322,45 +338,132 @@ export function PersonalProfileRoute(): React.JSX.Element {
 
 const THEMES = [
   {
+    value: "system",
+    label: "System",
+  },
+  {
     value: "light",
     label: "Light",
-    icon: Sun,
   },
   {
     value: "dark",
     label: "Dark",
-    icon: Moon,
-  },
-  {
-    value: "system",
-    label: "System",
-    icon: Monitor,
   },
 ] as const;
 
+const ACCENTS = [
+  {
+    value: "default",
+    label: "Default",
+    swatches: ["oklch(72% 0.17 255)", "oklch(51% 0.2 285)"],
+  },
+  {
+    value: "ocean",
+    label: "Ocean",
+    swatches: ["oklch(76% 0.12 215)", "oklch(52% 0.12 215)"],
+  },
+  {
+    value: "ember",
+    label: "Ember",
+    swatches: ["oklch(75% 0.15 55)", "oklch(56% 0.16 48)"],
+  },
+  {
+    value: "iris",
+    label: "Iris",
+    swatches: ["oklch(76% 0.15 292)", "oklch(53% 0.17 292)"],
+  },
+] as const;
+
+function ColorSchemePreview({
+  value,
+}: {
+  value: (typeof THEMES)[number]["value"];
+}): React.JSX.Element {
+  const light = value === "light";
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "relative block h-24 overflow-hidden rounded-(--cv-radius) border",
+        light ? "border-black/10 bg-[#f5f7fa]" : "border-white/10 bg-[#111820]",
+        value === "system" &&
+          "border-black/10 bg-[linear-gradient(90deg,#f5f7fa_0_50%,#111820_50%_100%)]",
+      )}
+    >
+      <span
+        className={cn(
+          "absolute inset-y-0 left-0 w-[29%] border-r",
+          light
+            ? "border-black/10 bg-[#e4ebf2]"
+            : "border-white/10 bg-[#17232e]",
+          value === "system" && "border-black/10 bg-[#e4ebf2]",
+        )}
+      >
+        <span className="absolute left-2 top-3 h-1.5 w-8 rounded-full bg-sky-400/35" />
+        <span className="absolute left-2 top-7 h-1.5 w-6 rounded-full bg-sky-400/20" />
+        <span className="absolute left-2 top-11 h-1.5 w-7 rounded-full bg-sky-400/20" />
+      </span>
+      <span
+        className={cn(
+          "absolute left-[37%] top-4 h-2 w-[34%] rounded-full",
+          light ? "bg-black/14" : "bg-white/16",
+          value === "system" && "bg-black/14",
+        )}
+      />
+      <span
+        className={cn(
+          "absolute left-[37%] top-8 h-1.5 w-[24%] rounded-full",
+          light ? "bg-black/9" : "bg-white/10",
+          value === "system" && "bg-black/9",
+        )}
+      />
+      <span
+        className={cn(
+          "absolute bottom-3 left-[36%] right-3 h-4 rounded-full border",
+          light ? "border-black/10 bg-white/70" : "border-white/10 bg-white/3",
+          value === "system" && "border-white/10 bg-white/3",
+        )}
+      >
+        <span className="absolute right-1 top-1/2 size-2 -translate-y-1/2 rounded-full bg-accent" />
+      </span>
+      {value === "system" ? (
+        <span className="absolute inset-y-0 left-1/2 w-px bg-black/15" />
+      ) : null}
+    </span>
+  );
+}
+
 export function PersonalAppearanceRoute(): React.JSX.Element {
-  const { preference, setPreference } = useTheme();
+  const {
+    preference,
+    setPreference,
+    accent,
+    setAccent,
+    reduceMotion,
+    setReduceMotion,
+  } = useTheme();
 
   return (
     <PersonalPage
       title="Appearance"
-      description="Choose the theme for this device."
+      description="Choose how CodeVault looks and moves on this device."
     >
-      <SettingsSection title="Color theme">
+      <SettingsSection title="Color scheme">
         <fieldset>
-          <legend className="sr-only">Color theme</legend>
-          <div className="divide-y divide-border border-y border-border">
+          <legend className="sr-only">Color scheme</legend>
+          <div className="grid gap-3 sm:grid-cols-3">
             {THEMES.map((theme) => {
-              const Icon = theme.icon;
               const selected = preference === theme.value;
 
               return (
                 <label
                   key={theme.value}
                   className={cn(
-                    "relative flex min-h-12 cursor-pointer items-center gap-3 px-2 py-2",
-                    "transition-colors duration-150 ease-out hover:bg-surface-hover",
-                    selected && "bg-accent/8",
+                    "group relative cursor-pointer rounded-xl border p-2",
+                    "transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100",
+                    selected
+                      ? "border-accent bg-accent/6 shadow-[0_0_0_1px_var(--cv-accent)]"
+                      : "border-border bg-surface hover:border-border-strong hover:bg-surface-raised",
                   )}
                 >
                   <input
@@ -371,38 +474,388 @@ export function PersonalAppearanceRoute(): React.JSX.Element {
                     className="peer sr-only"
                     onChange={() => setPreference(theme.value)}
                   />
-                  <span
-                    className={cn(
-                      "flex size-9 shrink-0 items-center justify-center rounded-(--cv-radius)",
-                      "peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus",
-                      selected
-                        ? "bg-accent/12 text-accent"
-                        : "bg-surface-raised text-text-muted",
-                    )}
-                  >
-                    <Icon aria-hidden className="size-4" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[13px] font-medium">
-                      {theme.label}
+                  <span className="absolute inset-0 rounded-xl peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus" />
+                  <ColorSchemePreview value={theme.value} />
+                  <span className="mt-2 flex min-h-6 items-center justify-between px-1 text-[13px] font-medium">
+                    {theme.label}
+                    <span
+                      aria-hidden
+                      className={cn(
+                        "flex size-4 items-center justify-center rounded-full border",
+                        selected
+                          ? "border-accent bg-accent text-accent-contrast"
+                          : "border-border-strong",
+                      )}
+                    >
+                      {selected ? <Check className="size-2.5" /> : null}
                     </span>
-                  </span>
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "flex size-5 items-center justify-center rounded-full border",
-                      selected
-                        ? "border-accent bg-accent text-accent-contrast"
-                        : "border-border-strong",
-                    )}
-                  >
-                    {selected ? <Check className="size-3" /> : null}
                   </span>
                 </label>
               );
             })}
           </div>
         </fieldset>
+      </SettingsSection>
+
+      <SettingsSection title="Accent color">
+        <fieldset>
+          <legend className="sr-only">Accent color</legend>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {ACCENTS.map((option) => {
+              const selected = accent === option.value;
+
+              return (
+                <label
+                  key={option.value}
+                  className={cn(
+                    "relative flex min-h-20 cursor-pointer items-center gap-4 rounded-xl border px-4 py-3",
+                    "transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100",
+                    selected
+                      ? "border-accent bg-accent/6 shadow-[0_0_0_1px_var(--cv-accent)]"
+                      : "border-border bg-surface hover:border-border-strong hover:bg-surface-raised",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="accent-color"
+                    value={option.value}
+                    checked={selected}
+                    className="peer sr-only"
+                    onChange={() => setAccent(option.value)}
+                  />
+                  <span className="absolute inset-0 rounded-xl peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus" />
+                  <span className="flex -space-x-2" aria-hidden>
+                    {option.swatches.map((swatch) => (
+                      <span
+                        key={swatch}
+                        className="size-9 rounded-full outline outline-2 -outline-offset-1 outline-surface"
+                        style={{ backgroundColor: swatch }}
+                      />
+                    ))}
+                  </span>
+                  <span className="flex-1 text-[13px] font-medium">
+                    {option.label}
+                  </span>
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "flex size-4 items-center justify-center rounded-full border",
+                      selected
+                        ? "border-accent bg-accent text-accent-contrast"
+                        : "border-border-strong",
+                    )}
+                  >
+                    {selected ? <Check className="size-2.5" /> : null}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      </SettingsSection>
+
+      <SettingsSection title="Motion">
+        <div className="flex min-h-12 items-center justify-between gap-4 border-y border-border py-2">
+          <span className="text-[13px] font-medium">Reduce motion</span>
+          <button
+            type="button"
+            role="switch"
+            aria-label="Reduce motion"
+            aria-checked={reduceMotion}
+            className="group flex min-h-10 min-w-14 items-center justify-center rounded-(--cv-radius) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
+            onClick={() => setReduceMotion(!reduceMotion)}
+          >
+            <span
+              aria-hidden
+              className={cn(
+                "relative h-5 w-9 rounded-full transition-[background-color] duration-150 ease-out motion-reduce:transition-none",
+                reduceMotion ? "bg-accent" : "bg-surface-hover",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform duration-150 ease-out motion-reduce:transition-none",
+                  reduceMotion && "translate-x-4",
+                )}
+              />
+            </span>
+          </button>
+        </div>
+      </SettingsSection>
+    </PersonalPage>
+  );
+}
+
+function providerReadiness(
+  provider: AiProviderStatus,
+  policy: AiProviderPolicy | undefined,
+): { label: string; tone: "success" | "warning" | "danger" } {
+  if (!provider.available) {
+    return { label: "Not detected", tone: "danger" };
+  }
+
+  if (policy === undefined) {
+    return { label: "Policy unavailable", tone: "warning" };
+  }
+
+  if (!policy.enabled) {
+    return { label: "Disabled by organization", tone: "warning" };
+  }
+
+  if (policy.allowedModels.length === 0) {
+    return { label: "No models allowed", tone: "warning" };
+  }
+
+  if (policy.allowedEfforts.length === 0) {
+    return { label: "No effort levels allowed", tone: "warning" };
+  }
+
+  return { label: "Ready", tone: "success" };
+}
+
+export function PersonalAiRoute(): React.JSX.Element {
+  const user = useSession((state) => state.user);
+  const { providerId, setProviderId } = useAiProviderPreference();
+  const [providers, setProviders] = useState<AiProviderStatus[] | null>(null);
+  const [providerError, setProviderError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const policies = useApiQuery<{ items: AiProviderPolicy[] }>(
+    queryKeys.aiPolicies,
+    "/v1/ai/policies",
+  );
+
+  const loadProviders = useCallback(async (): Promise<void> => {
+    setRefreshing(true);
+    setProviderError(null);
+
+    try {
+      const statuses = await bridge().ai.providers();
+      setProviders(normalizeAiProviderStatuses(statuses));
+    } catch {
+      setProviderError(
+        "CodeVault could not inspect the local AI providers on this device.",
+      );
+    } finally {
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void bridge()
+      .ai.providers()
+      .then((statuses) => {
+        if (!cancelled) {
+          setProviders(normalizeAiProviderStatuses(statuses));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setProviderError(
+            "CodeVault could not inspect the local AI providers on this device.",
+          );
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const configuredProviders = configuredAiProviderStatuses(
+    providers ?? [],
+    policies.data?.items ?? [],
+  );
+  const preferredProviderReady =
+    providerId === null ||
+    configuredProviders.some((provider) => provider.providerId === providerId);
+
+  return (
+    <PersonalPage
+      title="AI"
+      description="Choose a local provider and see what this organization permits."
+    >
+      <SettingsSection title="Default provider">
+        {policies.error ? (
+          <QueryError query={policies} className="mb-3" />
+        ) : null}
+        {policies.data === undefined && policies.error === null ? (
+          <LoadingLine label="Loading AI policy…" />
+        ) : (
+          <fieldset>
+            <legend className="sr-only">Default AI provider</legend>
+            <div className="divide-y divide-border border-y border-border">
+              <label className="flex min-h-12 cursor-pointer items-center gap-3 px-2 py-2 hover:bg-surface-hover">
+                <input
+                  type="radio"
+                  name="default-ai-provider"
+                  checked={providerId === null}
+                  className="size-4 accent-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                  onChange={() => setProviderId(null)}
+                />
+                <span className="text-[13px] font-medium">Automatic</span>
+                <span className="ml-auto text-[11px] text-text-muted">
+                  First ready provider
+                </span>
+              </label>
+              {(providers ?? []).map((provider) => {
+                const ready = configuredProviders.some(
+                  (item) => item.providerId === provider.providerId,
+                );
+
+                return (
+                  <label
+                    key={provider.providerId}
+                    className={cn(
+                      "flex min-h-12 items-center gap-3 px-2 py-2",
+                      ready
+                        ? "cursor-pointer hover:bg-surface-hover"
+                        : "cursor-not-allowed opacity-55",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="default-ai-provider"
+                      value={provider.providerId}
+                      checked={providerId === provider.providerId}
+                      disabled={!ready}
+                      className="size-4 accent-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                      onChange={() => setProviderId(provider.providerId)}
+                    />
+                    <span className="text-[13px] font-medium">
+                      {provider.displayName}
+                    </span>
+                    <span className="ml-auto text-[11px] text-text-muted">
+                      {ready ? "Ready" : "Unavailable"}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            {preferredProviderReady ? null : (
+              <p role="status" className="mt-3 text-[12px] text-warning">
+                Your preferred provider is unavailable. CodeVault will use the
+                first ready provider until it returns.
+              </p>
+            )}
+          </fieldset>
+        )}
+      </SettingsSection>
+
+      <SettingsSection title="Local integrations">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="text-pretty text-[12px] text-text-muted">
+            Detection runs on this device. Organization policy still controls
+            which providers may receive case data.
+          </p>
+          <Button
+            variant="secondary"
+            className="h-10 shrink-0 px-3"
+            loading={refreshing}
+            onClick={() => void loadProviders()}
+          >
+            <RefreshCw aria-hidden className="size-3.5" />
+            Check again
+          </Button>
+        </div>
+
+        {providerError ? (
+          <div
+            role="alert"
+            className="flex items-center justify-between gap-3 border-y border-danger/35 py-4 text-[12px] text-danger"
+          >
+            <p>{providerError}</p>
+            <button
+              type="button"
+              className="min-h-10 shrink-0 underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+              onClick={() => void loadProviders()}
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
+
+        {providers === null && providerError === null ? (
+          <LoadingLine label="Detecting local AI providers…" />
+        ) : null}
+
+        {providers?.length === 0 ? (
+          <div className="border-y border-border py-5">
+            <p className="text-[13px] font-medium">
+              No supported providers were returned.
+            </p>
+            <p className="mt-1 text-[11px] text-text-muted">
+              Check again after installing a supported local provider.
+            </p>
+          </div>
+        ) : null}
+
+        {providers && providers.length > 0 ? (
+          <ul className="divide-y divide-border border-y border-border">
+            {providers.map((provider) => {
+              const policy = policies.data?.items.find(
+                (item) => item.providerId === provider.providerId,
+              );
+              const readiness = providerReadiness(provider, policy);
+
+              return (
+                <li key={provider.providerId} className="flex gap-3 py-4">
+                  <Bot
+                    aria-hidden
+                    className="mt-0.5 size-4 shrink-0 text-text-muted"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <p className="text-[13px] font-medium">
+                        {provider.displayName}
+                      </p>
+                      <span
+                        className={cn(
+                          "flex items-center gap-1.5 text-[11px] font-semibold",
+                          readiness.tone === "success" && "text-success",
+                          readiness.tone === "warning" && "text-warning",
+                          readiness.tone === "danger" && "text-danger",
+                        )}
+                      >
+                        <span className="size-1.5 rounded-full bg-current" />
+                        {readiness.label}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-pretty text-[11px] leading-4 text-text-muted">
+                      {provider.available
+                        ? `Version ${provider.version ?? "unavailable"}`
+                        : (provider.detail ??
+                          "The provider executable was not found on this device.")}
+                    </p>
+                    {provider.executablePath ? (
+                      <code className="mt-1 block break-all font-mono text-[11px] text-text-muted">
+                        {provider.executablePath}
+                      </code>
+                    ) : null}
+                    {policy && policy.allowedModels.length > 0 ? (
+                      <p className="mt-2 text-pretty text-[11px] leading-4 text-text-muted">
+                        Allowed models: {policy.allowedModels.join(", ")}
+                      </p>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+
+        <p className="mt-4 text-[12px] text-text-muted">
+          {user?.role === "ADMIN"
+            ? "Organization-wide access rules are managed in Organization Security."
+            : "An administrator manages organization-wide AI access rules."}{" "}
+          <Link
+            to="/organization/security"
+            className="font-medium text-accent underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+          >
+            View organization policy
+          </Link>
+        </p>
       </SettingsSection>
     </PersonalPage>
   );

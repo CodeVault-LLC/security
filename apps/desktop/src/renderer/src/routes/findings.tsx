@@ -1,6 +1,6 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ListFilter, Plus } from "lucide-react";
+import { ListFilter, Plus, SlidersHorizontal, X } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
 import type { FindingSummary } from "@codevault/contracts";
@@ -46,7 +46,7 @@ interface Paginated<T> {
   nextCursor: string | null;
 }
 
-const ROW_HEIGHT = 34;
+const ROW_HEIGHT = 72;
 
 /**
  * The sentinel for "no filter".
@@ -58,6 +58,8 @@ const ROW_HEIGHT = 34;
 const ALL = "__all";
 
 export function FindingsRoute(): React.JSX.Element {
+  const routeSearch = useSearch({ from: "/findings" });
+  const navigate = useNavigate();
   const user = useSession((state) => state.user);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -65,11 +67,12 @@ export function FindingsRoute(): React.JSX.Element {
   const [disclosureState, setDisclosureState] = useState<string>("");
   const [priorArtState, setPriorArtState] = useState<string>("");
   const [severity, setSeverity] = useState<string>("");
+  const [limit, setLimit] = useState(200);
 
   const debouncedSearch = useDebouncedValue(search, 220);
 
   const query = useMemo(() => {
-    const params = new URLSearchParams({ limit: "200" });
+    const params = new URLSearchParams({ limit: String(limit) });
 
     if (debouncedSearch.trim().length > 0) {
       params.set("query", debouncedSearch.trim());
@@ -91,6 +94,10 @@ export function FindingsRoute(): React.JSX.Element {
       params.set("severity", severity);
     }
 
+    if (routeSearch.assetId !== undefined) {
+      params.set("assetId", routeSearch.assetId);
+    }
+
     return params.toString();
   }, [
     debouncedSearch,
@@ -98,6 +105,8 @@ export function FindingsRoute(): React.JSX.Element {
     disclosureState,
     priorArtState,
     severity,
+    routeSearch.assetId,
+    limit,
   ]);
 
   const findings = useApiQuery<Paginated<FindingSummary>>(
@@ -106,7 +115,23 @@ export function FindingsRoute(): React.JSX.Element {
   );
 
   const items = findings.data?.items ?? [];
+  const hasFilters =
+    search.trim().length > 0 ||
+    validationState.length > 0 ||
+    disclosureState.length > 0 ||
+    priorArtState.length > 0 ||
+    severity.length > 0 ||
+    routeSearch.assetId !== undefined;
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const clearFilters = (): void => {
+    setSearch("");
+    setValidationState("");
+    setDisclosureState("");
+    setPriorArtState("");
+    setSeverity("");
+    void navigate({ to: "/findings", search: {} });
+  };
 
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -119,7 +144,11 @@ export function FindingsRoute(): React.JSX.Element {
     <div className="flex h-full flex-col">
       <PageHeader
         title="Findings"
-        description="Every finding you can see, across every case."
+        description={
+          routeSearch.assetId === undefined
+            ? "Every finding you can see, across every case."
+            : `Findings linked to ${routeSearch.assetName ?? "the selected asset"}.`
+        }
         actions={
           canWrite(user) ? (
             <Button variant="primary" onClick={() => setCreateOpen(true)}>
@@ -130,40 +159,77 @@ export function FindingsRoute(): React.JSX.Element {
         }
       />
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2">
+      <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5">
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Filter by title or reference…"
-          className="w-72"
+          className="min-w-56 flex-1 sm:max-w-md"
           aria-label="Filter findings"
         />
-        <FilterSelect
-          label="Validation"
-          value={validationState}
-          onChange={setValidationState}
-          options={stateSelectOptions("validation", VALIDATION_STATES)}
-        />
-        <FilterSelect
-          label="Disclosure"
-          value={disclosureState}
-          onChange={setDisclosureState}
-          options={stateSelectOptions("disclosure", DISCLOSURE_STATES)}
-        />
-        <FilterSelect
-          label="Prior art"
-          value={priorArtState}
-          onChange={setPriorArtState}
-          options={stateSelectOptions("priorArt", PRIOR_ART_STATES)}
-        />
-        <FilterSelect
-          label="Severity"
-          value={severity}
-          onChange={setSeverity}
-          options={severitySelectOptions(SEVERITY_RATINGS)}
-        />
-        <span className="ml-auto text-[11px] text-text-muted">
-          {items.length} shown
+        <details className="group relative">
+          <summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-(--cv-radius) border border-border bg-surface px-3 text-[13px] font-medium hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus">
+            <SlidersHorizontal aria-hidden className="size-4" />
+            Filters
+            {hasFilters ? <span className="text-accent">Active</span> : null}
+          </summary>
+          <div className="absolute right-0 z-20 mt-2 grid w-[min(38rem,calc(100vw-6rem))] grid-cols-1 gap-2 rounded-(--cv-radius-lg) border border-border-strong bg-surface p-3 shadow-lg sm:grid-cols-2">
+            <FilterSelect
+              label="Validation"
+              value={validationState}
+              onChange={setValidationState}
+              options={stateSelectOptions("validation", VALIDATION_STATES)}
+            />
+            <FilterSelect
+              label="Disclosure"
+              value={disclosureState}
+              onChange={setDisclosureState}
+              options={stateSelectOptions("disclosure", DISCLOSURE_STATES)}
+            />
+            <FilterSelect
+              label="Prior art"
+              value={priorArtState}
+              onChange={setPriorArtState}
+              options={stateSelectOptions("priorArt", PRIOR_ART_STATES)}
+            />
+            <FilterSelect
+              label="Severity"
+              value={severity}
+              onChange={setSeverity}
+              options={severitySelectOptions(SEVERITY_RATINGS)}
+            />
+          </div>
+        </details>
+        {routeSearch.assetId === undefined ? null : (
+          <div className="flex h-10 min-w-0 items-center gap-1 rounded-(--cv-radius) border border-border bg-surface px-2 text-[12px]">
+            <span className="shrink-0 text-text-muted">Asset</span>
+            <Link
+              to={`/assets/${routeSearch.assetId}`}
+              className="min-w-0 truncate font-medium hover:underline"
+            >
+              {routeSearch.assetName ?? "Linked asset"}
+            </Link>
+            <button
+              type="button"
+              aria-label="Clear asset filter"
+              title="Clear asset filter"
+              onClick={() => void navigate({ to: "/findings", search: {} })}
+              className="ml-1 flex size-10 shrink-0 items-center justify-center rounded-(--cv-radius) text-text-muted hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-focus"
+            >
+              <X aria-hidden className="size-3.5" />
+            </button>
+          </div>
+        )}
+        {hasFilters ? (
+          <Button variant="ghost" onClick={clearFilters}>
+            <X aria-hidden className="size-4" />
+            Clear
+          </Button>
+        ) : null}
+        <span className="ml-auto text-[11px] text-text-muted" role="status">
+          {findings.isFetching && findings.data !== undefined
+            ? "Updating…"
+            : `${items.length} shown`}
         </span>
       </div>
 
@@ -186,8 +252,32 @@ export function FindingsRoute(): React.JSX.Element {
         <LoadingState label="Loading findings…" />
       ) : items.length === 0 ? (
         <EmptyState
-          title="No findings match"
-          description="Adjust the filters, or record a new finding."
+          title={
+            routeSearch.assetId !== undefined
+              ? `No findings linked to ${routeSearch.assetName ?? "this asset"}`
+              : hasFilters
+                ? "No findings match"
+                : "No findings yet"
+          }
+          description={
+            hasFilters
+              ? "Clear one or more filters to widen the result set."
+              : canWrite(user)
+                ? "Record a finding as soon as the issue is reproducible; the detail can follow."
+                : "No findings are available to you. An editor can record the first finding."
+          }
+          action={
+            hasFilters ? (
+              <Button variant="secondary" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            ) : canWrite(user) ? (
+              <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                <Plus aria-hidden className="size-3.5" />
+                New finding
+              </Button>
+            ) : undefined
+          }
         />
       ) : (
         <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
@@ -213,15 +303,15 @@ export function FindingsRoute(): React.JSX.Element {
                 >
                   <Link
                     to={`/findings/${finding.id}`}
-                    className="flex h-full items-center gap-2 border-b border-border px-4 text-[12px] hover:bg-surface-hover"
+                    className="grid h-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 border-b border-border px-4 text-[12px] hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus lg:grid-cols-[8rem_minmax(12rem,1fr)_auto_6rem]"
                   >
-                    <Mono className="w-32 shrink-0 text-text-muted">
+                    <Mono className="text-text-muted max-lg:row-start-2">
                       {finding.ref}
                     </Mono>
-                    <span className="min-w-0 flex-1 truncate">
+                    <span className="min-w-0 truncate font-medium max-lg:col-span-2 max-lg:row-start-1">
                       {finding.title}
                     </span>
-                    <span className="hidden shrink-0 items-center gap-1.5 lg:flex">
+                    <span className="flex shrink-0 items-center gap-1.5 max-lg:col-span-2 max-lg:row-start-3">
                       <SeverityBadge
                         severity={finding.severity}
                         score={finding.score}
@@ -230,13 +320,17 @@ export function FindingsRoute(): React.JSX.Element {
                         kind="validation"
                         state={finding.validationState}
                       />
-                      <StateBadge
-                        kind="disclosure"
-                        state={finding.disclosureState}
-                      />
-                      <PriorArtBadge state={finding.priorArtState} />
+                      <span className="max-lg:hidden">
+                        <StateBadge
+                          kind="disclosure"
+                          state={finding.disclosureState}
+                        />
+                      </span>
+                      <span className="max-lg:hidden">
+                        <PriorArtBadge state={finding.priorArtState} />
+                      </span>
                     </span>
-                    <span className="w-20 shrink-0 text-right text-text-muted">
+                    <span className="shrink-0 text-right text-text-muted">
                       {formatDistanceToNowStrict(finding.updatedAt)}
                     </span>
                   </Link>
@@ -244,10 +338,25 @@ export function FindingsRoute(): React.JSX.Element {
               );
             })}
           </div>
+          {findings.data?.nextCursor === null ? null : (
+            <div className="flex justify-center border-t border-border p-3">
+              <Button
+                variant="secondary"
+                loading={findings.isFetching}
+                onClick={() => setLimit((current) => current + 200)}
+              >
+                Load more findings
+              </Button>
+            </div>
+          )}
         </div>
       )}
 
-      <CreateFindingDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <CreateFindingDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        assetId={routeSearch.assetId}
+      />
     </div>
   );
 }
@@ -275,7 +384,7 @@ function FilterSelect({
       aria-label={label}
       value={value.length === 0 ? ALL : value}
       onValueChange={(next) => onChange(next === ALL ? "" : next)}
-      className="w-44"
+      className="w-full"
       options={[
         {
           value: ALL,

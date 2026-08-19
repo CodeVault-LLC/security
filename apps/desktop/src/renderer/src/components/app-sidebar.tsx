@@ -2,20 +2,18 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Activity,
   BarChart3,
+  BriefcaseBusiness,
   Building2,
   Boxes,
   ChevronUp,
   FileText,
   Home,
   LogOut,
-  Mail,
-  Monitor,
   Search,
   Settings,
   ShieldAlert,
   ShieldCheck,
   Send,
-  UserRound,
   Users,
   WifiOff,
 } from "lucide-react";
@@ -62,7 +60,7 @@ const PRIMARY_ITEMS: NavigationItem[] = [
   {
     to: "/cases",
     label: "Cases",
-    icon: <Boxes aria-hidden className="size-4" />,
+    icon: <BriefcaseBusiness aria-hidden className="size-4" />,
   },
   {
     to: "/findings",
@@ -110,22 +108,21 @@ export function AppSidebar({
   const [signingOut, setSigningOut] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
-  const isActive = (to: string): boolean =>
-    to === "/" ? pathname === "/" : pathname.startsWith(to);
-
   const renderItem = (item: NavigationItem): React.JSX.Element => (
     <Link
       key={item.to}
       to={item.to}
-      className={cn(
-        "flex items-center gap-2 rounded-(--cv-radius) px-2 py-1 text-[13px] transition-colors",
-        isActive(item.to)
-          ? "bg-surface-hover text-text"
-          : "text-text-muted hover:bg-surface-hover hover:text-text",
-      )}
+      aria-label={item.label}
+      title={item.label}
+      activeOptions={{ exact: item.to === "/" }}
+      activeProps={{ className: "bg-surface-hover text-text" }}
+      inactiveProps={{
+        className: "text-text-muted hover:bg-surface-hover hover:text-text",
+      }}
+      className="flex min-h-9 items-center gap-2 rounded-(--cv-radius) px-2 text-[13px] transition-colors max-lg:justify-center"
     >
       <span className="shrink-0">{item.icon}</span>
-      <span className="truncate">{item.label}</span>
+      <span className="truncate max-lg:hidden">{item.label}</span>
     </Link>
   );
 
@@ -143,32 +140,42 @@ export function AppSidebar({
   };
 
   return (
-    <nav className="flex h-full w-52 shrink-0 flex-col border-r border-border bg-surface">
-      <div className="cv-drag-region flex h-11 items-center px-3">
-        <BrandWordmark compact />
+    <nav
+      aria-label="Primary"
+      className="flex h-full w-52 shrink-0 flex-col border-r border-border bg-surface max-lg:w-16"
+    >
+      <div className="cv-drag-region flex h-14 items-center px-3 max-lg:justify-center max-lg:px-1">
+        <BrandWordmark compact className="max-lg:hidden" />
+        <span
+          aria-label="CodeVault Security"
+          className="hidden text-[13px] font-semibold tracking-[-0.02em] text-accent max-lg:inline"
+        >
+          CV
+        </span>
       </div>
 
       <div className="cv-no-drag px-2 pb-2">
         <button
           type="button"
           onClick={onOpenCommandPalette}
-          className="flex w-full items-center gap-2 rounded-(--cv-radius) border border-border bg-surface-raised px-2 py-1 text-[12px] text-text-muted hover:bg-surface-hover"
+          aria-label="Search and commands"
+          className="flex min-h-9 w-full items-center gap-2 rounded-(--cv-radius) border border-border bg-surface-raised px-2 text-[12px] text-text-muted hover:bg-surface-hover max-lg:justify-center"
         >
           <Search aria-hidden className="size-3.5" />
-          <span className="flex-1 text-left">Search</span>
-          <kbd className="rounded border border-border px-1 font-mono text-[10px]">
+          <span className="flex-1 text-left max-lg:hidden">Search</span>
+          <kbd className="rounded border border-border px-1 font-mono text-[10px] max-lg:hidden">
             ⌘K
           </kbd>
         </button>
       </div>
 
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-2">
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-2 max-lg:gap-2">
         <div className="flex flex-col gap-0.5">
           {PRIMARY_ITEMS.map(renderItem)}
         </div>
 
         <div className="flex flex-col gap-0.5">
-          <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted">
+          <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted max-lg:hidden">
             Organization
           </p>
           {renderItem({
@@ -189,7 +196,7 @@ export function AppSidebar({
         </div>
 
         <div className="flex flex-col gap-0.5">
-          <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted">
+          <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted max-lg:hidden">
             Publishing
           </p>
           {PUBLISHING_ITEMS.map(renderItem)}
@@ -212,11 +219,14 @@ export function AppSidebar({
       <div className="border-t border-border p-2">
         {eventsConnected ? null : (
           <div
+            role="status"
+            aria-label="Live updates are offline. Data may be stale."
             className="mb-2 flex items-center gap-1.5 rounded-(--cv-radius) border border-warning/40 bg-warning/10 px-2 py-1 text-[11px] text-warning"
             title="Live updates are not connected. Data may be out of date until it reconnects."
           >
             <WifiOff aria-hidden className="size-3" />
-            Live updates offline
+            <span className="max-lg:hidden">Live updates offline</span>
+            <span className="hidden max-lg:inline">Stale</span>
           </div>
         )}
 
@@ -240,7 +250,7 @@ export function AppSidebar({
                 label={user?.displayName ?? "Account"}
                 size="sm"
               />
-              <span className="min-w-0 flex-1">
+              <span className="min-w-0 flex-1 max-lg:hidden">
                 <span className="block truncate font-medium text-text">
                   {user?.displayName ?? "Account"}
                 </span>
@@ -250,7 +260,7 @@ export function AppSidebar({
               </span>
               <ChevronUp
                 aria-hidden
-                className="size-4 shrink-0 transition-transform duration-150 ease-out group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+                className="size-4 shrink-0 transition-transform duration-150 ease-out group-data-[state=open]:rotate-180 motion-reduce:transition-none max-lg:hidden"
               />
             </button>
           </DropdownMenuTrigger>
@@ -273,35 +283,8 @@ export function AppSidebar({
                 to="/settings/profile"
                 onClick={() => setAccountMenuOpen(false)}
               >
-                <UserRound aria-hidden className="size-4" />
-                Profile
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link
-                to="/settings/appearance"
-                onClick={() => setAccountMenuOpen(false)}
-              >
-                <Monitor aria-hidden className="size-4" />
-                Appearance
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link
-                to="/settings/security"
-                onClick={() => setAccountMenuOpen(false)}
-              >
-                <ShieldCheck aria-hidden className="size-4" />
-                Security
-              </Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link
-                to="/settings/mail"
-                onClick={() => setAccountMenuOpen(false)}
-              >
-                <Mail aria-hidden className="size-4" />
-                Mail
+                <Settings aria-hidden className="size-4" />
+                Settings
               </Link>
             </DropdownMenuItem>
             <DropdownMenuSeparator />

@@ -116,19 +116,20 @@ export function CaseDetailRoute({
       <header className="border-b border-border px-4 py-3">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Mono className="text-text-muted">{data.ref}</Mono>
               <StateBadge kind="validation" state={data.status} />
-              <span className="rounded border border-border px-1 text-[10px] uppercase text-text-muted">
+              <span className="text-[11px] text-text-muted">
                 {humanise(data.profile)}
               </span>
               {data.restricted ? (
-                <span className="rounded border border-danger/50 px-1 text-[10px] uppercase text-danger">
-                  Restricted
-                </span>
+                <span className="text-[11px] text-danger">Restricted</span>
               ) : null}
+              {canEdit ? null : (
+                <span className="text-[11px] text-text-muted">Read only</span>
+              )}
             </div>
-            <h1 className="mt-0.5 truncate text-[15px] font-semibold">
+            <h1 className="mt-1 text-[18px] font-semibold leading-tight tracking-[-0.015em] text-balance">
               {data.title}
             </h1>
             {data.summary === null ? null : (
@@ -141,7 +142,6 @@ export function CaseDetailRoute({
           {canEdit ? (
             <Button
               variant="primary"
-              size="sm"
               onClick={() => setCreateFindingOpen(true)}
             >
               <Plus aria-hidden className="size-3" />
@@ -182,11 +182,12 @@ export function CaseDetailRoute({
                   </span>
                 )}
               </CardHeader>
-              <QueryError query={readiness} className="mx-3 mt-3" />
-
-              {readiness.data === undefined ? (
+              {readiness.error !== null ? (
+                <QueryError query={readiness} className="m-3" />
+              ) : readiness.isLoading ? (
                 <LoadingState />
-              ) : readiness.data.requirements.length === 0 ? (
+              ) : readiness.data === undefined ? null : readiness.data
+                  .requirements.length === 0 ? (
                 <CardBody className="text-[12px] text-text-muted">
                   This case's policy pack imposes no publication requirements.
                 </CardBody>
@@ -265,8 +266,17 @@ export function CaseDetailRoute({
         </TabsContent>
 
         <TabsContent value="findings">
-          <QueryError query={findings} className="mb-3" />
-          <FindingsTable findings={findings.data?.items ?? []} />
+          {findings.error !== null ? (
+            <QueryError query={findings} className="m-4" />
+          ) : findings.isLoading ? (
+            <LoadingState label="Loading case findings…" />
+          ) : (
+            <FindingsTable
+              findings={findings.data?.items ?? []}
+              canEdit={canEdit}
+              onCreate={() => setCreateFindingOpen(true)}
+            />
+          )}
         </TabsContent>
 
         <TabsContent value="intake">
@@ -288,12 +298,17 @@ export function CaseDetailRoute({
         ) : null}
 
         <TabsContent value="reports" className="p-4">
-          <QueryError query={reports} className="mb-3" />
-          <ReportsPanel
-            caseId={caseId}
-            reports={reports.data?.items ?? []}
-            canEdit={canEdit}
-          />
+          {reports.error !== null ? (
+            <QueryError query={reports} />
+          ) : reports.isLoading ? (
+            <LoadingState label="Loading case reports…" />
+          ) : (
+            <ReportsPanel
+              caseId={caseId}
+              reports={reports.data?.items ?? []}
+              canEdit={canEdit}
+            />
+          )}
         </TabsContent>
       </Tabs>
 
@@ -308,14 +323,26 @@ export function CaseDetailRoute({
 
 function FindingsTable({
   findings,
+  canEdit,
+  onCreate,
 }: {
   findings: readonly FindingSummary[];
+  canEdit: boolean;
+  onCreate: () => void;
 }): React.JSX.Element {
   if (findings.length === 0) {
     return (
       <EmptyState
         title="No findings in this case yet"
         description="Record one as soon as you have something reproducible; the detail comes later."
+        action={
+          canEdit ? (
+            <Button variant="primary" onClick={onCreate}>
+              <Plus aria-hidden className="size-3.5" />
+              New finding
+            </Button>
+          ) : undefined
+        }
       />
     );
   }
@@ -326,14 +353,18 @@ function FindingsTable({
         <li key={finding.id}>
           <Link
             to={`/findings/${finding.id}`}
-            className="flex items-center gap-2 px-4 py-2 text-[12px] hover:bg-surface-hover"
+            className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-2 text-[12px] hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus lg:grid-cols-[8rem_minmax(12rem,1fr)_auto_auto_auto_6rem]"
           >
-            <Mono className="w-32 shrink-0 text-text-muted">{finding.ref}</Mono>
-            <span className="min-w-0 flex-1 truncate">{finding.title}</span>
+            <Mono className="text-text-muted max-lg:row-start-2">
+              {finding.ref}
+            </Mono>
+            <span className="min-w-0 truncate font-medium max-lg:col-span-2 max-lg:row-start-1">
+              {finding.title}
+            </span>
             <SeverityBadge severity={finding.severity} score={finding.score} />
             <StateBadge kind="validation" state={finding.validationState} />
             <PriorArtBadge state={finding.priorArtState} />
-            <span className="w-16 shrink-0 text-right text-text-muted">
+            <span className="shrink-0 text-right text-text-muted">
               {formatDistanceToNowStrict(finding.updatedAt)}
             </span>
           </Link>
@@ -370,45 +401,30 @@ function ReportsPanel({
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
+      <div className="divide-y divide-border rounded-(--cv-radius-lg) border border-border">
         {audiences.map((audience) => {
           const report = reports.find((item) => item.audience === audience);
 
           return (
-            <Card key={audience}>
-              <CardHeader>
-                <CardTitle>{audience}</CardTitle>
+            <section
+              key={audience}
+              className="grid grid-cols-1 gap-2 p-3 text-[12px] lg:grid-cols-[8rem_minmax(0,1fr)_auto] lg:items-center"
+            >
+              <div className="flex items-center gap-2">
+                <h2 className="font-semibold">{humanise(audience)}</h2>
                 {report === undefined ? null : <TlpBadge label={report.tlp} />}
-              </CardHeader>
-              <CardBody className="space-y-2 text-[12px]">
+              </div>
+              <div>
                 {report === undefined ? (
-                  <>
-                    <p className="text-text-muted">
-                      Not created. Each report is a projection of this case for
-                      one audience, and sees only the data that audience may
-                      see.
-                    </p>
-                    {canEdit ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={create.isPending}
-                        onClick={() =>
-                          create.mutate(audience, {
-                            onError: (mutationError) =>
-                              setError(mutationError.message),
-                          })
-                        }
-                      >
-                        Create {audience.toLowerCase()} report
-                      </Button>
-                    ) : null}
-                  </>
+                  <p className="text-text-muted">
+                    Not created. Each report is a projection of this case for
+                    one audience, and sees only the data that audience may see.
+                  </p>
                 ) : (
                   <>
                     <div className="flex items-center gap-2">
                       <Mono className="text-text-muted">{report.ref}</Mono>
-                      <span className="rounded border border-border px-1 text-[10px] uppercase text-text-muted">
+                      <span className="text-[11px] text-text-muted">
                         {report.status.replace("_", " ").toLowerCase()}
                       </span>
                     </div>
@@ -416,22 +432,40 @@ function ReportsPanel({
                       {report.approvedSectionCount} of {report.sectionCount}{" "}
                       sections approved
                     </p>
-                    <Link
-                      to={`/reports/${report.id}`}
-                      className="inline-block text-accent hover:underline"
-                    >
-                      Open report
-                    </Link>
                   </>
                 )}
-              </CardBody>
-            </Card>
+              </div>
+              <div>
+                {report === undefined ? (
+                  canEdit ? (
+                    <Button
+                      variant="secondary"
+                      loading={create.isPending}
+                      onClick={() =>
+                        create.mutate(audience, {
+                          onError: (mutationError) =>
+                            setError(mutationError.message),
+                        })
+                      }
+                    >
+                      Create {audience.toLowerCase()} report
+                    </Button>
+                  ) : null
+                ) : (
+                  <Button asChild variant="secondary">
+                    <Link to={`/reports/${report.id}`}>Open report</Link>
+                  </Button>
+                )}
+              </div>
+            </section>
           );
         })}
       </div>
 
       {error === null ? null : (
-        <p className="text-[12px] text-danger">{error}</p>
+        <p role="alert" className="text-[12px] text-danger">
+          {error}
+        </p>
       )}
     </div>
   );

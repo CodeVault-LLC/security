@@ -62,7 +62,6 @@ docker compose -f infra/docker-compose.yml up -d
 
 set -a; . ./.env; set +a
 
-bun run db:migrate
 bun run admin:create --organization "Your Organization" \
   --email you@example.com --name "Your Name"
 bun run verify:env
@@ -78,10 +77,25 @@ bun run dev              # API on :4310, worker, and the desktop client
 bun run dev:services     # API and worker only
 ```
 
-The three read `.env` from the repository root. `bun run dev` starts them as
-peers rather than through `bun run --filter`, which waits for a dependency's
-script to finish — the worker depends on the server package, so it would never
-start behind a server that is meant to keep running.
+`admin:create` applies pending migrations before creating the organization.
+`bun run dev` and `bun run dev:services` also apply pending migrations before
+starting any process. The development runner starts the processes as peers
+rather than through `bun run --filter`, which waits for a dependency's script
+to finish. The worker depends on the server package, so it would never start
+behind a server that is meant to keep running.
+
+To delete all application data in the local development database and rebuild
+the schema from every migration, run:
+
+```bash
+bun run db:reset
+```
+
+The command accepts only a local PostgreSQL URL, refuses `NODE_ENV=production`,
+and asks you to type the database name. Use `bun run db:reset --yes` only in a
+non-interactive development script. It does not delete object-store files.
+`bun run db:migrate` remains available when you want to apply migrations
+without starting the app.
 
 To use CodeVault from Codex CLI, Claude Code, or another terminal MCP client,
 sign in with `bun run mcp:login` and register the local stdio server. See
@@ -92,10 +106,11 @@ complete during install. Run `bun run electron:install` to retry it; nothing
 else in the repository needs it.
 
 There is no public registration page. The first administrator is created by the
-CLI above, which enrolls TOTP and prints ten one-time recovery codes only after
-the organization, membership, credential, and audit record commit atomically.
-Everyone else arrives through an expiring, single-use invitation and must enroll
-MFA before receiving a session.
+CLI above. It displays a terminal QR code for TOTP enrollment, verifies the
+first authenticator code, and prints ten one-time recovery codes only after the
+organization, membership, credential, and audit record commit atomically.
+Everyone else arrives through an expiring, single-use invitation and must
+enroll MFA before receiving a session.
 
 Rotate encrypted TOTP credentials after adding a new first entry to
 `MFA_ENCRYPTION_KEYS` with `bun run mfa:rotate-key`. Use `--dry-run` first; the

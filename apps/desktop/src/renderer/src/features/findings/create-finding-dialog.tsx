@@ -28,6 +28,7 @@ import {
   useApiQuery,
 } from "../../lib/api.js";
 import { MarkdownField } from "../markdown/markdown-field.js";
+import { clearDraft } from "../markdown/drafts.js";
 import { QueryError } from "../../components/query-boundary.js";
 
 /**
@@ -43,6 +44,8 @@ export interface CreateFindingDialogProps {
   onOpenChange: (open: boolean) => void;
   /** Pre-selects a case when opened from within one. */
   caseId?: string;
+  /** Pre-selects the affected asset when opened from an asset workspace. */
+  assetId?: string;
 }
 
 interface Paginated<T> {
@@ -54,12 +57,13 @@ export function CreateFindingDialog({
   open,
   onOpenChange,
   caseId,
+  assetId: initialAssetId,
 }: CreateFindingDialogProps): React.JSX.Element {
   const navigate = useNavigate();
   const [selectedCaseId, setSelectedCaseId] = useState(caseId ?? "");
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
-  const [assetId, setAssetId] = useState<string>("");
+  const [assetId, setAssetId] = useState<string>(initialAssetId ?? "");
   const [severity, setSeverity] = useState<SeverityRating | "">("");
 
   const cases = useApiQuery<Paginated<CaseSummary>>(
@@ -100,10 +104,11 @@ export function CreateFindingDialog({
 
     create.mutate(undefined, {
       onSuccess: (created) => {
+        clearDraft(`finding:new:${selectedCaseId}`);
         onOpenChange(false);
         setTitle("");
         setSummary("");
-        setAssetId("");
+        setAssetId(initialAssetId ?? "");
         setSeverity("");
         void navigate({ to: `/findings/${created.id}` });
       },
@@ -123,7 +128,8 @@ export function CreateFindingDialog({
               aria-label="Case"
               value={selectedCaseId.length === 0 ? undefined : selectedCaseId}
               onValueChange={setSelectedCaseId}
-              placeholder="Choose a case"
+              placeholder={cases.isLoading ? "Loading cases…" : "Choose a case"}
+              disabled={cases.isLoading || cases.error !== null}
               className="mt-1"
               options={(cases.data?.items ?? []).map((item) => ({
                 value: item.id,
@@ -155,7 +161,10 @@ export function CreateFindingDialog({
               aria-label="Affected asset"
               value={assetId.length === 0 ? undefined : assetId}
               onValueChange={setAssetId}
-              placeholder="Choose an asset"
+              placeholder={
+                assets.isLoading ? "Loading assets…" : "Choose an asset"
+              }
+              disabled={assets.isLoading || assets.error !== null}
               className="mt-1"
               options={(assets.data?.items ?? []).map((item) => ({
                 value: item.id,
@@ -170,6 +179,7 @@ export function CreateFindingDialog({
             <Label>Short summary (optional)</Label>
             <div className="mt-1">
               <MarkdownField
+                ariaLabel="Short summary"
                 value={summary}
                 onChange={setSummary}
                 draftKey={`finding:new:${selectedCaseId}`}
@@ -213,13 +223,10 @@ export function CreateFindingDialog({
           <Button
             variant="primary"
             onClick={submit}
-            disabled={
-              selectedCaseId.length === 0 ||
-              title.trim().length === 0 ||
-              create.isPending
-            }
+            disabled={selectedCaseId.length === 0 || title.trim().length === 0}
+            loading={create.isPending}
           >
-            {create.isPending ? "Creating…" : "Create finding"}
+            Create finding
           </Button>
         </DialogFooter>
       </DialogContent>

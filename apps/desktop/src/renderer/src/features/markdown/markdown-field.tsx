@@ -22,6 +22,8 @@ import { MarkdownToolbar } from "./markdown-toolbar.js";
  */
 
 export interface MarkdownFieldProps {
+  /** Accessible name for the CodeMirror textbox. */
+  ariaLabel: string;
   /** The stored value. Changes to it are adopted unless there is a draft. */
   value: string;
   onSave?: (value: string) => void;
@@ -52,6 +54,7 @@ function countWords(text: string): number {
 }
 
 export function MarkdownField({
+  ariaLabel,
   value,
   onSave,
   onChange,
@@ -115,14 +118,10 @@ export function MarkdownField({
     }
   }, [value]);
 
-  const save = useCallback(
-    (text: string): void => {
-      onSaveRef.current?.(text);
-      clearDraft(draftKey);
-      setSavedText(text);
-    },
-    [draftKey],
-  );
+  const save = useCallback((text: string): void => {
+    onSaveRef.current?.(text);
+    setSavedText(text);
+  }, []);
 
   useEffect(() => {
     if (!dirty || readOnly || onSave === undefined) {
@@ -169,45 +168,24 @@ export function MarkdownField({
     <div
       className={`flex min-h-0 flex-col rounded-(--cv-radius) border border-border bg-surface ${
         focusMode ? "h-full" : ""
-      }`}
+      } focus-within:border-focus focus-within:ring-1 focus-within:ring-focus/30`}
     >
       {readOnly ? null : (
         <MarkdownToolbar
           onCommand={runCommand}
           onInsertMenu={() => setMenuOpen(true)}
           disabled={mode === "preview"}
-        >
-          <div className="flex items-center gap-1.5">
-            {status === null ? null : (
-              <span className={`text-[11px] ${status.tone}`}>
-                {status.text}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => setFocusMode((current) => !current)}
-              title={focusMode ? "Leave focus mode (Esc)" : "Focus mode"}
-              aria-label={focusMode ? "Leave focus mode" : "Focus mode"}
-              className="rounded-(--cv-radius) p-1 text-text-muted hover:bg-surface-hover hover:text-text"
-            >
-              {focusMode ? (
-                <Minimize2 aria-hidden className="size-3.5" />
-              ) : (
-                <Maximize2 aria-hidden className="size-3.5" />
-              )}
-            </button>
-          </div>
-        </MarkdownToolbar>
+        />
       )}
 
-      <div className="flex items-center gap-1 border-b border-border px-1.5 py-1">
+      <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
         {(["write", "preview"] as const).map((item) => (
           <button
             key={item}
             type="button"
             onClick={() => setMode(item)}
             aria-pressed={mode === item}
-            className={`rounded-(--cv-radius) px-2 py-0.5 text-[11px] capitalize ${
+            className={`min-h-10 rounded-(--cv-radius) px-3 text-[11px] capitalize focus-visible:outline-2 focus-visible:outline-focus ${
               mode === item
                 ? "bg-surface-hover text-text"
                 : "text-text-muted hover:text-text"
@@ -217,9 +195,29 @@ export function MarkdownField({
           </button>
         ))}
 
-        <span className="ml-auto text-[10.5px] text-text-muted">
-          {countWords(draft)} words · {draft.length} characters
-        </span>
+        <div className="ml-auto flex items-center gap-2">
+          {status === null ? null : (
+            <span className={`text-[11px] ${status.tone}`}>{status.text}</span>
+          )}
+          <span className="text-[10.5px] text-text-muted max-sm:hidden">
+            {countWords(draft)} words · {draft.length} characters
+          </span>
+          {readOnly ? null : (
+            <button
+              type="button"
+              onClick={() => setFocusMode((current) => !current)}
+              title={focusMode ? "Leave focus mode (Esc)" : "Focus mode"}
+              aria-label={focusMode ? "Leave focus mode" : "Focus mode"}
+              className="flex size-10 items-center justify-center rounded-(--cv-radius) text-text-muted hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-focus"
+            >
+              {focusMode ? (
+                <Minimize2 aria-hidden className="size-3.5" />
+              ) : (
+                <Maximize2 aria-hidden className="size-3.5" />
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {recovered === null ? null : (
@@ -259,6 +257,7 @@ export function MarkdownField({
         {mode === "write" ? (
           <MarkdownEditor
             ref={editorRef}
+            ariaLabel={ariaLabel}
             value={draft}
             onChange={edit}
             readOnly={readOnly}

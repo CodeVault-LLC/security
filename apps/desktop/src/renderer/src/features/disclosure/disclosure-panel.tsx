@@ -152,10 +152,23 @@ export function DisclosurePanel({
             </Button>
           ) : null}
         </CardHeader>
-        {submissions.data === undefined || submissions.data.length === 0 ? (
+        {submissions.error !== null ? (
+          <QueryError query={submissions} className="m-3" />
+        ) : submissions.isLoading ? (
+          <LoadingState label="Loading vendor submissions…" />
+        ) : submissions.data === undefined || submissions.data.length === 0 ? (
           <CardBody className="text-[12px] text-text-muted">
             No vendor package has been prepared. Route details are snapshotted
             when a draft is created.
+            {canEdit ? (
+              <Button
+                className="mt-3"
+                variant="secondary"
+                onClick={() => setSubmissionOpen(true)}
+              >
+                Prepare submission
+              </Button>
+            ) : null}
           </CardBody>
         ) : (
           <ul className="divide-y divide-border">
@@ -226,7 +239,7 @@ export function DisclosurePanel({
 
           <QueryError query={overview} />
 
-          {data === undefined ? (
+          {overview.error !== null ? null : data === undefined ? (
             <LoadingState />
           ) : data.events.length === 0 ? (
             <EmptyState
@@ -287,10 +300,23 @@ export function DisclosurePanel({
                 </Button>
               ) : null}
             </CardHeader>
-            {data === undefined || data.stakeholders.length === 0 ? (
+            {data === undefined ? (
+              overview.error === null ? (
+                <LoadingState label="Loading stakeholders…" />
+              ) : null
+            ) : data.stakeholders.length === 0 ? (
               <CardBody className="text-[12px] text-text-muted">
                 No contact recorded. Coordinated disclosure requires one before
                 you can log that the vendor was contacted.
+                {canEdit ? (
+                  <Button
+                    className="mt-3"
+                    variant="secondary"
+                    onClick={() => setStakeholderOpen(true)}
+                  >
+                    Add stakeholder
+                  </Button>
+                ) : null}
               </CardBody>
             ) : (
               <ul className="divide-y divide-border">
@@ -325,7 +351,7 @@ export function DisclosurePanel({
               <DateField
                 label="Expected vendor response"
                 value={data?.embargo?.expectedResponseAt ?? null}
-                disabled={!canEdit}
+                disabled={!canEdit || setEmbargo.isPending}
                 onChange={(value) =>
                   setEmbargo.mutate(
                     { expectedResponseAt: value },
@@ -336,7 +362,7 @@ export function DisclosurePanel({
               <DateField
                 label="Embargo starts"
                 value={data?.embargo?.startsAt ?? null}
-                disabled={!canEdit}
+                disabled={!canEdit || setEmbargo.isPending}
                 onChange={(value) =>
                   setEmbargo.mutate(
                     { startsAt: value },
@@ -347,7 +373,7 @@ export function DisclosurePanel({
               <DateField
                 label="Embargo ends"
                 value={data?.embargo?.endsAt ?? null}
-                disabled={!canEdit}
+                disabled={!canEdit || setEmbargo.isPending}
                 onChange={(value) =>
                   setEmbargo.mutate(
                     { endsAt: value },
@@ -358,7 +384,7 @@ export function DisclosurePanel({
               <DateField
                 label="Planned disclosure"
                 value={data?.embargo?.plannedDisclosureAt ?? null}
-                disabled={!canEdit}
+                disabled={!canEdit || setEmbargo.isPending}
                 onChange={(value) =>
                   setEmbargo.mutate(
                     { plannedDisclosureAt: value },
@@ -413,10 +439,8 @@ function DateField({
   onChange: (value: string | null) => void;
 }): React.JSX.Element {
   return (
-    <div className="grid grid-cols-[150px_1fr] items-center gap-2">
-      <span className="text-[11px] uppercase tracking-wide text-text-muted">
-        {label}
-      </span>
+    <div className="grid grid-cols-1 items-center gap-1 sm:grid-cols-[150px_1fr] sm:gap-2">
+      <span className="text-[12px] font-medium text-text-muted">{label}</span>
       <Input
         type="date"
         aria-label={label}
@@ -550,6 +574,7 @@ function RecordEventDialog({
             <Label>Detail (optional)</Label>
             <div className="mt-1">
               <MarkdownField
+                ariaLabel="Disclosure event detail"
                 value={detail}
                 onChange={setDetail}
                 draftKey={`disclosure:new:${caseId}`}

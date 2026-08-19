@@ -4,8 +4,7 @@ import { useState } from "react";
 import type { VendorDetail, VendorPublicKey } from "@codevault/contracts";
 import {
   Button,
-  Card,
-  CardBody,
+  ErrorState,
   Input,
   Label,
   LoadingState,
@@ -64,6 +63,24 @@ export function PublicKeyPanel({
     return <LoadingState label="Loading public keys…" />;
   }
 
+  if (vendor.error !== null) {
+    return (
+      <ErrorState
+        title="Public keys could not be loaded"
+        description={vendor.error.message}
+        action={
+          <Button
+            variant="secondary"
+            loading={vendor.isFetching}
+            onClick={() => void vendor.refetch()}
+          >
+            Try again
+          </Button>
+        }
+      />
+    );
+  }
+
   const keys = vendor.data?.publicKeys ?? [];
 
   return (
@@ -84,71 +101,69 @@ export function PublicKeyPanel({
       </div>
 
       {showAdd ? (
-        <Card>
-          <CardBody className="space-y-2">
+        <div className="space-y-3 border-y border-border py-3">
+          <div>
+            <Label htmlFor="vendor-armored-key">Armored public key</Label>
+            <Textarea
+              id="vendor-armored-key"
+              rows={6}
+              value={armoredKey}
+              onChange={(event) => setArmoredKey(event.target.value)}
+              className="mt-1 font-mono text-[11px]"
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <Label htmlFor="vendor-armored-key">Armored public key</Label>
-              <Textarea
-                id="vendor-armored-key"
-                rows={6}
-                value={armoredKey}
-                onChange={(event) => setArmoredKey(event.target.value)}
-                className="mt-1 font-mono text-[11px]"
+              <Label htmlFor="vendor-key-fingerprint">
+                Expected fingerprint
+              </Label>
+              <Input
+                id="vendor-key-fingerprint"
+                value={fingerprint}
+                onChange={(event) => setFingerprint(event.target.value)}
+                className="mt-1 font-mono"
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label htmlFor="vendor-key-fingerprint">
-                  Expected fingerprint
-                </Label>
-                <Input
-                  id="vendor-key-fingerprint"
-                  value={fingerprint}
-                  onChange={(event) => setFingerprint(event.target.value)}
-                  className="mt-1 font-mono"
-                />
-              </div>
-              <div>
-                <Label htmlFor="vendor-key-source">Official HTTPS source</Label>
-                <Input
-                  id="vendor-key-source"
-                  type="url"
-                  value={sourceUrl}
-                  onChange={(event) => setSourceUrl(event.target.value)}
-                  className="mt-1"
-                />
-              </div>
+            <div>
+              <Label htmlFor="vendor-key-source">Official HTTPS source</Label>
+              <Input
+                id="vendor-key-source"
+                type="url"
+                value={sourceUrl}
+                onChange={(event) => setSourceUrl(event.target.value)}
+                className="mt-1"
+              />
             </div>
-            <div className="flex justify-end">
-              <Button
-                variant="primary"
-                size="sm"
-                loading={addKey.isPending}
-                disabled={
-                  armoredKey.trim().length === 0 ||
-                  !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(
-                    fingerprint.replace(/[\s:]/g, ""),
-                  ) ||
-                  !sourceUrl.startsWith("https://")
-                }
-                onClick={() =>
-                  addKey.mutate(undefined, {
-                    onSuccess: () => {
-                      setShowAdd(false);
-                      setArmoredKey("");
-                      setFingerprint("");
-                      setSourceUrl("");
-                      setError(null);
-                    },
-                    onError: (mutationError) => setError(mutationError.message),
-                  })
-                }
-              >
-                Parse and store key
-              </Button>
-            </div>
-          </CardBody>
-        </Card>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              variant="primary"
+              size="sm"
+              loading={addKey.isPending}
+              disabled={
+                armoredKey.trim().length === 0 ||
+                !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/i.test(
+                  fingerprint.replace(/[\s:]/g, ""),
+                ) ||
+                !sourceUrl.startsWith("https://")
+              }
+              onClick={() =>
+                addKey.mutate(undefined, {
+                  onSuccess: () => {
+                    setShowAdd(false);
+                    setArmoredKey("");
+                    setFingerprint("");
+                    setSourceUrl("");
+                    setError(null);
+                  },
+                  onError: (mutationError) => setError(mutationError.message),
+                })
+              }
+            >
+              Parse and store key
+            </Button>
+          </div>
+        </div>
       ) : null}
 
       {error === null ? null : (
@@ -203,87 +218,87 @@ function PublicKeyRecord({
   const isUsable = usable(key, renderedAt);
 
   return (
-    <Card>
-      <CardBody className="space-y-2">
-        <div className="flex items-center gap-2">
-          {isUsable ? (
-            <ShieldCheck aria-hidden className="size-4 text-success" />
-          ) : (
-            <ShieldX aria-hidden className="size-4 text-warning" />
-          )}
-          <span
-            className={
-              isUsable ? "text-[12px] text-success" : "text-[12px] text-warning"
+    <div className="space-y-2 border-t border-border pt-3 first:border-0 first:pt-0">
+      <div className="flex items-center gap-2">
+        {isUsable ? (
+          <ShieldCheck aria-hidden className="size-4 text-success" />
+        ) : (
+          <ShieldX aria-hidden className="size-4 text-warning" />
+        )}
+        <span
+          className={
+            isUsable ? "text-[12px] text-success" : "text-[12px] text-warning"
+          }
+        >
+          {key.verifiedAt === null ? "Not verified" : "Verified"}
+        </span>
+        <span className="text-[11px] text-text-muted">{key.algorithm}</span>
+        {key.supersededById === null ? null : (
+          <span className="text-[11px] text-danger">Superseded</span>
+        )}
+      </div>
+      <Mono className="block break-all text-[12px] tracking-wide">
+        {groupedFingerprint(key.fingerprint)}
+      </Mono>
+      <p className="text-[11px] text-text-muted">
+        {key.userIds.join(" · ") || "No identity recorded"} · created{" "}
+        {formatDate(key.createdAt)}
+        {key.expiresAt === null
+          ? ""
+          : ` · expires ${formatDate(key.expiresAt)}`}
+      </p>
+
+      {key.verifiedAt === null && canEdit ? (
+        <div className="grid grid-cols-1 items-end gap-3 rounded-(--cv-radius) bg-surface-raised p-3 lg:grid-cols-[1fr_230px_auto]">
+          <div>
+            <Label htmlFor={`key-source-${key.id}`}>
+              Independent verification source
+            </Label>
+            <Input
+              id={`key-source-${key.id}`}
+              type="url"
+              value={verificationSource}
+              onChange={(event) => setVerificationSource(event.target.value)}
+              className="mt-1"
+            />
+          </div>
+          <div>
+            <Label htmlFor={`key-confirm-${key.id}`}>
+              Last eight fingerprint characters
+            </Label>
+            <Input
+              id={`key-confirm-${key.id}`}
+              value={confirmation}
+              maxLength={8}
+              onChange={(event) =>
+                setConfirmation(event.target.value.toUpperCase())
+              }
+              className="mt-1 font-mono uppercase"
+            />
+          </div>
+          <Button
+            size="sm"
+            loading={verify.isPending}
+            disabled={
+              confirmation !== expectedSuffix ||
+              !verificationSource.startsWith("https://")
+            }
+            onClick={() =>
+              verify.mutate(undefined, {
+                onError: (mutationError) => setError(mutationError.message),
+              })
             }
           >
-            {key.verifiedAt === null ? "Not verified" : "Verified"}
-          </span>
-          <span className="text-[11px] text-text-muted">{key.algorithm}</span>
-          {key.supersededById === null ? null : (
-            <span className="text-[11px] text-danger">Superseded</span>
-          )}
+            Verify fingerprint
+          </Button>
         </div>
-        <Mono className="block break-all text-[12px] tracking-wide">
-          {groupedFingerprint(key.fingerprint)}
-        </Mono>
-        <p className="text-[11px] text-text-muted">
-          {key.userIds.join(" · ") || "No identity recorded"} · created{" "}
-          {formatDate(key.createdAt)}
-          {key.expiresAt === null
-            ? ""
-            : ` · expires ${formatDate(key.expiresAt)}`}
-        </p>
+      ) : null}
 
-        {key.verifiedAt === null && canEdit ? (
-          <div className="grid grid-cols-[1fr_230px_auto] items-end gap-2 rounded-(--cv-radius) bg-surface-raised p-2">
-            <div>
-              <Label htmlFor={`key-source-${key.id}`}>
-                Independent verification source
-              </Label>
-              <Input
-                id={`key-source-${key.id}`}
-                type="url"
-                value={verificationSource}
-                onChange={(event) => setVerificationSource(event.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label htmlFor={`key-confirm-${key.id}`}>
-                Last eight fingerprint characters
-              </Label>
-              <Input
-                id={`key-confirm-${key.id}`}
-                value={confirmation}
-                maxLength={8}
-                onChange={(event) =>
-                  setConfirmation(event.target.value.toUpperCase())
-                }
-                className="mt-1 font-mono uppercase"
-              />
-            </div>
-            <Button
-              size="sm"
-              loading={verify.isPending}
-              disabled={
-                confirmation !== expectedSuffix ||
-                !verificationSource.startsWith("https://")
-              }
-              onClick={() =>
-                verify.mutate(undefined, {
-                  onError: (mutationError) => setError(mutationError.message),
-                })
-              }
-            >
-              Verify fingerprint
-            </Button>
-          </div>
-        ) : null}
+      {error === null ? null : (
+        <p className="text-[11px] text-danger">{error}</p>
+      )}
 
-        {error === null ? null : (
-          <p className="text-[11px] text-danger">{error}</p>
-        )}
-
+      {onUseKey === undefined ? null : (
         <div className="flex justify-end">
           <Button
             size="sm"
@@ -294,7 +309,7 @@ function PublicKeyRecord({
             Use for encryption
           </Button>
         </div>
-      </CardBody>
-    </Card>
+      )}
+    </div>
   );
 }

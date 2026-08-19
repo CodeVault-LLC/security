@@ -3,6 +3,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { useEffect, useMemo } from "react";
 
 import { LoginScreen } from "./features/auth/login-screen.js";
+import { useTheme } from "./hooks/use-theme.js";
 import { createQueryClient } from "./lib/api.js";
 import { hasBridge, bridge } from "./lib/bridge.js";
 import { createAppRouter } from "./router.js";
@@ -25,6 +26,7 @@ import { useSession } from "./lib/session.js";
 const BRIDGE_PRESENT = hasBridge();
 
 export function App(): React.JSX.Element {
+  useTheme();
   const queryClient = useMemo(() => createQueryClient(), []);
   const router = useMemo(() => createAppRouter(), []);
   const status = useSession((state) => state.status);

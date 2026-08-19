@@ -81,6 +81,7 @@ export function SubmissionComposer({
       <div>
         <Label>Submission notes / plain-text body</Label>
         <MarkdownField
+          ariaLabel="Submission notes and plain-text body"
           value={bodyMarkdown}
           onChange={setBodyMarkdown}
           readOnly={locked}

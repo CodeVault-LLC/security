@@ -14,6 +14,7 @@ describe("settings route ownership boundaries", () => {
         "/organization/security",
         "/settings/profile",
         "/settings/appearance",
+        "/settings/ai",
         "/settings/security",
         "/settings/mail",
       ]),

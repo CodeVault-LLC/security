@@ -16,6 +16,7 @@ import {
   assertSecretOutputIsSafe,
   bootstrapOrganization,
   parseArguments,
+  renderTotpEnrollment,
 } from "./bootstrap-admin.js";
 
 const connectionString = process.env.DATABASE_URL;
@@ -82,6 +83,16 @@ describe("bootstrap argument parsing", () => {
     expect(() => assertSecretOutputIsSafe(undefined, false)).toThrow();
     expect(() => assertSecretOutputIsSafe(false, true)).not.toThrow();
     expect(() => assertSecretOutputIsSafe(true, false)).not.toThrow();
+  });
+
+  it("renders a terminal QR code with a manual enrollment fallback", async () => {
+    const enrollment = createTotpEnrollment("Acme Security", "admin@acme.test");
+    const output = await renderTotpEnrollment(enrollment);
+
+    expect(output).toContain("Scan this QR code");
+    expect(output).toContain("\u001b[");
+    expect(output).toContain(enrollment.manualSecret);
+    expect(output).not.toContain(enrollment.provisioningUri);
   });
 });
 
