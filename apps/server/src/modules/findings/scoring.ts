@@ -204,7 +204,12 @@ export async function approveScore(
   const rows = await tx
     .select()
     .from(schema.findingScores)
-    .where(eq(schema.findingScores.id, scoreId))
+    .where(
+      and(
+        eq(schema.findingScores.id, scoreId),
+        eq(schema.findingScores.findingId, findingId),
+      ),
+    )
     .limit(1);
 
   const score = rows[0];
@@ -231,7 +236,12 @@ export async function approveScore(
       reviewedBy: reviewerId,
       reviewedAt: sql`now()`,
     })
-    .where(eq(schema.findingScores.id, scoreId));
+    .where(
+      and(
+        eq(schema.findingScores.id, scoreId),
+        eq(schema.findingScores.findingId, findingId),
+      ),
+    );
 
   await refreshHeadlineSeverity(tx, findingId);
 }

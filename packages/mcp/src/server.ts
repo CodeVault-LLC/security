@@ -5,6 +5,7 @@ import {
   ASSET_IDENTIFIER_SCHEMES,
   ASSET_KINDS,
   CASE_PROFILES,
+  CASE_STATUSES,
 } from "@codevault/core";
 import { SEVERITY_RATINGS } from "@codevault/standards";
 import type {
@@ -14,20 +15,21 @@ import type {
 } from "@codevault/contracts";
 import * as z from "zod/v4";
 
+import { type CodeVaultClient, type RecordFindingRequest } from "./client.js";
+import { registerAssetTools } from "./tools/assets.js";
+import { registerCaseTools } from "./tools/cases.js";
+import { registerEvidenceTools } from "./tools/evidence.js";
+import { registerFindingTools } from "./tools/findings.js";
+import { registerReportTools } from "./tools/reports.js";
 import {
-  CodeVaultApiError,
-  type CodeVaultClient,
-  type RecordFindingRequest,
-} from "./client.js";
-
-const id = z.uuid();
-const list = z.object({
-  query: z.string().max(200).optional(),
-  limit: z.number().int().min(1).max(200).optional(),
-  cursor: z.string().max(200).optional(),
-});
-const markdown = z.string().max(200_000);
-const nullableHttpsUrl = z.union([z.url({ protocol: /^https$/u }), z.null()]);
+  compact,
+  id,
+  list,
+  markdown,
+  nullableHttpsUrl,
+  result,
+} from "./tools/shared.js";
+import { registerVendorTools } from "./tools/vendors.js";
 
 export function createCodeVaultMcpServer(client: CodeVaultClient): McpServer {
   const server = new McpServer(
@@ -57,7 +59,7 @@ export function createCodeVaultMcpServer(client: CodeVaultClient): McpServer {
         "Find an existing research case by title or reference before creating a new case.",
       inputSchema: list.extend({
         profile: z.enum(CASE_PROFILES).optional(),
-        status: z.enum(["OPEN", "ON_HOLD", "CLOSED", "ARCHIVED"]).optional(),
+        status: z.enum(CASE_STATUSES).optional(),
       }),
       annotations: { readOnlyHint: true },
     },
@@ -228,40 +230,12 @@ export function createCodeVaultMcpServer(client: CodeVaultClient): McpServer {
       ),
   );
 
+  registerFindingTools(server, client);
+  registerEvidenceTools(server, client);
+  registerCaseTools(server, client);
+  registerAssetTools(server, client);
+  registerVendorTools(server, client);
+  registerReportTools(server, client);
+
   return server;
-}
-
-async function result<T>(operation: () => Promise<T>) {
-  try {
-    const value = await operation();
-    return {
-      content: [
-        { type: "text" as const, text: JSON.stringify(value, null, 2) },
-      ],
-    };
-  } catch (error: unknown) {
-    const message = safeError(error);
-    return {
-      isError: true,
-      content: [{ type: "text" as const, text: message }],
-    };
-  }
-}
-
-function safeError(error: unknown): string {
-  if (error instanceof CodeVaultApiError) {
-    const request =
-      error.requestId === null ? "" : ` Request: ${error.requestId}.`;
-    return `CodeVault rejected the request (${error.status}): ${error.message}${request}`;
-  }
-
-  return error instanceof Error
-    ? `CodeVault MCP request failed: ${error.message}`
-    : "CodeVault MCP request failed.";
-}
-
-function compact<T extends object>(value: T): T {
-  return Object.fromEntries(
-    Object.entries(value).filter(([, item]) => item !== undefined),
-  ) as T;
 }

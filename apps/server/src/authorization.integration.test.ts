@@ -420,6 +420,38 @@ describeIntegration("finding lifecycle", () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it("refuses to approve a score through a different finding", async () => {
+    const created = await harness.app.inject({
+      method: "POST",
+      url: "/v1/findings",
+      headers: user.headers,
+      payload: {
+        caseId: finding.caseId,
+        title: "A separate finding with its own score",
+      },
+    });
+    const otherFinding = created.json<FindingDetail>();
+    const scored = await harness.app.inject({
+      method: "POST",
+      url: `/v1/findings/${otherFinding.id}/scores`,
+      headers: user.headers,
+      payload: {
+        scheme: "CVSS40",
+        vector:
+          "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N",
+      },
+    });
+    const scoreId = scored.json<FindingDetail>().scores.at(-1)?.id;
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: `/v1/findings/${finding.id}/scores/${scoreId}/approve`,
+      headers: user.headers,
+    });
+
+    expect(response.statusCode).toBe(400);
+  });
+
   it("rejects an invalid CWE identifier", async () => {
     const current = await harness.app.inject({
       method: "GET",

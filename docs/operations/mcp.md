@@ -1,6 +1,6 @@
 # Use CodeVault from terminal AI clients
 
-The CodeVault MCP server lets Codex CLI and Claude Code read and create research
+The CodeVault MCP server lets Codex CLI and Claude Code read and manage research
 records from any terminal session. The desktop app does not need to be open.
 The CodeVault server must be running and reachable.
 
@@ -82,15 +82,28 @@ and every file you could not classify.
 
 The AI client can use the MCP tools to:
 
-- find and create cases;
-- find and create vendors;
-- find and create assets with stable identifiers;
-- find and read findings; and
-- create complete draft findings with asset links and affected-version ranges.
+- find, create, and update cases, notes, readiness, stakeholders, embargoes,
+  and disclosure events;
+- find, create, and update vendors, contact routes, and verified public keys;
+- find, create, and update assets, identifiers, versions, and relationships;
+- find, create, and update findings, scores, real vulnerability identifiers,
+  claims, and external references;
+- create and update evidence records, upload local files, attach artifacts, and
+  request short-lived artifact download URLs; and
+- create, edit, lint, preview, approve, and export reports.
 
-The MCP server does not expose tools for validation, approval, disclosure,
-publication, deletion, or score approval. Complete those decisions in
-CodeVault after you review the imported records.
+MCP write tools perform the requested operation immediately as the authenticated
+CodeVault user. For example, `codevault_add_finding_score` creates a proposed
+score unless `approve: true` is supplied, while
+`codevault_approve_finding_score` approves an existing score immediately.
+CodeVault still applies the same role checks, case permissions, optimistic
+revision checks, validation, lifecycle rules, lint gates, and audit logging as
+the desktop application.
+
+`codevault_upload_evidence_file` reads the path on the machine running the MCP
+process. It computes the SHA-256 digest locally, uploads the bytes directly to
+the presigned object-storage URL without sending the CodeVault bearer token to
+storage, completes the upload, and creates or updates the evidence attachment.
 
 ## Use another token file
 
