@@ -13,6 +13,7 @@ import {
 } from "@codevault/ui";
 
 import { PageHeader } from "../components/app-shell.js";
+import { Avatar } from "../components/avatar.js";
 import { CreateCaseDialog } from "../features/cases/create-case-dialog.js";
 import { formatDistanceToNowStrict } from "../lib/dates.js";
 import { humanise } from "../lib/format.js";
@@ -128,7 +129,14 @@ export function CasesRoute(): React.JSX.Element {
                     {item.findingCount}
                   </td>
                   <td className="px-2 py-1.5 text-text-muted">
-                    {item.owner.displayName}
+                    <Avatar
+                      avatarId={null}
+                      userId={item.owner.id}
+                      label={item.owner.displayName}
+                      size="sm"
+                      showLabel
+                      className="gap-1.5"
+                    />
                   </td>
                   <td className="px-4 py-1.5 text-right text-text-muted">
                     {formatDistanceToNowStrict(item.updatedAt)}

@@ -20,6 +20,7 @@ import {
 } from "@codevault/ui";
 
 import { PageBody, PageHeader } from "../components/app-shell.js";
+import { Avatar } from "../components/avatar.js";
 import { QueryBoundary, QueryError } from "../components/query-boundary.js";
 import { formatDateTime } from "../lib/dates.js";
 import { humanise } from "../lib/format.js";
@@ -265,9 +266,20 @@ export function ActivityRoute(): React.JSX.Element {
                     {formatDateTime(event.occurredAt)}
                   </span>
                   <Mono className="w-56 shrink-0">{event.action}</Mono>
-                  <span className="w-40 shrink-0 truncate text-text-muted">
-                    {event.actor?.displayName ?? "system"}
-                  </span>
+                  <div className="w-40 shrink-0 truncate text-text-muted">
+                    {event.actor ? (
+                      <Avatar
+                        avatarId={null}
+                        userId={event.actor.id}
+                        label={event.actor.displayName}
+                        size="sm"
+                        showLabel
+                        className="gap-1.5"
+                      />
+                    ) : (
+                      "system"
+                    )}
+                  </div>
                   <span className="w-28 shrink-0 text-text-muted">
                     {event.entityType}
                   </span>

@@ -29,6 +29,7 @@ import {
 } from "@codevault/ui";
 
 import { CreateFindingDialog } from "../features/findings/create-finding-dialog.js";
+import { Avatar } from "../components/avatar.js";
 import { DisclosurePanel } from "../features/disclosure/disclosure-panel.js";
 import { EvidencePanel } from "../features/evidence/evidence-panel.js";
 import { IntakePanel } from "../features/intake/intake-panel.js";
@@ -219,9 +220,17 @@ export function CaseDetailRoute({
             <Card>
               <CardHeader>
                 <CardTitle>Members</CardTitle>
-                <span className="text-[11px] text-text-muted">
-                  owner {data.owner.displayName}
-                </span>
+                <div className="flex items-center gap-1 text-[11px] text-text-muted">
+                  owner
+                  <Avatar
+                    avatarId={null}
+                    userId={data.owner.id}
+                    label={data.owner.displayName}
+                    size="sm"
+                    showLabel
+                    className="gap-1"
+                  />
+                </div>
               </CardHeader>
               {data.members.length === 0 ? (
                 <CardBody className="text-[12px] text-text-muted">
@@ -236,9 +245,14 @@ export function CaseDetailRoute({
                       key={member.user.id}
                       className="flex items-center gap-2 px-3 py-1.5 text-[12px]"
                     >
-                      <span className="min-w-0 flex-1 truncate">
-                        {member.user.displayName}
-                      </span>
+                      <Avatar
+                        avatarId={null}
+                        userId={member.user.id}
+                        label={member.user.displayName}
+                        size="sm"
+                        showLabel
+                        className="min-w-0 flex-1 gap-1.5"
+                      />
                       <span className="text-[10px] uppercase text-text-muted">
                         {member.access.toLowerCase()}
                       </span>

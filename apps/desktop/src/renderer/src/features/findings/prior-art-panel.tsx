@@ -15,6 +15,7 @@ import {
 } from "@codevault/ui";
 
 import { bridge } from "../../lib/bridge.js";
+import { Avatar } from "../../components/avatar.js";
 import { formatDateTime } from "../../lib/dates.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../../lib/api.js";
 import { QueryError } from "../../components/query-boundary.js";
@@ -170,7 +171,15 @@ export function PriorArtPanel({
               {latest.completedAt === null ? null : (
                 <span>Completed {formatDateTime(latest.completedAt)}</span>
               )}
-              <span>by {latest.startedBy.displayName}</span>
+              <span>by</span>
+              <Avatar
+                avatarId={null}
+                userId={latest.startedBy.id}
+                label={latest.startedBy.displayName}
+                size="sm"
+                showLabel
+                className="gap-1"
+              />
             </div>
 
             <div>
@@ -349,10 +358,18 @@ export function PriorArtPanel({
                   ))}
                 </div>
                 {latest.concludedBy === null ? null : (
-                  <p className="mt-2 text-[11px] text-text-muted">
-                    Recorded by {latest.concludedBy.displayName} on{" "}
-                    {formatDateTime(latest.concludedAt)}.
-                  </p>
+                  <div className="mt-2 flex items-center gap-1 text-[11px] text-text-muted">
+                    <span>Recorded by</span>
+                    <Avatar
+                      avatarId={null}
+                      userId={latest.concludedBy.id}
+                      label={latest.concludedBy.displayName}
+                      size="sm"
+                      showLabel
+                      className="gap-1"
+                    />
+                    <span>on {formatDateTime(latest.concludedAt)}.</span>
+                  </div>
                 )}
               </div>
             ) : null}

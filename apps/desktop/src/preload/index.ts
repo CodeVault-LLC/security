@@ -130,6 +130,10 @@ const api: CodeVaultDesktopApi = {
       ipcRenderer.invoke(IPC_CHANNELS.avatarsLoad, avatarId) as ReturnType<
         CodeVaultDesktopApi["avatars"]["load"]
       >,
+    loadUser: (userId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.avatarsLoadUser, userId) as ReturnType<
+        CodeVaultDesktopApi["avatars"]["loadUser"]
+      >,
   },
 
   submissions: {

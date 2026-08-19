@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Check } from "lucide-react";
 
 import type { InviteInspection } from "@codevault/contracts";
 import { Button, Input, Label } from "@codevault/ui";
 
 import type { EnrollmentSetup } from "../../../../preload/contracts.js";
+import { Avatar } from "../../components/avatar.js";
 import { bridge } from "../../lib/bridge.js";
 import { AuthHeader } from "./auth-header.js";
 import { TotpInput } from "./totp-input.js";
@@ -133,9 +133,16 @@ export function InviteOnboarding(props: {
             }}
           >
             <div className="mt-3 flex items-start gap-2.5 rounded-(--cv-radius) border border-border bg-surface-muted p-3 text-[12px]">
-              <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-success/10 text-success">
-                <Check aria-hidden className="size-3" />
-              </span>
+              <Avatar
+                avatarId={null}
+                {...(inspection.organizationAvatarDataUrl
+                  ? { source: inspection.organizationAvatarDataUrl }
+                  : {})}
+                label={inspection.organizationName}
+                seed={inspection.organizationId}
+                size="md"
+                className="gap-0"
+              />
               <div>
                 <strong className="text-text">
                   {inspection.organizationName}

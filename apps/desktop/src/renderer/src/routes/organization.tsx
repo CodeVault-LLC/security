@@ -247,7 +247,14 @@ export function OrganizationUsersRoute(): React.JSX.Element {
                     params={{ userId: user.id }}
                     className="font-semibold text-accent hover:underline"
                   >
-                    {user.displayName}
+                    <Avatar
+                      avatarId={user.avatarId}
+                      userId={user.id}
+                      label={user.displayName}
+                      size="sm"
+                      showLabel
+                      className="gap-1.5"
+                    />
                   </Link>
                   <span className="text-text-muted">{user.email}</span>
                   <span>{user.role}</span>
@@ -352,7 +359,7 @@ export function OrganizationUserDetailRoute(props: {
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader title={user.data?.displayName ?? "Organization user"} />
+      <PageHeader title="Organization user" />
       <PageBody className="space-y-4">
         <Link
           to="/organization/users"
@@ -367,7 +374,9 @@ export function OrganizationUserDetailRoute(props: {
           <CardBody className="space-y-3 text-[12px]">
             <Avatar
               avatarId={user.data?.avatarId ?? null}
+              {...(user.data ? { userId: user.data.id } : {})}
               label={user.data?.displayName ?? "User"}
+              showLabel
             />
             <p>{user.data?.email ?? "Loading…"}</p>
             <p className="text-text-muted">
@@ -475,11 +484,10 @@ export function OrganizationSettingsRoute(): React.JSX.Element {
             <Avatar
               avatarId={organization.data?.avatarId ?? null}
               label={organization.data?.name ?? "Organization"}
+              seed={organization.data?.id ?? "organization"}
+              showLabel
               {...(admin ? { target: "ORGANIZATION" as const } : {})}
             />
-            <p className="mt-3 text-[13px] font-medium">
-              {organization.data?.name ?? "Loading…"}
-            </p>
             <p className="mt-1 text-[12px] text-text-muted">
               The organization name and sanitized avatar identify the security
               boundary that owns every user, case, role, and policy.

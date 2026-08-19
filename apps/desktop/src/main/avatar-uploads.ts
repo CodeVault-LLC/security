@@ -11,6 +11,13 @@ import type { AvatarUpload } from "@codevault/contracts";
 import type { ApiClient } from "./api-client.js";
 import type { SessionStore } from "./session-store.js";
 
+const AVATAR_CACHE_TTL_MS = 5 * 60_000;
+const MAX_CACHED_AVATARS = 256;
+const avatarDataUrlCache = new Map<
+  string,
+  { expiresAt: number; value: Promise<string> }
+>();
+
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 export type AvatarTarget = "USER" | "ORGANIZATION";
@@ -101,32 +108,60 @@ export async function selectAndUploadAvatar(options: {
 
 export async function loadAvatarDataUrl(
   sessionStore: SessionStore,
-  avatarId: string,
+  id: string,
+  reference: "AVATAR" | "USER" = "AVATAR",
 ): Promise<string> {
   const session = sessionStore.current();
   if (!session) throw new Error("Authentication is required.");
-  const response = await fetch(
-    new URL(`/v1/avatars/${avatarId}/content`, session.serverUrl),
-    {
+  const now = Date.now();
+  const cacheKey = `${session.serverUrl}:${session.userId}:${reference}:${id}`;
+  const cached = avatarDataUrlCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) return cached.value;
+  if (cached) avatarDataUrlCache.delete(cacheKey);
+
+  const path =
+    reference === "USER"
+      ? `/v1/user-avatars/${id}/content`
+      : `/v1/avatars/${id}/content`;
+  const value = (async () => {
+    const response = await fetch(new URL(path, session.serverUrl), {
       headers: {
         authorization: `Bearer ${session.token}`,
         accept: "image/webp",
       },
-    },
-  );
-  if (
-    !response.ok ||
-    response.headers.get("content-type")?.split(";", 1)[0] !== "image/webp"
-  ) {
-    throw new Error("The avatar derivative was unavailable.");
+    });
+    if (
+      !response.ok ||
+      response.headers.get("content-type")?.split(";", 1)[0] !== "image/webp"
+    ) {
+      throw new Error("The avatar derivative was unavailable.");
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (
+      bytes.byteLength > 512 * 1024 ||
+      bytes.toString("ascii", 0, 4) !== "RIFF" ||
+      bytes.toString("ascii", 8, 12) !== "WEBP"
+    ) {
+      throw new Error("The avatar derivative failed local validation.");
+    }
+    return `data:image/webp;base64,${bytes.toString("base64")}`;
+  })();
+
+  for (const [key, entry] of avatarDataUrlCache) {
+    if (entry.expiresAt <= now) avatarDataUrlCache.delete(key);
   }
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (
-    bytes.byteLength > 512 * 1024 ||
-    bytes.toString("ascii", 0, 4) !== "RIFF" ||
-    bytes.toString("ascii", 8, 12) !== "WEBP"
-  ) {
-    throw new Error("The avatar derivative failed local validation.");
+  if (avatarDataUrlCache.size >= MAX_CACHED_AVATARS) {
+    const oldestKey = avatarDataUrlCache.keys().next().value as
+      string | undefined;
+    if (oldestKey) avatarDataUrlCache.delete(oldestKey);
   }
-  return `data:image/webp;base64,${bytes.toString("base64")}`;
+  avatarDataUrlCache.set(cacheKey, {
+    expiresAt: now + AVATAR_CACHE_TTL_MS,
+    value,
+  });
+  void value.catch(() => {
+    if (avatarDataUrlCache.get(cacheKey)?.value === value)
+      avatarDataUrlCache.delete(cacheKey);
+  });
+  return value;
 }

@@ -35,6 +35,7 @@ import {
 } from "./service.js";
 
 const Id = Type.Object({ id: Type.String({ format: "uuid" }) });
+const UserId = Type.Object({ userId: Type.String({ format: "uuid" }) });
 
 function toUpload(row: typeof schema.avatarImages.$inferSelect) {
   return {
@@ -205,6 +206,44 @@ export async function registerAvatarRoutes(app: AppInstance): Promise<void> {
         .where(
           and(
             eq(schema.avatarImages.id, request.params.id),
+            eq(schema.avatarImages.organizationId, principal.organization.id),
+            eq(schema.avatarImages.status, "READY"),
+          ),
+        )
+        .limit(1);
+      if (!avatar?.sanitizedObjectKey) throw notFound("Avatar");
+      const bytes = await app.storage.getObject(avatar.sanitizedObjectKey);
+      assertWebpDerivative(bytes);
+      if (
+        avatar.sanitizedSha256 === null ||
+        !digestMatches(sha256Hex(bytes), avatar.sanitizedSha256)
+      ) {
+        throw new DomainError(
+          "SERVER_ERROR",
+          "The avatar derivative failed its integrity check.",
+        );
+      }
+      return reply
+        .header("Content-Type", "image/webp")
+        .header("Content-Disposition", "inline")
+        .header("X-Content-Type-Options", "nosniff")
+        .header("Cache-Control", "private, max-age=300")
+        .header("ETag", `"${avatar.sanitizedSha256 ?? avatar.id}"`)
+        .send(Buffer.from(bytes));
+    },
+  );
+
+  app.get(
+    "/v1/user-avatars/:userId/content",
+    { schema: { params: UserId } },
+    async (request, reply) => {
+      const principal = principalOf(request);
+      const [avatar] = await app.db
+        .select()
+        .from(schema.avatarImages)
+        .where(
+          and(
+            eq(schema.avatarImages.targetUserId, request.params.userId),
             eq(schema.avatarImages.organizationId, principal.organization.id),
             eq(schema.avatarImages.status, "READY"),
           ),

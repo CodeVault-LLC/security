@@ -24,6 +24,7 @@ import {
 
 import { formatDateTime } from "../../lib/dates.js";
 import { queryKeys, useApiMutation } from "../../lib/api.js";
+import { Avatar } from "../../components/avatar.js";
 
 /**
  * Scoring.
@@ -318,10 +319,18 @@ export function ScoringPanel({
                     </p>
                   )}
                   {score.reviewedBy === null ? null : (
-                    <p className="mt-0.5 text-text-muted">
-                      Approved by {score.reviewedBy.displayName} on{" "}
-                      {formatDateTime(score.reviewedAt)}
-                    </p>
+                    <div className="mt-0.5 flex items-center gap-1 text-text-muted">
+                      <span>Approved by</span>
+                      <Avatar
+                        avatarId={null}
+                        userId={score.reviewedBy.id}
+                        label={score.reviewedBy.displayName}
+                        size="sm"
+                        showLabel
+                        className="gap-1"
+                      />
+                      <span>on {formatDateTime(score.reviewedAt)}</span>
+                    </div>
                   )}
                 </li>
               ))}

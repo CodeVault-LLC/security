@@ -621,6 +621,19 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
   });
 
+  handle(IPC_CHANNELS.avatarsLoadUser, async (payload) => {
+    if (typeof payload !== "string" || !/^[0-9a-f-]{36}$/u.test(payload))
+      return failure(new Error("invalid user id"));
+    try {
+      return {
+        ok: true as const,
+        data: await loadAvatarDataUrl(sessionStore, payload, "USER"),
+      };
+    } catch (error) {
+      return failure(error);
+    }
+  });
+
   handle(IPC_CHANNELS.uploadsStart, async (payload) => {
     const window = dependencies.window();
 

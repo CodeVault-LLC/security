@@ -25,6 +25,7 @@ import {
 } from "@codevault/ui";
 
 import { PageBody, PageHeader } from "../components/app-shell.js";
+import { Avatar } from "../components/avatar.js";
 import { QueryError } from "../components/query-boundary.js";
 import { errorHeading, queryKeys, useApiQuery } from "../lib/api.js";
 import { humanise } from "../lib/format.js";
@@ -263,15 +264,23 @@ export function DashboardRoute(): React.JSX.Element {
                     className="flex items-start gap-2 px-3 py-2 text-[12px]"
                   >
                     <Mono className="shrink-0 text-text-muted">{item.ref}</Mono>
-                    <span className="min-w-0 flex-1">
+                    <div className="min-w-0 flex-1">
                       <span className="block truncate">{item.title}</span>
-                      <span className="text-text-muted">
-                        {item.detail}
-                        {item.actor === null
-                          ? ""
-                          : ` · ${item.actor.displayName}`}
-                      </span>
-                    </span>
+                      <span className="text-text-muted">{item.detail}</span>
+                      {item.actor === null ? null : (
+                        <div className="mt-0.5 flex items-center gap-1 text-text-muted">
+                          <span>·</span>
+                          <Avatar
+                            avatarId={null}
+                            userId={item.actor.id}
+                            label={item.actor.displayName}
+                            size="sm"
+                            showLabel
+                            className="gap-1"
+                          />
+                        </div>
+                      )}
+                    </div>
                     <span className="shrink-0 text-text-muted">
                       {formatDistanceToNowStrict(item.occurredAt)}
                     </span>

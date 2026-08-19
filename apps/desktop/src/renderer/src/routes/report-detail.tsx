@@ -29,6 +29,7 @@ import {
 } from "@codevault/ui";
 
 import { AiToolbar } from "../features/ai/ai-toolbar.js";
+import { Avatar } from "../components/avatar.js";
 import type { Command } from "../features/markdown/commands.js";
 import { InsertMenu } from "../features/markdown/insert-menu.js";
 import {
@@ -520,7 +521,18 @@ function SectionWorkspace({
         <div className="flex items-center gap-2">
           <ApprovalState
             state={section.reviewState}
-            approvedBy={section.approvedBy?.displayName ?? null}
+            approvedBy={
+              section.approvedBy ? (
+                <Avatar
+                  avatarId={null}
+                  userId={section.approvedBy.id}
+                  label={section.approvedBy.displayName}
+                  size="sm"
+                  showLabel
+                  className="gap-1"
+                />
+              ) : null
+            }
             approvedAt={section.approvedAt}
           />
           {canEdit ? (

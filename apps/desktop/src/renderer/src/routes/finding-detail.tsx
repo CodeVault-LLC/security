@@ -37,6 +37,7 @@ import {
 } from "@codevault/ui";
 
 import { AiToolbar } from "../features/ai/ai-toolbar.js";
+import { Avatar } from "../components/avatar.js";
 import { MarkdownField } from "../features/markdown/markdown-field.js";
 import { PriorArtPanel } from "../features/findings/prior-art-panel.js";
 import { ScoringPanel } from "../features/findings/scoring-panel.js";
@@ -652,7 +653,7 @@ function FindingHistory({
     items: Array<{
       id: string;
       action: string;
-      actor: { displayName: string } | null;
+      actor: { id: string; displayName: string } | null;
       occurredAt: string;
       before: Record<string, unknown> | null;
       after: Record<string, unknown> | null;
@@ -685,9 +686,20 @@ function FindingHistory({
             <Mono className="w-56 shrink-0 text-text-muted">
               {event.action}
             </Mono>
-            <span className="flex-1">
-              {event.actor?.displayName ?? "system"}
-            </span>
+            <div className="flex-1">
+              {event.actor ? (
+                <Avatar
+                  avatarId={null}
+                  userId={event.actor.id}
+                  label={event.actor.displayName}
+                  size="sm"
+                  showLabel
+                  className="gap-1.5"
+                />
+              ) : (
+                "system"
+              )}
+            </div>
             <span className="text-text-muted">
               {formatDateTime(event.occurredAt)}
             </span>

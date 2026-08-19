@@ -1,4 +1,6 @@
-import { eq, sql } from "drizzle-orm";
+import { createHash, randomUUID } from "node:crypto";
+
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { generateOpaqueToken } from "@codevault/core/crypto";
@@ -44,13 +46,71 @@ describeIntegration("invitation MFA onboarding", () => {
   it("creates no account until TOTP confirmation and returns codes once", async () => {
     const email = `onboard-${Date.now()}@codevault.test`;
     const token = await invite(email);
+    const avatarId = randomUUID();
+    const avatarBytes = Buffer.from("RIFF\u0004\u0000\u0000\u0000WEBP");
+    const avatarObjectKey = `derivatives/avatars/${avatarId}.webp`;
+    const avatarDigest = createHash("sha256").update(avatarBytes).digest("hex");
+    await harness.dbHandle.db
+      .delete(schema.avatarImages)
+      .where(
+        and(
+          eq(schema.avatarImages.targetOrganizationId, harness.organizationId),
+          eq(schema.avatarImages.status, "READY"),
+        ),
+      );
+    await harness.dbHandle.db.insert(schema.avatarImages).values({
+      id: avatarId,
+      organizationId: harness.organizationId,
+      target: "ORGANIZATION",
+      targetOrganizationId: harness.organizationId,
+      status: "READY",
+      originalFilename: "organization.png",
+      declaredSizeBytes: avatarBytes.byteLength,
+      declaredSha256: avatarDigest,
+      observedSizeBytes: avatarBytes.byteLength,
+      observedSha256: avatarDigest,
+      quarantineObjectKey: `quarantine/avatars/${avatarId}`,
+      sanitizedObjectKey: avatarObjectKey,
+      sanitizedSha256: avatarDigest,
+      width: 64,
+      height: 64,
+      requestedBy: admin.id,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      readyAt: new Date().toISOString(),
+    });
+    harness.storage.objects.set(avatarObjectKey, avatarBytes);
     const inspection = await harness.app.inject({
       method: "POST",
       url: "/v1/invitations/inspect",
       payload: { token },
     });
     expect(inspection.statusCode).toBe(200);
-    expect(inspection.json<{ email: string }>().email).toBe(email);
+    expect(
+      inspection.json<{
+        email: string;
+        organizationId: string;
+        organizationAvatarId: string | null;
+        organizationAvatarDataUrl: string | null;
+      }>(),
+    ).toMatchObject({
+      email,
+      organizationId: harness.organizationId,
+      organizationAvatarId: avatarId,
+      organizationAvatarDataUrl: `data:image/webp;base64,${avatarBytes.toString("base64")}`,
+    });
+
+    harness.storage.objects.delete(avatarObjectKey);
+    const inspectionWithoutAvatar = await harness.app.inject({
+      method: "POST",
+      url: "/v1/invitations/inspect",
+      payload: { token },
+    });
+    expect(inspectionWithoutAvatar.statusCode).toBe(200);
+    expect(
+      inspectionWithoutAvatar.json<{
+        organizationAvatarDataUrl: string | null;
+      }>().organizationAvatarDataUrl,
+    ).toBeNull();
 
     const start = await harness.app.inject({
       method: "POST",

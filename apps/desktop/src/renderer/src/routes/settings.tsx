@@ -88,6 +88,9 @@ export function PersonalProfileRoute(): React.JSX.Element {
         <CardBody className="max-w-lg space-y-4 text-[12px]">
           <Avatar
             avatarId={profile.data?.avatarId ?? null}
+            {...((profile.data?.id ?? user?.id)
+              ? { userId: profile.data?.id ?? user!.id }
+              : {})}
             label={displayName || "User"}
             target="USER"
           />

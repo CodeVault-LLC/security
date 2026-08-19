@@ -12,7 +12,6 @@ import {
   ShieldCheck,
   Send,
   Users,
-  UserCircle2,
   WifiOff,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -20,6 +19,7 @@ import type { ReactNode } from "react";
 import { cn } from "@codevault/ui";
 
 import { useSession } from "../lib/session.js";
+import { Avatar } from "./avatar.js";
 import { BrandWordmark } from "./brand-wordmark.js";
 
 /**
@@ -201,10 +201,15 @@ export function AppSidebar({
             to="/settings/profile"
             className="flex items-center gap-2 rounded-(--cv-radius) px-2 py-1 text-[13px] text-text-muted hover:bg-surface-hover hover:text-text"
           >
-            <UserCircle2 aria-hidden className="size-4 shrink-0" />
-            <span className="min-w-0 flex-1 truncate">
-              {user?.displayName ?? "Account"}
-            </span>
+            <Avatar
+              avatarId={null}
+              {...(user ? { userId: user.id } : {})}
+              seed={user?.id ?? "account"}
+              label={user?.displayName ?? "Account"}
+              size="sm"
+              showLabel
+              className="min-w-0 flex-1 gap-2"
+            />
             <span className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-text-muted">
               {user?.role.slice(0, 1) ?? "?"}
             </span>

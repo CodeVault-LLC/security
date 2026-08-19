@@ -1,4 +1,5 @@
 export * from "./components/badges.js";
+export * from "./components/avatar.js";
 export * from "./components/charts.js";
 export * from "./components/finding-header.js";
 export * from "./components/overlays.js";

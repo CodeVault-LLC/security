@@ -18,6 +18,11 @@ import { schema } from "@codevault/db";
 import { hashPassword, WeakPasswordError } from "../../auth/password.js";
 import { hashToken } from "../../auth/tokens.js";
 import { createTotpEnrollment, validateTotpAt } from "../../auth/totp.js";
+import {
+  assertWebpDerivative,
+  digestMatches,
+  sha256Hex,
+} from "../avatars/service.js";
 
 const INVALID_INVITATION = "The invitation is invalid or has expired.";
 const INVALID_ENROLLMENT = "The enrollment is invalid or has expired.";
@@ -42,15 +47,25 @@ export async function registerEnrollmentRoutes(
     },
     async (request, reply) => {
       const result = await app.db.execute<{
+        organization_id: string;
         organization_name: string;
+        avatar_id: string | null;
+        avatar_object_key: string | null;
+        avatar_sha256: string | null;
         email: string;
         role: "ADMIN" | "MEMBER" | "VIEWER";
         expires_at: string;
       }>(sql`
-        SELECT organization.name AS organization_name, invitation.email,
-          invitation.role, invitation.expires_at
+        SELECT organization.id AS organization_id,
+          organization.name AS organization_name, invitation.email,
+          invitation.role, invitation.expires_at, avatar.id AS avatar_id,
+          avatar.sanitized_object_key AS avatar_object_key,
+          avatar.sanitized_sha256 AS avatar_sha256
         FROM invites AS invitation
         JOIN organizations AS organization ON organization.id = invitation.organization_id
+        LEFT JOIN avatar_images AS avatar
+          ON avatar.target_organization_id = organization.id
+          AND avatar.status = 'READY'
         WHERE invitation.token_hash = ${hashToken(request.body.token)}
           AND invitation.revoked_at IS NULL AND invitation.accepted_at IS NULL
           AND invitation.expires_at > now()
@@ -65,9 +80,24 @@ export async function registerEnrollmentRoutes(
           },
         });
       }
+      let organizationAvatarDataUrl: string | null = null;
+      if (row.avatar_object_key !== null && row.avatar_sha256 !== null) {
+        try {
+          const bytes = await app.storage.getObject(row.avatar_object_key);
+          assertWebpDerivative(bytes);
+          if (digestMatches(sha256Hex(bytes), row.avatar_sha256)) {
+            organizationAvatarDataUrl = `data:image/webp;base64,${Buffer.from(bytes).toString("base64")}`;
+          }
+        } catch {
+          // Organization branding is optional during enrollment. A missing or
+          // corrupt derivative must not invalidate an otherwise valid invite.
+        }
+      }
       return {
+        organizationId: row.organization_id,
         organizationName: row.organization_name,
-        organizationAvatarId: null,
+        organizationAvatarId: row.avatar_id,
+        organizationAvatarDataUrl,
         email: row.email,
         role: row.role,
         expiresAt: row.expires_at,

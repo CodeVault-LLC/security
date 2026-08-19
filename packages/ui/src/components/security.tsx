@@ -366,7 +366,7 @@ export function ApprovalState({
   className,
 }: {
   state: ReviewState;
-  approvedBy?: string | null;
+  approvedBy?: ReactNode | null;
   approvedAt?: string | null;
   className?: string;
 }): React.JSX.Element {

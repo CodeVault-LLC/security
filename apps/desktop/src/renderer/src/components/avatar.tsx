@@ -1,42 +1,90 @@
 import { useEffect, useState } from "react";
+import { toSvg } from "jdenticon/browser";
 
-import { Button } from "@codevault/ui";
+import {
+  Avatar as AvatarRoot,
+  AvatarFallback,
+  AvatarImage,
+  Button,
+  cn,
+} from "@codevault/ui";
 
 import { bridge } from "../lib/bridge.js";
 
 export function Avatar(props: {
   avatarId: string | null;
   label: string;
+  source?: string;
+  seed?: string;
+  userId?: string;
+  size?: "sm" | "md" | "lg";
+  showLabel?: boolean;
+  className?: string;
   target?: "USER" | "ORGANIZATION";
 }): React.JSX.Element {
-  const [loaded, setLoaded] = useState<{ id: string; source: string } | null>(
+  const [loaded, setLoaded] = useState<{ key: string; source: string } | null>(
     null,
   );
   const [message, setMessage] = useState<string | null>(null);
+  const imageKey = props.avatarId
+    ? `avatar:${props.avatarId}`
+    : props.userId
+      ? `user:${props.userId}`
+      : null;
+
   useEffect(() => {
     let active = true;
-    if (props.avatarId)
-      void bridge()
-        .avatars.load(props.avatarId)
-        .then((outcome) => {
-          if (active && outcome.ok && props.avatarId)
-            setLoaded({ id: props.avatarId, source: outcome.data });
-        });
+    const request = props.source
+      ? null
+      : props.avatarId
+        ? bridge().avatars.load(props.avatarId)
+        : props.userId
+          ? bridge().avatars.loadUser(props.userId)
+          : null;
+
+    if (request && imageKey)
+      void request.then((outcome) => {
+        if (active && outcome.ok)
+          setLoaded({ key: imageKey, source: outcome.data });
+      });
     return () => {
       active = false;
     };
-  }, [props.avatarId]);
-  const source = loaded?.id === props.avatarId ? loaded.source : null;
+  }, [imageKey, props.avatarId, props.source, props.userId]);
+
+  const source =
+    props.source ?? (loaded?.key === imageKey ? loaded.source : null);
+  const size = props.size ?? "lg";
+  const fallbackSource = identiconDataUrl(
+    props.seed ?? props.userId ?? props.avatarId ?? props.label,
+  );
+
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex size-14 items-center justify-center overflow-hidden rounded-full border border-border bg-surface-muted text-[16px] font-semibold">
-        {source ? (
-          <img src={source} alt="" className="size-full object-cover" />
-        ) : (
-          props.label.slice(0, 2).toUpperCase()
+    <span className={cn("flex items-center gap-3", props.className)}>
+      <AvatarRoot
+        {...(props.showLabel
+          ? { "aria-hidden": true }
+          : { role: "img", "aria-label": props.label })}
+        className={cn(
+          "border border-border bg-surface-muted",
+          size === "sm" ? "size-5" : size === "md" ? "size-8" : "size-14",
         )}
-      </div>
-      <div>
+      >
+        {source ? <AvatarImage src={source} alt="" /> : null}
+        <AvatarFallback>
+          <img
+            src={fallbackSource}
+            alt=""
+            aria-hidden
+            data-avatar-fallback
+            className="size-full object-cover"
+          />
+        </AvatarFallback>
+      </AvatarRoot>
+      {props.showLabel ? (
+        <span className="min-w-0 truncate">{props.label}</span>
+      ) : null}
+      <span>
         {props.target ? (
           <Button
             size="sm"
@@ -58,9 +106,17 @@ export function Avatar(props: {
           </Button>
         ) : null}
         {message ? (
-          <p className="mt-1 text-[11px] text-text-muted">{message}</p>
+          <span className="mt-1 block text-[11px] text-text-muted">
+            {message}
+          </span>
         ) : null}
-      </div>
-    </div>
+      </span>
+    </span>
   );
+}
+
+function identiconDataUrl(seed: string): string {
+  return `data:image/svg+xml,${encodeURIComponent(
+    toSvg(seed, 64, { padding: 0.08 }),
+  )}`;
 }

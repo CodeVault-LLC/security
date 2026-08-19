@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
@@ -15,6 +15,10 @@ const bytes = Buffer.from(
   "avatar bytes are independently decoded by the worker",
 );
 const digest = createHash("sha256").update(bytes).digest("hex");
+const sanitizedBytes = Buffer.from("RIFF\u0004\u0000\u0000\u0000WEBP");
+const sanitizedDigest = createHash("sha256")
+  .update(sanitizedBytes)
+  .digest("hex");
 
 describeIntegration("avatar upload boundary", () => {
   let harness: TestHarness;
@@ -102,6 +106,42 @@ describeIntegration("avatar upload boundary", () => {
   it("denies organization-avatar changes to members", async () => {
     expect((await start(member, "ORGANIZATION")).statusCode).toBe(403);
     expect((await start(admin, "ORGANIZATION")).statusCode).toBe(201);
+  });
+
+  it("serves a member's current sanitized avatar by stable user id", async () => {
+    const avatarId = randomUUID();
+    const objectKey = `derivatives/avatars/${avatarId}.webp`;
+    await harness.dbHandle.db.insert(schema.avatarImages).values({
+      id: avatarId,
+      organizationId: member.organizationId,
+      target: "USER",
+      targetUserId: member.id,
+      status: "READY",
+      originalFilename: "avatar.png",
+      declaredSizeBytes: bytes.byteLength,
+      declaredSha256: digest,
+      observedSizeBytes: bytes.byteLength,
+      observedSha256: digest,
+      quarantineObjectKey: `quarantine/avatars/${avatarId}`,
+      sanitizedObjectKey: objectKey,
+      sanitizedSha256: sanitizedDigest,
+      width: 64,
+      height: 64,
+      requestedBy: member.id,
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      readyAt: new Date().toISOString(),
+    });
+    harness.storage.objects.set(objectKey, sanitizedBytes);
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: `/v1/user-avatars/${member.id}/content`,
+      headers: admin.headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["content-type"]).toBe("image/webp");
+    expect(response.rawPayload).toEqual(sanitizedBytes);
   });
 
   it("rejects an integrity mismatch without retaining raw bytes", async () => {

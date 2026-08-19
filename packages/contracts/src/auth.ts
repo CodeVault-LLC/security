@@ -118,8 +118,13 @@ export const InviteTokenRequest = Type.Object({
   token: Type.String({ minLength: 32, maxLength: 512 }),
 });
 export const InviteInspection = Type.Object({
+  organizationId: Uuid,
   organizationName: Type.String(),
   organizationAvatarId: Type.Union([Uuid, Type.Null()]),
+  organizationAvatarDataUrl: Type.Union([
+    Type.String({ maxLength: 700_000 }),
+    Type.Null(),
+  ]),
   email: Type.String({ format: "email" }),
   role: UserRoleSchema,
   expiresAt: Timestamp,

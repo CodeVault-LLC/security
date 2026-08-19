@@ -41,6 +41,7 @@ import {
   toDateInputValue,
 } from "../../lib/dates.js";
 import { humanise } from "../../lib/format.js";
+import { Avatar } from "../../components/avatar.js";
 import { MarkdownField } from "../markdown/markdown-field.js";
 import { MarkdownPreview } from "../markdown/markdown-preview.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../../lib/api.js";
@@ -250,13 +251,21 @@ export function DisclosurePanel({
                         debounceMs={0}
                       />
                     )}
-                    <p className="mt-0.5 text-[11px] text-text-muted">
+                    <div className="mt-0.5 flex flex-wrap items-center gap-1 text-[11px] text-text-muted">
                       {event.stakeholderName === null
                         ? ""
                         : `${event.stakeholderName} · `}
-                      recorded by {event.recordedBy.displayName} on{" "}
-                      {formatDateTime(event.createdAt)}
-                    </p>
+                      <span>recorded by</span>
+                      <Avatar
+                        avatarId={null}
+                        userId={event.recordedBy.id}
+                        label={event.recordedBy.displayName}
+                        size="sm"
+                        showLabel
+                        className="gap-1"
+                      />
+                      <span>on {formatDateTime(event.createdAt)}</span>
+                    </div>
                   </div>
                 </li>
               ))}

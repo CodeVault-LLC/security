@@ -180,6 +180,7 @@ export interface CodeVaultDesktopApi {
       target: "USER" | "ORGANIZATION",
     ): Promise<ApiOutcome<AvatarUpload | null>>;
     load(avatarId: string): Promise<ApiOutcome<string>>;
+    loadUser(userId: string): Promise<ApiOutcome<string>>;
   };
 
   submissions: {
@@ -255,6 +256,7 @@ export const IPC_CHANNELS = {
   uploadsProgress: "uploads:progress",
   avatarsSelectAndUpload: "avatars:select-and-upload",
   avatarsLoad: "avatars:load",
+  avatarsLoadUser: "avatars:load-user",
   submissionsDownloadManualBundle: "submissions:download-manual-bundle",
   submissionsSeal: "submissions:seal",
   submissionsSend: "submissions:send",
