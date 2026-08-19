@@ -50,7 +50,12 @@ async function bootstrap(): Promise<void> {
   }
 
   const sessionStore = createSessionStore();
-  const apiClient = createApiClient({ sessionStore });
+  const apiClient = createApiClient({
+    sessionStore,
+    onSessionExpired: () => {
+      mainWindow?.webContents.send(IPC_CHANNELS.authSessionExpired);
+    },
+  });
   const providers = createProviderRegistry();
   const signingKeys = createSigningKeyStore();
 

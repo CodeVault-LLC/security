@@ -207,7 +207,7 @@ export async function buildApp(
     if (principal === null) {
       return reply.status(401).send({
         error: {
-          category: "PERMISSION_DENIED",
+          category: "SESSION_EXPIRED",
           message: "Your session has expired. Sign in again.",
           requestId: request.requestId,
         },

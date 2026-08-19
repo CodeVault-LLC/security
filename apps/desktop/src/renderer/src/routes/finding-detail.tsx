@@ -238,16 +238,13 @@ export function FindingDetailRoute({
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
             <div className="space-y-4">
               {canEdit ? (
-                <Card>
-                  <CardBody>
-                    <AiToolbar
-                      targetType="FINDING"
-                      targetId={data.id}
-                      actions={AI_ACTIONS}
-                      onCompleted={onAiCompleted}
-                    />
-                  </CardBody>
-                </Card>
+                <AiToolbar
+                  targetType="FINDING"
+                  targetId={data.id}
+                  actions={AI_ACTIONS}
+                  onCompleted={onAiCompleted}
+                  className="rounded-(--cv-radius-lg) border border-border bg-surface p-3"
+                />
               ) : null}
 
               {proposals.length === 0 ? null : (

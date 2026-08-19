@@ -45,6 +45,7 @@ function categoryForFastifyError(error: FastifyValidationError): ErrorCategory {
 const SAFE_MESSAGES: Record<ErrorCategory, string> = {
   VALIDATION: "The request was not valid.",
   PERMISSION_DENIED: "You do not have access to this resource.",
+  SESSION_EXPIRED: "Your session has expired. Sign in again.",
   MFA_REAUTH_REQUIRED: "Recent multi-factor authentication is required.",
   NOT_FOUND: "The requested item was not found.",
   CONFLICT: "The data changed since you loaded it.",

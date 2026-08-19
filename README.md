@@ -44,6 +44,7 @@ packages/
   db/        Drizzle schema and hand-written SQL migrations
   reporting/ Directives, sanitised Markdown, the report linter, print CSS, PDF
   ai/        Action registry, output schemas, context filtering, proposal mapping
+  mcp/       Authenticated stdio tools for terminal AI clients
   ui/        Theme tokens and the semantic security components
 infra/       Development stack and container images
 docs/        Threat model, AI security, data model, report model
@@ -81,6 +82,10 @@ The three read `.env` from the repository root. `bun run dev` starts them as
 peers rather than through `bun run --filter`, which waits for a dependency's
 script to finish — the worker depends on the server package, so it would never
 start behind a server that is meant to keep running.
+
+To use CodeVault from Codex CLI, Claude Code, or another terminal MCP client,
+sign in with `bun run mcp:login` and register the local stdio server. See
+[`docs/operations/mcp.md`](docs/operations/mcp.md).
 
 If the desktop client reports "Electron uninstall", the binary download did not
 complete during install. Run `bun run electron:install` to retry it; nothing

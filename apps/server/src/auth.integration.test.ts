@@ -77,21 +77,21 @@ describeIntegration("authentication boundary", () => {
       .update(schema.sessions)
       .set({ revokedAt: sql`now()` })
       .where(eq(schema.sessions.tokenHash, hashToken(revokedUser.token)));
-    expect((await me(revokedUser.token)).statusCode).toBe(401);
+    await expectExpiredSession(revokedUser.token);
 
     const expiredUser = await harness.createUser();
     const expired = await harness.issueSession(
       expiredUser.id,
       new Date(Date.now() - 1_000),
     );
-    expect((await me(expired)).statusCode).toBe(401);
+    await expectExpiredSession(expired);
 
     const disabledUser = await harness.createUser();
     await harness.dbHandle.db
       .update(schema.users)
       .set({ disabled: true })
       .where(eq(schema.users.id, disabledUser.id));
-    expect((await me(disabledUser.token)).statusCode).toBe(401);
+    await expectExpiredSession(disabledUser.token);
   });
 
   it("has no public registration or legacy invite-accept route", async () => {
@@ -177,6 +177,15 @@ describeIntegration("authentication boundary", () => {
       url: "/v1/auth/me",
       headers: { authorization: `Bearer ${token}` },
     });
+  }
+
+  async function expectExpiredSession(token: string): Promise<void> {
+    const response = await me(token);
+
+    expect(response.statusCode).toBe(401);
+    expect(
+      response.json<{ error: { category: string } }>().error.category,
+    ).toBe("SESSION_EXPIRED");
   }
 
   async function sessionCount(userId: string): Promise<number> {

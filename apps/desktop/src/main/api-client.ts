@@ -37,6 +37,8 @@ export class ApiError extends Error {
 
 export interface ApiClientOptions {
   sessionStore: SessionStore;
+  /** Notifies the renderer that every authenticated screen must close. */
+  onSessionExpired?: () => void;
   /** Overridden in tests. */
   fetchImpl?: typeof fetch;
   /** Milliseconds before a request is abandoned. */
@@ -132,7 +134,14 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
           text.length === 0 ? null : (JSON.parse(text) as unknown);
 
         if (!response.ok) {
-          throw toApiError(response.status, payload);
+          const error = toApiError(response.status, payload);
+
+          if (response.status === 401 && request.anonymous !== true) {
+            await options.sessionStore.clear();
+            options.onSessionExpired?.();
+          }
+
+          throw error;
         }
 
         return payload as T;

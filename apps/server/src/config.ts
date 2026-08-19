@@ -25,6 +25,7 @@ export interface ServerConfig {
     logLevel: string;
   };
   auth: {
+    /** Absolute lifetime of a session created with "Remember me". */
     sessionTtlHours: number;
     inviteTtlDays: number;
     loginMaxAttempts: number;

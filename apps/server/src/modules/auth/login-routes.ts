@@ -236,11 +236,14 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
         const session = await createSession(
           tx,
           row.user_id,
-          row.absolute_hours,
+          request.body.rememberMe === true
+            ? app.config.auth.sessionTtlHours
+            : row.absolute_hours,
           typeof request.headers["user-agent"] === "string"
             ? request.headers["user-agent"].slice(0, 200)
             : null,
           new Date(),
+          request.body.rememberMe === true,
         );
         await tx
           .update(schema.users)

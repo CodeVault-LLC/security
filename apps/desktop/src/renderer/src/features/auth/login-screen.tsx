@@ -21,6 +21,7 @@ export function LoginScreen(): React.JSX.Element {
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(false);
   const [mode, setMode] = useState<
     "LOGIN" | "MFA" | "INVITATION" | "ENROLLMENT"
   >("LOGIN");
@@ -88,6 +89,7 @@ export function LoginScreen(): React.JSX.Element {
         normalizedServer,
         email.trim(),
         password,
+        rememberMe,
       );
       if (!outcome.ok) {
         setError(outcome.message);
@@ -117,6 +119,7 @@ export function LoginScreen(): React.JSX.Element {
     <div className="flex h-full items-center justify-center bg-background p-6">
       <form
         onSubmit={(event) => void submit(event)}
+        autoComplete="on"
         className="w-[380px] rounded-(--cv-radius-lg) border border-border bg-surface p-5"
       >
         <div className="mb-5">
@@ -127,6 +130,7 @@ export function LoginScreen(): React.JSX.Element {
             <Label htmlFor="server">Server</Label>
             <Input
               id="server"
+              name="server"
               value={serverUrl}
               onChange={(event) => setServerUrl(event.target.value)}
               autoComplete="url"
@@ -137,10 +141,13 @@ export function LoginScreen(): React.JSX.Element {
             <Label htmlFor="email">Organization email</Label>
             <Input
               id="email"
+              name="username"
               type="email"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
               className="mt-1"
             />
           </div>
@@ -148,12 +155,27 @@ export function LoginScreen(): React.JSX.Element {
             <Label htmlFor="password">Password</Label>
             <Input
               id="password"
+              name="password"
               type="password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
               className="mt-1"
             />
+          </div>
+          <div>
+            <label className="flex cursor-pointer items-center gap-2 text-[12px] text-text-muted">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(event) => setRememberMe(event.target.checked)}
+                className="size-3.5 accent-accent"
+              />
+              <span>Remember me</span>
+            </label>
+            <p className="mt-1 pl-5.5 text-[11px] leading-relaxed text-text-muted">
+              Keeps you signed in on this device for up to 7 days.
+            </p>
           </div>
         </div>
         {error === null ? null : (

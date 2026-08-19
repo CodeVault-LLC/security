@@ -20,7 +20,7 @@ export default defineConfig({
           name: "node",
           environment: "node",
           include: [
-            "packages/{core,standards,contracts,db,reporting,ai,markdown}/src/**/*.test.ts",
+            "packages/{core,standards,contracts,db,reporting,ai,markdown,mcp}/src/**/*.test.ts",
             "apps/{server,worker,media-worker}/src/**/*.test.ts",
             "apps/desktop/src/{main,preload}/**/*.test.ts",
             "scripts/**/*.test.ts",

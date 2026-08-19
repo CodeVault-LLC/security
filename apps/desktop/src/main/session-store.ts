@@ -70,7 +70,10 @@ export interface SessionStore {
   /** Current session, if one is held in memory. */
   current(): StoredSession | null;
   /** Stores a session, persisting it only when the backend is trustworthy. */
-  save(session: StoredSession): Promise<StorageBackendStatus>;
+  save(
+    session: StoredSession,
+    persist?: boolean,
+  ): Promise<StorageBackendStatus>;
   /** Loads a persisted session, if any survived the last shutdown. */
   restore(): Promise<StoredSession | null>;
   clear(): Promise<void>;
@@ -99,11 +102,11 @@ export function createSessionStore(
       return status;
     },
 
-    async save(next) {
+    async save(next, persist = true) {
       session = next;
       status = describeStorageBackend();
 
-      if (!status.available || !status.persistent) {
+      if (!persist || !status.available || !status.persistent) {
         // Deliberately not written to disk. The token stays in memory for this
         // run and is gone when the process exits.
         await rm(filePath, { force: true });

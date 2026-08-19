@@ -10,6 +10,7 @@ import {
 
 import type { ApiRequestOptions } from "../../../preload/contracts.js";
 import { bridge } from "./bridge.js";
+import { useSession } from "./session.js";
 
 /**
  * Server state.
@@ -48,6 +49,10 @@ export async function apiRequest<T>(
   const outcome = await bridge().api.request<T>(path, options);
 
   if (!outcome.ok) {
+    if (outcome.category === "SESSION_EXPIRED") {
+      useSession.getState().signOut();
+    }
+
     throw new ApiCallError(
       outcome.category,
       outcome.message,
@@ -220,6 +225,7 @@ export function errorHeading(error: unknown): string {
   const headings: Record<string, string> = {
     VALIDATION: "Validation error",
     PERMISSION_DENIED: "Permission denied",
+    SESSION_EXPIRED: "Session expired",
     NOT_FOUND: "Not found",
     CONFLICT: "Conflict — the data changed",
     PROVIDER_UNAVAILABLE: "Provider unavailable",

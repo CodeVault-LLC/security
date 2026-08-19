@@ -132,6 +132,7 @@ export interface CodeVaultDesktopApi {
       serverUrl: string,
       email: string,
       password: string,
+      rememberMe: boolean,
     ): Promise<ApiOutcome<LoginChallengeResult>>;
     loginComplete(totp: string): Promise<ApiOutcome<AuthResult>>;
     enrollmentStart(): Promise<ApiOutcome<EnrollmentSetup>>;
@@ -141,6 +142,8 @@ export interface CodeVaultDesktopApi {
     restore(): Promise<ApiOutcome<AuthResult> | null>;
     /** Warning to display when the session could not be stored securely. */
     storageWarning(): Promise<string | null>;
+    /** Fires after the server rejects the current session. */
+    onSessionExpired(listener: () => void): () => void;
   };
 
   invitation: {
@@ -247,6 +250,7 @@ export const IPC_CHANNELS = {
   authLogout: "auth:logout",
   authRestore: "auth:restore",
   authStorageWarning: "auth:storage-warning",
+  authSessionExpired: "auth:session-expired",
   invitationInspect: "invitation:inspect",
   invitationStart: "invitation:start",
   invitationConfirm: "invitation:confirm",

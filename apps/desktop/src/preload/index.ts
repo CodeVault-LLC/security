@@ -53,11 +53,12 @@ const api: CodeVaultDesktopApi = {
   },
 
   auth: {
-    loginStart: (serverUrl, email, password) =>
+    loginStart: (serverUrl, email, password, rememberMe) =>
       ipcRenderer.invoke(IPC_CHANNELS.authLoginStart, {
         serverUrl,
         email,
         password,
+        rememberMe,
       }) as ReturnType<CodeVaultDesktopApi["auth"]["loginStart"]>,
     loginComplete: (totp) =>
       ipcRenderer.invoke(IPC_CHANNELS.authLoginComplete, {
@@ -80,6 +81,8 @@ const api: CodeVaultDesktopApi = {
       ipcRenderer.invoke(IPC_CHANNELS.authStorageWarning) as Promise<
         string | null
       >,
+    onSessionExpired: (listener) =>
+      subscribe<void>(IPC_CHANNELS.authSessionExpired, listener),
   },
 
   invitation: {

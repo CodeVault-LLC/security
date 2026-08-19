@@ -104,6 +104,7 @@ export const sessions = pgTable(
     expiresAt: timestampColumn("expires_at").notNull(),
     revokedAt: timestampColumn("revoked_at"),
     lastSeenAt: timestampColumn("last_seen_at"),
+    remembered: boolean("remembered").notNull().default(false),
     mfaVerifiedAt: timestampColumn("mfa_verified_at").notNull(),
     mfaMethod: text("mfa_method").$type<"TOTP">().notNull().default("TOTP"),
     createdAt: createdAt(),

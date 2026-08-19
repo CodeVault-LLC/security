@@ -9,6 +9,7 @@
 export const ERROR_CATEGORIES = [
   "VALIDATION",
   "PERMISSION_DENIED",
+  "SESSION_EXPIRED",
   "MFA_REAUTH_REQUIRED",
   "NOT_FOUND",
   "CONFLICT",
@@ -26,6 +27,7 @@ export type ErrorCategory = (typeof ERROR_CATEGORIES)[number];
 const CATEGORY_STATUS: Record<ErrorCategory, number> = {
   VALIDATION: 400,
   PERMISSION_DENIED: 403,
+  SESSION_EXPIRED: 401,
   MFA_REAUTH_REQUIRED: 403,
   NOT_FOUND: 404,
   CONFLICT: 409,

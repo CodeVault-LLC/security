@@ -29,6 +29,7 @@ export type LoginStartResponse = Static<typeof LoginStartResponse>;
 export const LoginCompleteRequest = Type.Object({
   challengeToken: Type.String({ minLength: 32, maxLength: 512 }),
   totp: Type.String({ pattern: "^[0-9]{6}$" }),
+  rememberMe: Type.Optional(Type.Boolean({ default: false })),
 });
 export type LoginCompleteRequest = Static<typeof LoginCompleteRequest>;
 

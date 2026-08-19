@@ -129,6 +129,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
   let pendingLogin: {
     serverUrl: string;
     challengeToken: string;
+    rememberMe: boolean;
   } | null = null;
   let pendingMigratedEnrollment: {
     serverUrl: string;
@@ -212,12 +213,14 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       serverUrl?: unknown;
       email?: unknown;
       password?: unknown;
+      rememberMe?: unknown;
     };
 
     if (
       typeof request.serverUrl !== "string" ||
       typeof request.email !== "string" ||
-      typeof request.password !== "string"
+      typeof request.password !== "string" ||
+      typeof request.rememberMe !== "boolean"
     ) {
       return failure(new Error("invalid login payload"));
     }
@@ -239,6 +242,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       pendingLogin = {
         serverUrl,
         challengeToken: response.challengeToken,
+        rememberMe: request.rememberMe,
       };
       return {
         ok: true as const,
@@ -267,28 +271,34 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
           body: {
             challengeToken: pendingLogin.challengeToken,
             totp: request.totp,
+            rememberMe: pendingLogin.rememberMe,
           },
           serverUrl: pendingLogin.serverUrl,
           anonymous: true,
         },
       );
       const serverUrl = pendingLogin.serverUrl;
+      const rememberMe = pendingLogin.rememberMe;
       pendingLogin = null;
       uploadSelections.clear();
-      const status = await sessionStore.save({
-        token: response.token,
-        serverUrl,
-        expiresAt: response.expiresAt,
-        userId: response.user.id,
-      });
+      const status = await sessionStore.save(
+        {
+          token: response.token,
+          serverUrl,
+          expiresAt: response.expiresAt,
+          userId: response.user.id,
+        },
+        rememberMe,
+      );
       const result: AuthResult = {
         user: response.user,
-        persistent: status.persistent,
-        storageWarning: status.persistent
-          ? null
-          : "reason" in status
-            ? status.reason
-            : null,
+        persistent: rememberMe && status.persistent,
+        storageWarning:
+          !rememberMe || status.persistent
+            ? null
+            : "reason" in status
+              ? status.reason
+              : null,
       };
       return { ok: true as const, data: result };
     } catch (error: unknown) {

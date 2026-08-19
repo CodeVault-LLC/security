@@ -4,20 +4,34 @@ import {
   BarChart3,
   Building2,
   Boxes,
+  ChevronUp,
   FileText,
   Home,
+  LogOut,
+  Mail,
+  Monitor,
   Search,
   Settings,
   ShieldAlert,
   ShieldCheck,
   Send,
+  UserRound,
   Users,
   WifiOff,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
-import { cn } from "@codevault/ui";
+import {
+  cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@codevault/ui";
 
+import { bridge } from "../lib/bridge.js";
 import { useSession } from "../lib/session.js";
 import { Avatar } from "./avatar.js";
 import { BrandWordmark } from "./brand-wordmark.js";
@@ -91,7 +105,10 @@ export function AppSidebar({
     select: (state) => state.location.pathname,
   });
   const user = useSession((state) => state.user);
+  const signOut = useSession((state) => state.signOut);
   const eventsConnected = useSession((state) => state.eventsConnected);
+  const [signingOut, setSigningOut] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
   const isActive = (to: string): boolean =>
     to === "/" ? pathname === "/" : pathname.startsWith(to);
@@ -111,6 +128,19 @@ export function AppSidebar({
       <span className="truncate">{item.label}</span>
     </Link>
   );
+
+  const handleSignOut = async (): Promise<void> => {
+    if (signingOut) return;
+
+    setSigningOut(true);
+    setAccountMenuOpen(false);
+    try {
+      await bridge().auth.logout();
+    } finally {
+      signOut();
+      setSigningOut(false);
+    }
+  };
 
   return (
     <nav className="flex h-full w-52 shrink-0 flex-col border-r border-border bg-surface">
@@ -190,31 +220,101 @@ export function AppSidebar({
           </div>
         )}
 
-        <div className="flex flex-col gap-0.5">
-          {renderItem({
-            to: "/settings/profile",
-            label: "Personal settings",
-            icon: <Settings aria-hidden className="size-4" />,
-          })}
-
-          <Link
-            to="/settings/profile"
-            className="flex items-center gap-2 rounded-(--cv-radius) px-2 py-1 text-[13px] text-text-muted hover:bg-surface-hover hover:text-text"
+        <DropdownMenu open={accountMenuOpen} onOpenChange={setAccountMenuOpen}>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label="Open account menu"
+              className={cn(
+                "group flex min-h-12 w-full items-center gap-2 rounded-(--cv-radius) px-2 py-1.5 text-left text-[13px]",
+                "text-text-muted hover:bg-surface-hover hover:text-text",
+                "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
+                pathname.startsWith("/settings") &&
+                  "bg-surface-hover text-text",
+              )}
+            >
+              <Avatar
+                avatarId={null}
+                {...(user ? { userId: user.id } : {})}
+                seed={user?.id ?? "account"}
+                label={user?.displayName ?? "Account"}
+                size="sm"
+              />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium text-text">
+                  {user?.displayName ?? "Account"}
+                </span>
+                <span className="block truncate text-[11px]">
+                  {user?.email ?? "Account menu"}
+                </span>
+              </span>
+              <ChevronUp
+                aria-hidden
+                className="size-4 shrink-0 transition-transform duration-150 ease-out group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+              />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            side="top"
+            align="start"
+            className="w-[calc(var(--radix-dropdown-menu-trigger-width)+1px)]"
           >
-            <Avatar
-              avatarId={null}
-              {...(user ? { userId: user.id } : {})}
-              seed={user?.id ?? "account"}
-              label={user?.displayName ?? "Account"}
-              size="sm"
-              showLabel
-              className="min-w-0 flex-1 gap-2"
-            />
-            <span className="shrink-0 rounded border border-border px-1 text-[10px] uppercase text-text-muted">
-              {user?.role.slice(0, 1) ?? "?"}
-            </span>
-          </Link>
-        </div>
+            <DropdownMenuLabel>
+              <span className="block truncate font-medium text-text">
+                {user?.displayName ?? "Account"}
+              </span>
+              <span className="block truncate text-[11px] text-text-muted">
+                {user?.email}
+              </span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link
+                to="/settings/profile"
+                onClick={() => setAccountMenuOpen(false)}
+              >
+                <UserRound aria-hidden className="size-4" />
+                Profile
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link
+                to="/settings/appearance"
+                onClick={() => setAccountMenuOpen(false)}
+              >
+                <Monitor aria-hidden className="size-4" />
+                Appearance
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link
+                to="/settings/security"
+                onClick={() => setAccountMenuOpen(false)}
+              >
+                <ShieldCheck aria-hidden className="size-4" />
+                Security
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link
+                to="/settings/mail"
+                onClick={() => setAccountMenuOpen(false)}
+              >
+                <Mail aria-hidden className="size-4" />
+                Mail
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              disabled={signingOut}
+              className="text-danger data-[highlighted]:bg-danger/10 data-[highlighted]:text-danger"
+              onSelect={() => void handleSignOut()}
+            >
+              <LogOut aria-hidden className="size-4" />
+              {signingOut ? "Signing out…" : "Sign out"}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </nav>
   );

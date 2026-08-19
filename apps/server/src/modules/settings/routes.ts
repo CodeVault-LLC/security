@@ -20,6 +20,18 @@ import { principalOf, requireRecentMfa } from "../../http/guards.js";
 const Profile = Type.Object({
   displayName: Type.String({ minLength: 2, maxLength: 120 }),
 });
+const SecuritySummary = Type.Object({
+  totp: Type.Object({
+    status: Type.Union([
+      Type.Literal("ACTIVE"),
+      Type.Literal("NOT_CONFIGURED"),
+    ]),
+    enrolledAt: Type.Union([Type.String(), Type.Null()]),
+  }),
+  recoveryCodes: Type.Object({
+    remaining: Type.Integer({ minimum: 0 }),
+  }),
+});
 const Password = Type.Object({
   currentPassword: Type.String({ minLength: 1, maxLength: 512 }),
   newPassword: Type.String({ minLength: 12, maxLength: 512 }),
@@ -50,6 +62,45 @@ export async function registerSettingsRoutes(app: AppInstance): Promise<void> {
         .where(eq(schema.users.id, principal.user.id))
         .returning({ displayName: schema.users.displayName });
       return row!;
+    },
+  );
+  app.get(
+    "/v1/settings/security",
+    { schema: { response: { 200: SecuritySummary } } },
+    async (request) => {
+      const principal = principalOf(request);
+      const [[credential], [recoveryCodes]] = await Promise.all([
+        app.db
+          .select({ enrolledAt: schema.totpCredentials.enrolledAt })
+          .from(schema.totpCredentials)
+          .where(
+            and(
+              eq(schema.totpCredentials.userId, principal.user.id),
+              isNull(schema.totpCredentials.replacedAt),
+            ),
+          )
+          .limit(1),
+        app.db
+          .select({ remaining: sql<number>`count(*)::int` })
+          .from(schema.mfaRecoveryCodes)
+          .where(
+            and(
+              eq(schema.mfaRecoveryCodes.userId, principal.user.id),
+              isNull(schema.mfaRecoveryCodes.usedAt),
+            ),
+          ),
+      ]);
+
+      return {
+        totp: {
+          status:
+            credential === undefined
+              ? ("NOT_CONFIGURED" as const)
+              : ("ACTIVE" as const),
+          enrolledAt: credential?.enrolledAt ?? null,
+        },
+        recoveryCodes: { remaining: recoveryCodes?.remaining ?? 0 },
+      };
     },
   );
   app.post(

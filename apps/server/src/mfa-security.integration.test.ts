@@ -64,6 +64,36 @@ describeIntegration("MFA session issuance", () => {
     );
   });
 
+  it("creates a remembered session with the configured persistent lifetime", async () => {
+    const user = await harness.createUser();
+    const challengeToken = await start(user);
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/login/complete",
+      payload: {
+        challengeToken,
+        totp: generateTotpAt(user.totpSecret, Date.now()),
+        rememberMe: true,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<{ token: string; expiresAt: string }>();
+    const remaining = Date.parse(body.expiresAt) - Date.now();
+    expect(remaining).toBeGreaterThan(
+      (harness.config.auth.sessionTtlHours - 1) * 60 * 60_000,
+    );
+    expect(remaining).toBeLessThanOrEqual(
+      harness.config.auth.sessionTtlHours * 60 * 60_000,
+    );
+
+    const [stored] = await harness.dbHandle.db
+      .select({ remembered: schema.sessions.remembered })
+      .from(schema.sessions)
+      .where(eq(schema.sessions.tokenHash, hashToken(body.token)));
+    expect(stored?.remembered).toBe(true);
+  });
+
   it("accepts only one concurrent use of a TOTP counter", async () => {
     const user = await harness.createUser();
     const [firstChallenge, secondChallenge] = await Promise.all([

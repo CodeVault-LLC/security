@@ -29,6 +29,7 @@ export function App(): React.JSX.Element {
   const router = useMemo(() => createAppRouter(), []);
   const status = useSession((state) => state.status);
   const signIn = useSession((state) => state.signIn);
+  const signOut = useSession((state) => state.signOut);
   const setStatus = useSession((state) => state.setStatus);
 
   useEffect(() => {
@@ -39,6 +40,7 @@ export function App(): React.JSX.Element {
     }
 
     let cancelled = false;
+    const unsubscribe = bridge().auth.onSessionExpired(signOut);
 
     void bridge()
       .auth.restore()
@@ -63,8 +65,9 @@ export function App(): React.JSX.Element {
 
     return () => {
       cancelled = true;
+      unsubscribe();
     };
-  }, [signIn, setStatus]);
+  }, [signIn, signOut, setStatus]);
 
   if (!BRIDGE_PRESENT) {
     return (

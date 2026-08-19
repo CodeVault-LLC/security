@@ -1,6 +1,7 @@
 export * from "./components/badges.js";
 export * from "./components/avatar.js";
 export * from "./components/charts.js";
+export * from "./components/dropdown-menu.js";
 export * from "./components/finding-header.js";
 export * from "./components/overlays.js";
 export * from "./components/primitives.js";

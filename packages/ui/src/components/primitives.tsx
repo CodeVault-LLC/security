@@ -29,7 +29,7 @@ const buttonVariants = cva(
     // A press has to be visible. `duration-75` on the transform keeps the
     // release snappy; anything slower reads as lag rather than as feedback.
     "transition-[background-color,border-color,color,transform] duration-100 " +
-    "active:scale-[0.97] active:duration-75 motion-reduce:active:scale-100",
+    "active:scale-[0.96] active:duration-75 motion-reduce:active:scale-100",
   {
     variants: {
       variant: {

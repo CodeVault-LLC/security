@@ -58,6 +58,7 @@ export async function createSession(
   ttlHours: number,
   userAgent: string | null,
   mfaVerifiedAt: Date,
+  remembered = false,
 ): Promise<CreatedSession> {
   const token = generateOpaqueToken();
   const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
@@ -68,6 +69,7 @@ export async function createSession(
       userId,
       tokenHash: hashToken(token),
       expiresAt: expiresAt.toISOString(),
+      remembered,
       mfaVerifiedAt: mfaVerifiedAt.toISOString(),
       mfaMethod: "TOTP",
       ...(userAgent === null ? {} : { userAgent }),
@@ -104,6 +106,7 @@ export async function resolveSession(
       sessionExpiresAt: schema.sessions.expiresAt,
       sessionCreatedAt: schema.sessions.createdAt,
       sessionLastSeenAt: schema.sessions.lastSeenAt,
+      sessionRemembered: schema.sessions.remembered,
       mfaVerifiedAt: schema.sessions.mfaVerifiedAt,
       mfaMethod: schema.sessions.mfaMethod,
       userId: schema.users.id,
@@ -159,14 +162,15 @@ export async function resolveSession(
     return null;
   }
 
-  const idleAnchor = Date.parse(row.sessionLastSeenAt ?? row.sessionCreatedAt);
-  const createdAt = Date.parse(row.sessionCreatedAt);
-
   if (
-    !Number.isFinite(idleAnchor) ||
-    !Number.isFinite(createdAt) ||
-    Date.now() - createdAt > row.sessionAbsoluteHours * 60 * 60_000 ||
-    Date.now() - idleAnchor > row.sessionIdleMinutes * 60_000
+    hasSessionExpired({
+      expiresAt: row.sessionExpiresAt,
+      createdAt: row.sessionCreatedAt,
+      lastSeenAt: row.sessionLastSeenAt,
+      idleMinutes: row.sessionIdleMinutes,
+      absoluteHours: row.sessionAbsoluteHours,
+      remembered: row.sessionRemembered,
+    })
   ) {
     return null;
   }
@@ -201,6 +205,43 @@ export async function resolveSession(
       },
     },
   };
+}
+
+interface SessionExpiryInput {
+  expiresAt: string;
+  createdAt: string;
+  lastSeenAt: string | null;
+  idleMinutes: number;
+  absoluteHours: number;
+  remembered: boolean;
+}
+
+/** Applies the short organization limits unless the user chose persistence. */
+export function hasSessionExpired(
+  session: SessionExpiryInput,
+  now = Date.now(),
+): boolean {
+  const expiresAt = Date.parse(session.expiresAt);
+  const idleAnchor = Date.parse(session.lastSeenAt ?? session.createdAt);
+  const createdAt = Date.parse(session.createdAt);
+
+  if (
+    !Number.isFinite(expiresAt) ||
+    !Number.isFinite(idleAnchor) ||
+    !Number.isFinite(createdAt) ||
+    expiresAt <= now
+  ) {
+    return true;
+  }
+
+  if (session.remembered) {
+    return false;
+  }
+
+  return (
+    now - createdAt > session.absoluteHours * 60 * 60_000 ||
+    now - idleAnchor > session.idleMinutes * 60_000
+  );
 }
 
 /** Records activity without rewriting the row on every single request. */

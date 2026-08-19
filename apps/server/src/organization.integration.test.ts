@@ -104,6 +104,25 @@ describeIntegration("organization and personal settings APIs", () => {
     expect(adminRow?.name).not.toBe("Updated Member");
   });
 
+  it("reports the current user's actual account protection", async () => {
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/settings/security",
+      headers: member.headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(
+      response.json<{
+        totp: { status: string; enrolledAt: string | null };
+        recoveryCodes: { remaining: number };
+      }>(),
+    ).toMatchObject({
+      totp: { status: "ACTIVE" },
+      recoveryCodes: { remaining: member.recoveryCodes.length },
+    });
+  });
+
   it("rate limits repeated password reauthentication guesses", async () => {
     const user = await harness.createUser();
     const statuses: number[] = [];

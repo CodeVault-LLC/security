@@ -15,6 +15,7 @@ import type {
 import {
   Button,
   ButtonGroup,
+  cn,
   Dialog,
   DialogBody,
   DialogContent,
@@ -26,7 +27,10 @@ import {
 } from "@codevault/ui";
 
 import { bridge } from "../../lib/bridge.js";
-import { normalizeAiProviderStatuses } from "../../lib/ai-providers.js";
+import {
+  configuredAiProviderStatuses,
+  normalizeAiProviderStatuses,
+} from "../../lib/ai-providers.js";
 import { formatBytesApprox } from "../../lib/format.js";
 import { queryKeys, useApiQuery } from "../../lib/api.js";
 
@@ -68,6 +72,7 @@ export interface AiToolbarProps {
   actions: readonly AiAction[];
   onCompleted: (run: AiRunWithProposals) => void;
   disabled?: boolean;
+  className?: string;
 }
 
 export function AiToolbar({
@@ -76,20 +81,22 @@ export function AiToolbar({
   actions,
   onCompleted,
   disabled = false,
-}: AiToolbarProps): React.JSX.Element {
+  className,
+}: AiToolbarProps): React.JSX.Element | null {
   const [runningAction, setRunningAction] = useState<AiActionId | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<AiContextPreview | null>(null);
   const [previewFor, setPreviewFor] = useState<AiActionId | null>(null);
   const [model, setModel] = useState<AiModelId | null>(null);
   const [effort, setEffort] = useState<AiEffort | null>(null);
-  const [providerId, setProviderId] = useState<AiProviderId>("claude-code");
-  const [providers, setProviders] = useState<AiProviderStatus[]>([]);
+  const [providerId, setProviderId] = useState<AiProviderId | null>(null);
+  const [providers, setProviders] = useState<AiProviderStatus[] | null>(null);
 
   useEffect(() => {
     void bridge()
       .ai.providers()
-      .then((statuses) => setProviders(normalizeAiProviderStatuses(statuses)));
+      .then((statuses) => setProviders(normalizeAiProviderStatuses(statuses)))
+      .catch(() => setProviders([]));
   }, []);
 
   const policies = useApiQuery<{ items: AiProviderPolicy[] }>(
@@ -97,10 +104,16 @@ export function AiToolbar({
     "/v1/ai/policies",
   );
 
-  const policy = policies.data?.items.find(
-    (item) => item.providerId === providerId,
+  const configuredProviders = configuredAiProviderStatuses(
+    providers ?? [],
+    policies.data?.items ?? [],
   );
-  const provider = providers.find((item) => item.providerId === providerId);
+  const provider =
+    configuredProviders.find((item) => item.providerId === providerId) ??
+    configuredProviders[0];
+  const policy = policies.data?.items.find(
+    (item) => item.providerId === provider?.providerId,
+  );
   const allowedModels = policy?.allowedModels ?? [];
   const allowedEfforts = policy?.allowedEfforts ?? [];
   const selectedModel = model ?? policy?.defaultModel ?? allowedModels[0];
@@ -111,6 +124,8 @@ export function AiToolbar({
   };
 
   const runAction = async (action: AiActionId): Promise<void> => {
+    if (provider === undefined) return;
+
     setRunningAction(action);
     setError(null);
 
@@ -119,7 +134,7 @@ export function AiToolbar({
         action,
         targetType,
         targetId,
-        providerId,
+        providerId: provider.providerId,
         ...preferences,
       });
 
@@ -136,6 +151,8 @@ export function AiToolbar({
   };
 
   const showContext = async (action: AiActionId): Promise<void> => {
+    if (provider === undefined) return;
+
     setError(null);
     setPreviewFor(action);
 
@@ -143,7 +160,7 @@ export function AiToolbar({
       action,
       targetType,
       targetId,
-      providerId,
+      providerId: provider.providerId,
       ...preferences,
     });
 
@@ -157,8 +174,17 @@ export function AiToolbar({
     setPreview(outcome.data);
   };
 
+  if (
+    providers === null ||
+    policies.data === undefined ||
+    provider === undefined ||
+    policy === undefined
+  ) {
+    return null;
+  }
+
   return (
-    <div className="flex flex-col gap-2">
+    <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex flex-wrap items-center gap-1.5">
         <span className="flex items-center gap-1 text-[11px] uppercase tracking-wide text-text-muted">
           <Sparkles aria-hidden className="size-3" />
@@ -191,73 +217,57 @@ export function AiToolbar({
           </ButtonGroup>
         ))}
 
-        {providers.length === 0 ? null : (
-          <div className="ml-auto flex items-center gap-1.5">
-            <Select
-              aria-label="AI provider"
-              className="w-36"
-              disabled={disabled || runningAction !== null}
-              value={providerId}
-              onValueChange={(value) => {
-                setProviderId(value as AiProviderId);
-                setModel(null);
-                setEffort(null);
-              }}
-              options={providers.map((item) => ({
-                value: item.providerId,
-                label: item.displayName,
-                description: item.available ? "Detected" : "Not detected",
-              }))}
-            />
+        <div className="ml-auto flex items-center gap-1.5">
+          <Select
+            aria-label="AI provider"
+            className="w-36"
+            disabled={disabled || runningAction !== null}
+            value={provider.providerId}
+            onValueChange={(value) => {
+              setProviderId(value as AiProviderId);
+              setModel(null);
+              setEffort(null);
+            }}
+            options={configuredProviders.map((item) => ({
+              value: item.providerId,
+              label: item.displayName,
+            }))}
+          />
 
-            {allowedModels.length === 0 ? (
-              <span className="text-[11px] text-warning">
-                {provider?.available === false
-                  ? "Provider unavailable"
-                  : "Provider not configured"}
-              </span>
-            ) : (
-              <Select
-                aria-label="Model"
-                className="w-44"
-                disabled={disabled || runningAction !== null}
-                value={selectedModel}
-                onValueChange={(value) => setModel(value as AiModelId)}
-                options={allowedModels.map((id) => ({ value: id, label: id }))}
-              />
-            )}
+          <Select
+            aria-label="Model"
+            className="w-44"
+            disabled={disabled || runningAction !== null}
+            value={selectedModel}
+            onValueChange={(value) => setModel(value as AiModelId)}
+            options={allowedModels.map((id) => ({ value: id, label: id }))}
+          />
 
-            {allowedModels.length === 0 ||
-            allowedEfforts.length === 0 ? null : (
-              <Select
-                aria-label="Reasoning effort"
-                className="w-40"
-                disabled={disabled || runningAction !== null}
-                value={effort ?? AUTOMATIC_EFFORT}
-                onValueChange={(value) =>
-                  setEffort(
-                    value === AUTOMATIC_EFFORT ? null : (value as AiEffort),
-                  )
-                }
-                options={[
-                  {
-                    value: AUTOMATIC_EFFORT,
-                    label: "Effort: automatic",
-                    // Each action declares how much thinking its own work is
-                    // worth, so leaving this alone gives scoring more than it
-                    // gives a title rewrite.
-                    description: "Chosen per action",
-                  },
-                  ...allowedEfforts.map((level) => ({
-                    value: level,
-                    label: `Effort: ${level}`,
-                    description: EFFORT_DESCRIPTIONS[level],
-                  })),
-                ]}
-              />
-            )}
-          </div>
-        )}
+          <Select
+            aria-label="Reasoning effort"
+            className="w-40"
+            disabled={disabled || runningAction !== null}
+            value={effort ?? AUTOMATIC_EFFORT}
+            onValueChange={(value) =>
+              setEffort(value === AUTOMATIC_EFFORT ? null : (value as AiEffort))
+            }
+            options={[
+              {
+                value: AUTOMATIC_EFFORT,
+                label: "Effort: automatic",
+                // Each action declares how much thinking its own work is
+                // worth, so leaving this alone gives scoring more than it
+                // gives a title rewrite.
+                description: "Chosen per action",
+              },
+              ...allowedEfforts.map((level) => ({
+                value: level,
+                label: `Effort: ${level}`,
+                description: EFFORT_DESCRIPTIONS[level],
+              })),
+            ]}
+          />
+        </div>
       </div>
 
       {error === null ? null : <InlineError>{error}</InlineError>}

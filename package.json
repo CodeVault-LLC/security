@@ -27,6 +27,8 @@
     "db:migrate": "bun run --cwd packages/db migrate",
     "admin:create": "bun run scripts/bootstrap-admin.ts",
     "mfa:rotate-key": "bun run scripts/rotate-mfa-key.ts",
+    "mcp:login": "bun run --cwd packages/mcp login",
+    "mcp:start": "bun run --cwd packages/mcp start",
     "seed:dev": "bun run scripts/seed-dev.ts",
     "verify:env": "bun run scripts/verify-env.ts",
     "mail:rewrap-tokens": "bun run scripts/rewrap-mail-tokens.ts",

@@ -564,14 +564,13 @@ function SectionWorkspace({
       </div>
 
       {canEdit ? (
-        <div className="border-b border-border px-3 py-2">
-          <AiToolbar
-            targetType="REPORT_SECTION"
-            targetId={section.id}
-            actions={SECTION_AI_ACTIONS}
-            onCompleted={onAiCompleted}
-          />
-        </div>
+        <AiToolbar
+          targetType="REPORT_SECTION"
+          targetId={section.id}
+          actions={SECTION_AI_ACTIONS}
+          onCompleted={onAiCompleted}
+          className="border-b border-border px-3 py-2"
+        />
       ) : null}
 
       {proposals.length === 0 ? null : (
