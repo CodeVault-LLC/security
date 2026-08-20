@@ -366,6 +366,9 @@ jobs:
         with:
           path: release-bundle
           merge-multiple: true
+      - name: Remove internal Docker build records
+        shell: bash
+        run: find release-bundle -type f -name '*.dockerbuild' -delete
       - name: Set reproducible release metadata
         shell: bash
         run: |
