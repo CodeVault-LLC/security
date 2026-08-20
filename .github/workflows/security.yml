@@ -71,6 +71,7 @@ jobs:
           severity: MEDIUM,HIGH,CRITICAL
           ignore-unfixed: false
           format: sarif
+          limit-severities-for-sarif: true
           output: trivy-results.sarif
           exit-code: 1
       - name: Upload scan results
