@@ -19,7 +19,8 @@ Workspace packages remain private build inputs. The project does not publish the
 `.github/workflows/release.yml` calls `.github/workflows/reusable-release-build.yml` for version tags. The reusable workflow runs the following gates before publication:
 
 - Frozen dependency installation with Bun 1.3.14.
-- Lint, formatting, type checking, unit tests, integration tests, and builds.
+- Lint, formatting, type checking, generated-inventory checks, unit tests, DOM
+  tests, database integration tests, the existing end-to-end suites, and builds.
 - Dependency audit and media-decoder runtime checks.
 - Native desktop builds on Linux, macOS, and Windows.
 - Final OCI image scanning for fixable high and critical vulnerabilities.
@@ -27,11 +28,14 @@ Workspace packages remain private build inputs. The project does not publish the
 - VEX, checksum, and release-evidence generation.
 - GitHub build attestations and keyless OCI signatures.
 
-An expected desktop package that does not exist fails its build job. An existing GitHub Release for the tag also fails publication. The workflow does not replace published release assets.
+The workflow checks the exact desktop package name and architecture inventory
+for each native runner. A missing or unexpected package fails its build job. An
+existing GitHub Release for the tag also fails publication. The workflow does
+not replace published release assets.
 
 ## Alpha prereleases
 
-A SemVer prerelease tag, such as `v0.1.0-alpha.5`, creates a GitHub prerelease.
+A SemVer prerelease tag, such as `v0.1.0-alpha.6`, creates a GitHub prerelease.
 Alpha releases include the complete source, container, evidence, and desktop
 artifact inventory. The macOS and Windows packages may be unsigned. Release
 notes must identify them as test builds and warn about Gatekeeper and

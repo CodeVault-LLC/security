@@ -7,6 +7,10 @@ The CodeVault server must be running and reachable.
 The MCP server uses your CodeVault identity. Server-side role checks, case
 permissions, validation, and audit records apply to every tool call.
 
+The [generated tool inventory](mcp-tool-inventory.md) lists every discovered
+tool, its effect annotation, and its registered purpose. Run
+`bun run mcp:inventory:check` to confirm that the file matches the server.
+
 ## Sign in from the terminal
 
 From the CodeVault Security repository, run:

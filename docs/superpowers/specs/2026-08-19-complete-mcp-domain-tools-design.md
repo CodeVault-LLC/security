@@ -2,7 +2,10 @@
 
 **Date:** 2026-08-19
 
-**Status:** Approved direction; implementation pending
+**Status:** Implemented. Live discovery exposes 53 tools and the exact current
+set is published in the [generated MCP tool inventory](../../operations/mcp-tool-inventory.md).
+The inventory drift check and `packages/mcp/src/server.test.ts` guard the tool
+names and annotations.
 
 **Owner:** CodeVault Security
 

@@ -207,6 +207,9 @@ export function ActivityRoute(): React.JSX.Element {
   const items = activity.data?.items ?? [];
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // TanStack Virtual exposes imperative methods that React Compiler cannot
+  // memoize. Keep this exclusion on the hook call only. See the compatibility note.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,

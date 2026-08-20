@@ -4,11 +4,13 @@ This index states what the repository proves and what still depends on an operat
 
 | Evidence | Repository source | Current state |
 | --- | --- | --- |
+| Product feature inventory | `docs/feature-register.md` | Current for `0.1.0-alpha.6`; every implemented row links to at least one acceptance test. Published release and pull-request evidence are added when the tag ships. |
 | Threat model | `docs/architecture/threat-model.md` | Implemented; review after trust-boundary changes and at least annually. |
-| AI trust policy | `docs/architecture/ai-security.md` | Implemented. AI cannot approve authoritative changes. |
+| AI trust policy | `docs/architecture/ai-security.md` | Implemented for in-product AI proposals. Authenticated MCP clients are a separate direct-operation interface whose calls are attributed to the signed-in user. |
 | Organization isolation | `docs/architecture/organization-security.md` and authorization tests | Implemented in the product; a security assessment remains required before a stable release. |
 | Secure development plan | `.plans/2026-08-20-secure-open-source-release-plan.md` | Repository-controlled work implemented; owner, hosting, signing, release-run, and independent-assessment gates remain. |
-| CI gates | `.github/workflows/ci.yml` | Implemented in source. GitHub required-check settings remain external. |
+| CI gates | `.github/workflows/ci.yml` | Implemented in source for lint, formatting, types, unit, DOM, database integration, existing end-to-end tests, builds, and dependency checks. GitHub required-check settings remain external. |
+| MCP inventory | `docs/operations/mcp-tool-inventory.md` and `packages/mcp/src/generate-inventory.ts` | Generated from authenticated live discovery. CI rejects inventory drift. |
 | Security analysis | `.github/workflows/security.yml` | Implemented in source. Results exist only after GitHub runs the workflow. |
 | Release provenance | `.github/workflows/release.yml` and `.github/workflows/reusable-release-build.yml` | Implemented in source. Build Level 3 remains unverified until a real release attestation is assessed. |
 | SBOM and VEX | Release workflow and `scripts/release-evidence.ts` | Implemented in source. No release evidence exists before the first workflow run. |

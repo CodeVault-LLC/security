@@ -1,15 +1,15 @@
 # Verify a CodeVault release
 
-Use these checks before you install a desktop package or deploy an OCI image. Replace `v0.1.0-alpha.5` with the release you want to verify.
+Use these checks before you install a desktop package or deploy an OCI image. Replace `v0.1.0-alpha.6` with the release you want to verify.
 
 ## Verify downloadable files
 
 Download the complete evidence set into an empty directory:
 
 ```sh
-mkdir codevault-v0.1.0-alpha.5
-cd codevault-v0.1.0-alpha.5
-gh release download v0.1.0-alpha.5 --repo CodeVault-LLC/security
+mkdir codevault-v0.1.0-alpha.6
+cd codevault-v0.1.0-alpha.6
+gh release download v0.1.0-alpha.6 --repo CodeVault-LLC/security
 ```
 
 Check every local file listed by the release:
@@ -21,14 +21,14 @@ sha256sum --check SHA256SUMS
 Verify a package's GitHub attestation against this repository:
 
 ```sh
-gh attestation verify ./CodeVault-Security-0.1.0-alpha.5.AppImage \
+gh attestation verify ./CodeVault-Security-0.1.0-alpha.6-x86_64.AppImage \
   --repo CodeVault-LLC/security
 ```
 
 Run the repository's structural verification after you obtain the matching source:
 
 ```sh
-bun run release:verify -- /absolute/path/to/codevault-v0.1.0-alpha.5
+bun run release:verify -- /absolute/path/to/codevault-v0.1.0-alpha.6
 ```
 
 The command requires all declared desktop formats, all three image SBOMs, the source archive, VEX, evidence manifest, and valid checksums. It also requires every CycloneDX document to use specification version 1.7.
@@ -45,7 +45,7 @@ spctl --assess --type execute --verbose=2 /Applications/CodeVault\ Security.app
 On Windows, inspect the Authenticode result for a stable release in PowerShell:
 
 ```powershell
-Get-AuthenticodeSignature .\CodeVault-Security-Setup-0.1.0-alpha.5.exe | Format-List
+Get-AuthenticodeSignature .\CodeVault-Security-0.1.0-alpha.6-x64.exe | Format-List
 ```
 
 Require a `Valid` status and the expected CodeVault publisher identity.

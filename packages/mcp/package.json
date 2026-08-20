@@ -1,6 +1,6 @@
 {
   "name": "@codevault/mcp",
-  "version": "0.1.0-alpha.5",
+  "version": "0.1.0-alpha.6",
   "private": true,
   "type": "module",
   "bin": {
@@ -10,6 +10,8 @@
   "scripts": {
     "start": "bun src/index.ts",
     "login": "bun src/login.ts",
+    "inventory": "bun src/generate-inventory.ts",
+    "inventory:check": "bun src/generate-inventory.ts --check",
     "build": "tsc --noEmit",
     "typecheck": "tsc --noEmit"
   },

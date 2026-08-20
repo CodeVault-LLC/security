@@ -1,17 +1,23 @@
 # AI security
 
-CodeVault uses AI for the repetitive parts of research writing. It does not use
-AI to decide anything. This document explains how that separation is built
-rather than merely intended.
+CodeVault uses in-product AI actions for the repetitive parts of research
+writing. It does not use those actions to decide anything. This document covers
+that proposal pipeline.
+
+Authenticated MCP clients are different. MCP tools make direct API calls as the
+signed-in user, and some tools approve scores or reports immediately. The
+[generated MCP inventory](../operations/mcp-tool-inventory.md) records those
+effects. MCP still uses server permissions, validation, revision checks, and
+audit attribution, but it does not pass through the proposal gates below.
 
 ## The rule
 
 **AI drafts; humans own truth.**
 
-A model may propose text, a classification, CVSS metrics, a prior-art
-comparison or a rewrite. It cannot record that a finding is novel, confirmed,
-fixed, approved or ready to publish. Those are the claims a researcher puts
-their name to, and the system refuses to let anything else write them.
+An in-product model may propose text, a classification, CVSS metrics, a
+prior-art comparison, or a rewrite. The proposal pipeline cannot record that a
+finding is novel, confirmed, fixed, approved, or ready to publish. A permitted
+user must accept authoritative changes.
 
 ## Four gates
 

@@ -1,7 +1,10 @@
 # Metrics and charts
 
 **Date:** 2026-08-16
-**Status:** Approved, not yet implemented
+**Status:** Implemented. The chart primitives, contracts, API, dashboard,
+assets views, and Metrics destination are in the repository. Acceptance lives
+in `packages/ui/src/components/charts.test.tsx` and
+`apps/server/src/modules/metrics/routes.integration.test.ts`.
 
 Adds quantitative visualisation to CodeVault: a chart primitive layer in
 `@codevault/ui`, a metrics API, charts leading the dashboard, aggregate views on

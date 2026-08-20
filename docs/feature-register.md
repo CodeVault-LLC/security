@@ -1,0 +1,68 @@
+# Feature register
+
+This register is the current product inventory for `0.1.0-alpha.6`. Design
+documents explain decisions, but their task lists do not report implementation
+status. Update this file when code changes a feature state.
+
+The states have fixed meanings:
+
+- `implemented`: the current scope works and has at least one acceptance test;
+- `partial`: useful behavior exists, but a named part or acceptance path is
+  missing;
+- `planned`: the roadmap assigns the work to a future release; and
+- `deferred`: the work is outside the intended `0.1.0` scope.
+
+Every `implemented` row links to an acceptance test. Release evidence is
+created by the tagged release workflow. Add the pull request and published
+evidence URL when a release ships.
+
+## Product and workflow
+
+| Feature | State | Implementation | Acceptance test | Remaining work or release target |
+| --- | --- | --- | --- | --- |
+| Password, TOTP MFA, recovery, and re-enrollment | `implemented` | [`apps/server/src/modules/auth`](../apps/server/src/modules/auth) and [`apps/server/src/auth`](../apps/server/src/auth) | [`apps/server/src/mfa-security.integration.test.ts`](../apps/server/src/mfa-security.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Invitations, membership, roles, and organization settings | `implemented` | [`apps/server/src/modules/organization`](../apps/server/src/modules/organization) and [`apps/server/src/modules/users`](../apps/server/src/modules/users) | [`apps/server/src/invitation-onboarding.integration.test.ts`](../apps/server/src/invitation-onboarding.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Restricted-case authorization and hidden existence | `implemented` | [`apps/server/src/services/case-access.ts`](../apps/server/src/services/case-access.ts) | [`apps/server/src/authorization.integration.test.ts`](../apps/server/src/authorization.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Cases, case members, notes, policy readiness, and audit events | `implemented` | [`apps/server/src/modules/cases`](../apps/server/src/modules/cases) and [`apps/server/src/services/audit.ts`](../apps/server/src/services/audit.ts) | [`apps/server/src/organization.integration.test.ts`](../apps/server/src/organization.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Assets, identifiers, versions, and relationships | `implemented` | [`apps/server/src/modules/assets/routes.ts`](../apps/server/src/modules/assets/routes.ts) and [`packages/db/src/schema/assets.ts`](../packages/db/src/schema/assets.ts) | [`packages/mcp/src/client.test.ts`](../packages/mcp/src/client.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Findings, affected ranges, independent states, CWE, CVSS 4.0, and CVSS 3.1 | `implemented` | [`apps/server/src/modules/findings`](../apps/server/src/modules/findings) and [`packages/standards/src`](../packages/standards/src) | [`packages/standards/src/cvss40.test.ts`](../packages/standards/src/cvss40.test.ts) and [`packages/mcp/src/client.test.ts`](../packages/mcp/src/client.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Evidence records, artifact uploads, integrity checks, and PoC records | `implemented` | [`apps/server/src/modules/evidence`](../apps/server/src/modules/evidence) and [`apps/worker/src/jobs/artifact-integrity.ts`](../apps/worker/src/jobs/artifact-integrity.ts) | [`apps/server/src/evidence.integration.test.ts`](../apps/server/src/evidence.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Quarantined avatar decoding in the isolated media worker | `implemented` | [`apps/media-worker/src`](../apps/media-worker/src) and [`apps/server/src/modules/avatars`](../apps/server/src/modules/avatars) | [`apps/media-worker/src/worker.integration.test.ts`](../apps/media-worker/src/worker.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Internal, vendor, and public reports with review, lint, directives, and visibility filtering | `implemented` | [`apps/server/src/modules/reports`](../apps/server/src/modules/reports) and [`packages/reporting/src`](../packages/reporting/src) | [`apps/server/src/reports.integration.test.ts`](../apps/server/src/reports.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
+| PDF and Markdown report export | `implemented` | [`apps/worker/src/jobs/report-pdf.ts`](../apps/worker/src/jobs/report-pdf.ts) | [`packages/reporting/src/pdf.integration.test.ts`](../packages/reporting/src/pdf.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Local Claude Code and Codex CLI providers with fixed action schemas and filtered context | `implemented` | [`apps/desktop/src/main/agents`](../apps/desktop/src/main/agents) and [`packages/ai/src`](../packages/ai/src) | [`apps/desktop/src/main/agents/codex-cli.test.ts`](../apps/desktop/src/main/agents/codex-cli.test.ts) and [`apps/server/src/ai-security.integration.test.ts`](../apps/server/src/ai-security.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Manual finding intake with edit, accept, merge, reject, and audit history | `implemented` | [`apps/server/src/modules/intake`](../apps/server/src/modules/intake) and [`apps/desktop/src/renderer/src/features/intake`](../apps/desktop/src/renderer/src/features/intake) | [`apps/server/src/modules/intake/routes.integration.test.ts`](../apps/server/src/modules/intake/routes.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Folder and external-agent intake | `planned` | Source values and queue schema exist, but there is no producer | None | `alpha.7`: preview, deduplication, cancellation, and audited review |
+| Internal, NVD, OSV, and GitHub advisory prior-art search | `partial` | [`apps/worker/src/jobs/prior-art`](../apps/worker/src/jobs/prior-art) and [`apps/server/src/modules/prior-art`](../apps/server/src/modules/prior-art) | [`apps/worker/src/jobs/prior-art/internal-search.integration.test.ts`](../apps/worker/src/jobs/prior-art/internal-search.integration.test.ts) | `alpha.7`: full retry and end-to-end research-loop evidence |
+| EPSS and KEV intelligence refresh | `partial` | [`apps/worker/src/jobs/intelligence-refresh.ts`](../apps/worker/src/jobs/intelligence-refresh.ts) | None | `alpha.7`: triggers, staleness, negative KEV results, status, and tests |
+| TLP validation and export labels | `partial` | [`packages/standards/src/tlp.ts`](../packages/standards/src/tlp.ts) and report routes | [`apps/server/src/reports.integration.test.ts`](../apps/server/src/reports.integration.test.ts) | `alpha.7`: permitted desktop selector and acceptance test |
+| Dashboard and quantitative metrics | `implemented` | [`apps/server/src/modules/metrics`](../apps/server/src/modules/metrics) and [`apps/desktop/src/renderer/src/routes/metrics.tsx`](../apps/desktop/src/renderer/src/routes/metrics.tsx) | [`apps/server/src/modules/metrics/routes.integration.test.ts`](../apps/server/src/modules/metrics/routes.integration.test.ts) and [`packages/ui/src/components/charts.test.tsx`](../packages/ui/src/components/charts.test.tsx) | Release evidence: `alpha.6` tag workflow |
+| Global search, activity stream, and desktop list virtualization | `partial` | [`apps/server/src/modules/search`](../apps/server/src/modules/search), [`apps/server/src/modules/events`](../apps/server/src/modules/events), and desktop routes | None | Add end-to-end coverage and supported scale limits by `beta.1` |
+
+## Coordinated disclosure and integrations
+
+| Feature | State | Implementation | Acceptance test | Remaining work or release target |
+| --- | --- | --- | --- | --- |
+| Vendors, contact routes, route snapshots, and OpenPGP public keys | `implemented` | [`apps/server/src/modules/vendors`](../apps/server/src/modules/vendors) | [`apps/server/src/modules/vendors/routes.integration.test.ts`](../apps/server/src/modules/vendors/routes.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Disclosure stakeholders, events, embargoes, and warnings | `implemented` | [`apps/server/src/modules/disclosure/routes.ts`](../apps/server/src/modules/disclosure/routes.ts) | [`packages/mcp/src/client.test.ts`](../packages/mcp/src/client.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Submission drafting, approval, sealing, manual delivery, and correspondence | `implemented` | [`apps/server/src/modules/submissions`](../apps/server/src/modules/submissions) and [`apps/desktop/src/main/submissions`](../apps/desktop/src/main/submissions) | [`tests/e2e/vendor-submission.spec.ts`](../tests/e2e/vendor-submission.spec.ts) | Release evidence: `alpha.6` tag workflow |
+| Gmail delivery and mailbox synchronization | `partial` | [`apps/server/src/modules/mail`](../apps/server/src/modules/mail) and Gmail worker jobs | [`tests/e2e/gmail-thread-sync.spec.ts`](../tests/e2e/gmail-thread-sync.spec.ts) | `alpha.8`: watch renewal, revocation, quota, attachment, encrypted reply, and replay coverage |
+| Durable in-product notifications and failed-job view | `planned` | Dashboard due-work projections only | None | `alpha.8` |
+
+## Interfaces, distribution, and operations
+
+| Feature | State | Implementation | Acceptance test | Remaining work or release target |
+| --- | --- | --- | --- | --- |
+| Authenticated MCP case, asset, finding, evidence, report, and vendor tools | `partial` | [`packages/mcp/src`](../packages/mcp/src); generated [tool inventory](operations/mcp-tool-inventory.md) | [`packages/mcp/src/server.test.ts`](../packages/mcp/src/server.test.ts) | `alpha.7`: submission and remaining workflow operations from the approved design |
+| Hardened Electron boundary and local credential handling | `implemented` | [`apps/desktop/src/main/security.ts`](../apps/desktop/src/main/security.ts), preload contracts, and session store | [`apps/desktop/src/main/security.test.ts`](../apps/desktop/src/main/security.test.ts) | Release evidence: `alpha.6` tag workflow |
+| Native macOS, Windows, and Linux desktop packaging | `partial` | [`apps/desktop/electron-builder.yml`](../apps/desktop/electron-builder.yml) and the release workflow | None | `alpha.6` tag must produce and verify every policy-listed package |
+| Server, worker, and media-worker OCI images | `partial` | [`infra`](../infra) and the release workflow | [`scripts/docker-compose.test.ts`](../scripts/docker-compose.test.ts) | `alpha.6` tag must build, scan, attest, and publish all three images |
+| Hardened self-hosted Compose deployment | `implemented` | [`infra/compose.production.yml`](../infra/compose.production.yml) | [`scripts/docker-compose.test.ts`](../scripts/docker-compose.test.ts) | Release evidence: `alpha.6` tag workflow |
+| SBOM, VEX, checksums, attestations, and OCI signatures | `partial` | [release workflow](../.github/workflows/reusable-release-build.yml) and [`scripts/release-evidence.ts`](../scripts/release-evidence.ts) | [`scripts/release-evidence.test.ts`](../scripts/release-evidence.test.ts) | A real tagged release must prove the artifact set |
+| Backup, restore, upgrades, rollback, health telemetry, and job recovery | `planned` | No supported operator commands yet | None | `alpha.9` |
+| Accessibility acceptance evidence | `planned` | Semantic controls and keyboard behavior exist in parts of the desktop client | None | `beta.1`: keyboard, screen reader, contrast, zoom, and reduced motion |
+| Bulk workflow actions | `planned` | No supported bulk mutation interface | None | `alpha.7` after realistic dataset review |
+| Versioned case archive import and export | `planned` | No stable archive format | None | `alpha.7` |
+| Supported scale and resource budgets | `planned` | No published limits | None | `alpha.9` |
+| Desktop updates, release channels, release notes, and version display | `planned` | `app.getVersion()` is exposed through the preload bridge, but the renderer does not display it; packaging has `publish: null` and no updater | None | `alpha.9`: signed Stable, Beta, and Alpha feeds; verified update installation or a verified platform fallback; version and channel display; beta exit gate |
+| Multi-organization hosting, SaaS control plane, mobile apps, and plugin execution | `deferred` | Outside the first stable release | None | Reconsider after `0.1.0` usage |

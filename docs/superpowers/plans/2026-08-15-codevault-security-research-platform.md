@@ -1,5 +1,10 @@
 # CodeVault Security Research Platform Implementation Plan
 
+**Status:** Historical implementation plan. It records the original build
+sequence, not current completion. The [feature register](../../feature-register.md)
+is the current inventory. Unchecked task boxes below are preserved as planning
+history and must not be read as evidence that shipped work is missing.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
 > **Read this entire document before changing code.** This is a greenfield product specification, not a loose set of ideas. Preserve the architectural boundaries and security rules even when implementation details need adjustment.
