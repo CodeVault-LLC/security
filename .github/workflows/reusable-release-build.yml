@@ -8,6 +8,7 @@ permissions: {}
 env:
   BUN_VERSION: 1.3.14
   CDXGEN_VERSION: v12.3.1
+  BLINT_VERSION: v3.2.4
   COSIGN_VERSION: v3.1.3
   IMAGE_ROOT: ghcr.io/codevault-llc/security
 
@@ -375,7 +376,7 @@ jobs:
         run: |
           git archive --format=tar --prefix="codevault-${VERSION}/" "$GITHUB_SHA" \
             | gzip -n > "release-bundle/codevault-${VERSION}-source.tar.gz"
-      - name: Install verified CycloneDX generator
+      - name: Install verified SBOM generators
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -390,6 +391,18 @@ jobs:
           sha256sum --check cdxgen-linux-amd64.sha256
           chmod 0755 cdxgen-linux-amd64
           echo "CDXGEN=$RUNNER_TEMP/cdxgen/cdxgen-linux-amd64" >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/blint"
+          gh release download "$BLINT_VERSION" \
+            --repo owasp-dep-scan/blint \
+            --pattern blint-linux-amd64 \
+            --pattern blint-linux-amd64.sha256 \
+            --dir "$RUNNER_TEMP/blint"
+          cd "$RUNNER_TEMP/blint"
+          expected=$(awk '{print $1}' blint-linux-amd64.sha256)
+          echo "${expected}  blint-linux-amd64" | sha256sum --check -
+          chmod 0755 blint-linux-amd64
+          ln -s blint-linux-amd64 blint
+          echo "$RUNNER_TEMP/blint" >> "$GITHUB_PATH"
       - name: Generate CycloneDX 1.7 SBOMs
         shell: bash
         run: |
@@ -398,6 +411,11 @@ jobs:
           while IFS= read -r -d '' artifact; do
             "$CDXGEN" -t binary --spec-version 1.7 --validate \
               -o "${artifact}.cdx.json" "$artifact"
+            # cdxgen delegates binary analysis to blint, whose current output
+            # still declares 1.6 even when cdxgen requests the compatible 1.7 schema.
+            jq '.specVersion = "1.7"' "${artifact}.cdx.json" \
+              > "${artifact}.cdx.json.tmp"
+            mv "${artifact}.cdx.json.tmp" "${artifact}.cdx.json"
           done < <(find release-bundle -type f \( \
             -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o \
             -name '*.rpm' -o -name '*.AppImage' \) -print0)

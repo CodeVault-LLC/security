@@ -31,7 +31,7 @@ An expected desktop package that does not exist fails its build job. An existing
 
 ## Alpha prereleases
 
-A SemVer prerelease tag, such as `v0.1.0-alpha.3`, creates a GitHub prerelease.
+A SemVer prerelease tag, such as `v0.1.0-alpha.4`, creates a GitHub prerelease.
 Alpha releases include the complete source, container, evidence, and desktop
 artifact inventory. The macOS and Windows packages may be unsigned. Release
 notes must identify them as test builds and warn about Gatekeeper and

@@ -7,6 +7,7 @@
 appId: dev.codevault.desktop
 productName: CodeVault Security
 executableName: codevault-security
+artifactName: CodeVault-Security-${version}-${arch}.${ext}
 copyright: Copyright © 2026 CodeVault
 
 directories:
@@ -72,7 +73,6 @@ nsis:
   deleteAppDataOnUninstall: false
 
 linux:
-  artifactName: CodeVault-Security-${version}-${arch}.${ext}
   target:
     - target: rpm
       arch: [x64]
