@@ -1,0 +1,477 @@
+name: Reusable release build
+
+on:
+  workflow_call:
+
+permissions: {}
+
+env:
+  BUN_VERSION: 1.3.14
+  CDXGEN_VERSION: v12.3.1
+  COSIGN_VERSION: v3.1.3
+  IMAGE_ROOT: ghcr.io/codevault-llc/security
+
+jobs:
+  gate:
+    name: Release gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    services:
+      postgres:
+        image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+        env:
+          POSTGRES_USER: codevault
+          POSTGRES_PASSWORD: codevault_ci
+          POSTGRES_DB: codevault
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U codevault"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://codevault:codevault_ci@127.0.0.1:5432/codevault
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-extended
+      - name: Verify release identity
+        run: bun run release:check-tag -- "${GITHUB_REF_NAME}"
+      - name: Install frozen dependencies
+        run: bun install --frozen-lockfile
+      - name: Run quality gates
+        run: |
+          bun run lint
+          bun run format:check
+          bun run typecheck
+          bunx vitest --run --project node --project dom
+          bun run build
+      - name: Run database integration tests
+        run: |
+          bun run db:migrate
+          bunx vitest --run --project node-integration
+      - name: Run dependency and decoder gates
+        run: |
+          bun audit --audit-level=moderate
+          bun run --cwd apps/media-worker verify:runtime
+          timeout 30s bunx vitest --run apps/media-worker/src/sanitize-image.test.ts
+      - name: Analyze source with CodeQL
+        uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        with:
+          category: codevault-release
+      - name: Scan source, secrets, and configuration
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          format: table
+          exit-code: 1
+      - name: Validate workflow syntax
+        run: >-
+          docker run --rm
+          --volume "$PWD:/repo:ro"
+          --workdir /repo
+          rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+      - name: Audit workflow security
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          advanced-security: false
+          annotations: true
+          min-severity: medium
+          min-confidence: medium
+          persona: pedantic
+          version: 1.29.0
+
+  desktop:
+    name: Desktop package (${{ matrix.runner }})
+    needs: gate
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    environment: release
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Require Apple signing credentials
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+        run: |
+          for name in APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID CSC_LINK CSC_KEY_PASSWORD; do
+            test -n "${!name}" || { echo "Missing required secret ${name}"; exit 1; }
+          done
+      - name: Require Windows signing credentials
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          foreach ($name in @("CSC_LINK", "CSC_KEY_PASSWORD")) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              throw "Missing required secret $name"
+            }
+          }
+      - name: Install frozen dependencies
+        run: bun install --frozen-lockfile
+      - name: Build Linux desktop packages
+        if: runner.os == 'Linux'
+        working-directory: apps/desktop
+        run: |
+          bun run build
+          bunx electron-builder --publish never
+      - name: Build signed and notarized macOS desktop packages
+        if: runner.os == 'macOS'
+        working-directory: apps/desktop
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+        run: |
+          bun run build
+          bunx electron-builder --publish never
+      - name: Build signed Windows desktop packages
+        if: runner.os == 'Windows'
+        working-directory: apps/desktop
+        env:
+          CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          bun run build
+          bunx electron-builder --publish never
+      - name: Verify expected desktop package inventory
+        shell: bash
+        run: |
+          node <<'NODE'
+          const { readdirSync } = require("node:fs");
+          const files = readdirSync("apps/desktop/release");
+          const expected = {
+            Linux: [".rpm", ".AppImage"],
+            macOS: [".dmg", ".zip"],
+            Windows: [".exe"],
+          }[process.env.RUNNER_OS];
+          if (!expected) throw new Error(`Unsupported runner ${process.env.RUNNER_OS}`);
+          for (const suffix of expected) {
+            if (!files.some((file) => file.endsWith(suffix))) {
+              throw new Error(`Missing required ${suffix} desktop package`);
+            }
+          }
+          NODE
+      - name: Attest desktop packages
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.rpm
+            apps/desktop/release/*.AppImage
+      - name: Store desktop packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-${{ runner.os }}
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.rpm
+            apps/desktop/release/*.AppImage
+          if-no-files-found: error
+          retention-days: 14
+
+  container:
+    name: Container image (${{ matrix.component }})
+    needs: gate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: server
+            dockerfile: infra/server.Dockerfile
+          - component: worker
+            dockerfile: infra/worker.Dockerfile
+          - component: media-worker
+            dockerfile: infra/media-worker.Dockerfile
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: release
+    permissions:
+      attestations: write
+      contents: read
+      id-token: write
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Read immutable image metadata
+        id: metadata
+        shell: bash
+        run: echo "created=$(git show -s --format=%cI "$GITHUB_SHA")" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@96fe6ef7f33517b61c61be40b68a1882f3264fb8 # v4.2.0
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+      - name: Sign in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and publish image
+        id: build
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: false
+          sbom: false
+          tags: |
+            ${{ env.IMAGE_ROOT }}/${{ matrix.component }}:${{ github.ref_name }}
+            ${{ env.IMAGE_ROOT }}/${{ matrix.component }}:sha-${{ github.sha }}
+          labels: |
+            org.opencontainers.image.created=${{ steps.metadata.outputs.created }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ github.ref_name }}
+            org.opencontainers.image.licenses=Apache-2.0
+      - name: Attest image provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ env.IMAGE_ROOT }}/${{ matrix.component }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+      - name: Scan the published image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_ROOT }}/${{ matrix.component }}@${{ steps.build.outputs.digest }}
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          format: sarif
+          output: trivy-${{ matrix.component }}.sarif
+          exit-code: 1
+      - name: Store image scan result
+        if: always() && hashFiles(format('trivy-{0}.sarif', matrix.component)) != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: container-scan-${{ matrix.component }}
+          path: trivy-${{ matrix.component }}.sarif
+          if-no-files-found: error
+          retention-days: 14
+      - name: Record immutable image identity
+        shell: bash
+        env:
+          COMPONENT: ${{ matrix.component }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE: ${{ env.IMAGE_ROOT }}/${{ matrix.component }}
+        run: |
+          jq -n \
+            --arg component "$COMPONENT" \
+            --arg digest "$DIGEST" \
+            --arg image "$IMAGE" \
+            '{component: $component, digest: $digest, image: $image}' \
+            > "container-${COMPONENT}.json"
+      - name: Store image identity
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: container-${{ matrix.component }}
+          path: container-${{ matrix.component }}.json
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish verified release
+    needs: [desktop, container]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: release
+    concurrency:
+      group: official-release
+      cancel-in-progress: false
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Sign in to GHCR for SBOM generation
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Download built artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: release-bundle
+          merge-multiple: true
+      - name: Set reproducible release metadata
+        shell: bash
+        run: |
+          echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+          echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct "$GITHUB_SHA")" >> "$GITHUB_ENV"
+      - name: Create deterministic source archive
+        shell: bash
+        run: |
+          git archive --format=tar --prefix="codevault-${VERSION}/" "$GITHUB_SHA" \
+            | gzip -n > "release-bundle/codevault-${VERSION}-source.tar.gz"
+      - name: Install verified CycloneDX generator
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/cdxgen"
+          gh release download "$CDXGEN_VERSION" \
+            --repo cdxgen/cdxgen \
+            --pattern cdxgen-linux-amd64 \
+            --pattern cdxgen-linux-amd64.sha256 \
+            --dir "$RUNNER_TEMP/cdxgen"
+          cd "$RUNNER_TEMP/cdxgen"
+          sha256sum --check cdxgen-linux-amd64.sha256
+          chmod 0755 cdxgen-linux-amd64
+          echo "CDXGEN=$RUNNER_TEMP/cdxgen/cdxgen-linux-amd64" >> "$GITHUB_ENV"
+      - name: Generate CycloneDX 1.7 SBOMs
+        shell: bash
+        run: |
+          "$CDXGEN" -t bun --no-install-deps --spec-version 1.7 --validate \
+            -o "release-bundle/codevault-${VERSION}-source.cdx.json" .
+          while IFS= read -r -d '' artifact; do
+            "$CDXGEN" -t binary --spec-version 1.7 --validate \
+              -o "${artifact}.cdx.json" "$artifact"
+          done < <(find release-bundle -type f \( \
+            -name '*.dmg' -o -name '*.zip' -o -name '*.exe' -o \
+            -name '*.rpm' -o -name '*.AppImage' \) -print0)
+          for component in server worker media-worker; do
+            image=$(jq -r .image "release-bundle/container-${component}.json")
+            digest=$(jq -r .digest "release-bundle/container-${component}.json")
+            "$CDXGEN" -t docker --spec-version 1.7 --validate \
+              -o "release-bundle/codevault-${component}-${VERSION}.cdx.json" \
+              "${image}@${digest}"
+          done
+      - name: Generate VEX and evidence manifest
+        shell: bash
+        run: |
+          bun run scripts/release-evidence.ts vex release-bundle
+          bun run scripts/release-evidence.ts manifest release-bundle "$GITHUB_SHA"
+          bun run scripts/release-evidence.ts checksums release-bundle
+          bun run release:verify -- release-bundle
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+      - name: Sign immutable image digests
+        shell: bash
+        run: |
+          for component in server worker media-worker; do
+            image=$(jq -r .image "release-bundle/container-${component}.json")
+            digest=$(jq -r .digest "release-bundle/container-${component}.json")
+            cosign sign --yes "${image}@${digest}"
+          done
+      - name: Read immutable image identities
+        id: images
+        shell: bash
+        run: |
+          for component in server worker media-worker; do
+            key=${component//-/_}
+            echo "${key}_image=$(jq -r .image "release-bundle/container-${component}.json")" >> "$GITHUB_OUTPUT"
+            echo "${key}_digest=$(jq -r .digest "release-bundle/container-${component}.json")" >> "$GITHUB_OUTPUT"
+          done
+      - name: Attest server SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.images.outputs.server_image }}
+          subject-digest: ${{ steps.images.outputs.server_digest }}
+          sbom-path: release-bundle/codevault-server-${{ env.VERSION }}.cdx.json
+          push-to-registry: true
+      - name: Attest worker SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.images.outputs.worker_image }}
+          subject-digest: ${{ steps.images.outputs.worker_digest }}
+          sbom-path: release-bundle/codevault-worker-${{ env.VERSION }}.cdx.json
+          push-to-registry: true
+      - name: Attest media-worker SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-name: ${{ steps.images.outputs.media_worker_image }}
+          subject-digest: ${{ steps.images.outputs.media_worker_digest }}
+          sbom-path: release-bundle/codevault-media-worker-${{ env.VERSION }}.cdx.json
+          push-to-registry: true
+      - name: Attest source SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: release-bundle/codevault-${{ env.VERSION }}-source.tar.gz
+          sbom-path: release-bundle/codevault-${{ env.VERSION }}-source.cdx.json
+      - name: Attest the complete release evidence
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-checksums: release-bundle/SHA256SUMS
+      - name: Publish immutable GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release ${GITHUB_REF_NAME} already exists; refusing to replace it."
+            exit 1
+          fi
+          created_draft=false
+          cleanup_draft() {
+            if [ "$created_draft" = true ]; then
+              gh release delete "$GITHUB_REF_NAME" --yes
+            fi
+          }
+          trap cleanup_draft EXIT
+          gh release create "$GITHUB_REF_NAME" \
+            --verify-tag \
+            --title "CodeVault Security ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --draft
+          created_draft=true
+          find release-bundle -type f -print0 \
+            | xargs -0 gh release upload "$GITHUB_REF_NAME"
+          gh release edit "$GITHUB_REF_NAME" --draft=false
+          created_draft=false

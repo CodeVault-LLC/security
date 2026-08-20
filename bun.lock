@@ -42,7 +42,7 @@
     },
     "apps/desktop": {
       "name": "@codevault/desktop",
-      "version": "1.0.0",
+      "version": "0.1.0-alpha.0",
       "dependencies": {
         "@codevault/contracts": "workspace:*",
         "@codevault/core": "workspace:*",
@@ -55,7 +55,7 @@
         "jdenticon": "^3.3.0",
         "lucide-react": "^0.545.0",
         "mailparser": "3.9.15",
-        "nodemailer": "7.0.6",
+        "nodemailer": "9.0.5",
         "openpgp": "6.2.2",
       },
       "devDependencies": {
@@ -83,7 +83,7 @@
     },
     "apps/media-worker": {
       "name": "@codevault/media-worker",
-      "version": "1.0.0",
+      "version": "0.1.0-alpha.0",
       "dependencies": {
         "@aws-sdk/client-s3": "^3.1111.0",
         "@codevault/core": "workspace:*",
@@ -94,7 +94,7 @@
     },
     "apps/server": {
       "name": "@codevault/server",
-      "version": "1.0.0",
+      "version": "0.1.0-alpha.0",
       "dependencies": {
         "@aws-sdk/client-s3": "^3.1111.0",
         "@aws-sdk/s3-request-presigner": "^3.1111.0",
@@ -119,7 +119,7 @@
     },
     "apps/worker": {
       "name": "@codevault/worker",
-      "version": "1.0.0",
+      "version": "0.1.0-alpha.0",
       "dependencies": {
         "@aws-sdk/client-s3": "^3.1111.0",
         "@codevault/ai": "workspace:*",
@@ -138,7 +138,7 @@
     },
     "packages/ai": {
       "name": "@codevault/ai",
-      "version": "1.0.0",
+      "version": "0.1.0-alpha.0",
       "dependencies": {
         "@codevault/contracts": "workspace:*",
         "@codevault/core": "workspace:*",
@@ -148,7 +148,7 @@
     },
     "packages/contracts": {
       "name": "@codevault/contracts",
-      "version": "1.0.0",
+      "version": "0.1.0-alpha.0",
       "dependencies": {
         "@codevault/core": "workspace:*",
         "@codevault/standards": "workspace:*",
@@ -157,11 +157,11 @@
     },
     "packages/core": {
       "name": "@codevault/core",
-      "version": "1.0.0",
+      "version": "0.1.0-alpha.0",
     },
     "packages/db": {
       "name": "@codevault/db",
-      "version": "1.0.0",
+      "version": "0.1.0-alpha.0",
       "dependencies": {
         "@codevault/core": "workspace:*",
         "@codevault/standards": "workspace:*",
@@ -174,7 +174,7 @@
     },
     "packages/markdown": {
       "name": "@codevault/markdown",
-      "version": "1.0.0",
+      "version": "0.1.0-alpha.0",
       "dependencies": {
         "highlight.js": "^11.12.0",
         "lowlight": "^3.3.0",
@@ -199,9 +199,10 @@
     },
     "packages/mcp": {
       "name": "@codevault/mcp",
-      "version": "1.0.0",
+      "version": "0.1.0-alpha.0",
       "bin": {
         "codevault-mcp": "./src/index.ts",
+        "codevault-mcp-login": "./src/login.ts",
       },
       "dependencies": {
         "@codevault/contracts": "workspace:*",
@@ -216,7 +217,7 @@
     },
     "packages/reporting": {
       "name": "@codevault/reporting",
-      "version": "1.0.0",
+      "version": "0.1.0-alpha.0",
       "dependencies": {
         "@codevault/core": "workspace:*",
         "@codevault/markdown": "workspace:*",
@@ -230,11 +231,11 @@
     },
     "packages/standards": {
       "name": "@codevault/standards",
-      "version": "1.0.0",
+      "version": "0.1.0-alpha.0",
     },
     "packages/ui": {
       "name": "@codevault/ui",
-      "version": "1.0.0",
+      "version": "0.1.0-alpha.0",
       "dependencies": {
         "@codevault/contracts": "workspace:*",
         "@codevault/core": "workspace:*",
@@ -265,6 +266,9 @@
         "react-dom": "^19.0.0",
       },
     },
+  },
+  "overrides": {
+    "html-to-text": "10.0.1",
   },
   "packages": {
     "@acemir/cssom": ["@acemir/cssom@0.9.31", "", {}, "sha512-ZnR3GSaH+/vJ0YlHau21FjfLYjMpYVIzTD8M8vIEQvIGxeOXyXdzCI140rrCY862p/C/BbzWsjc1dgnM9mkoTA=="],
@@ -1359,7 +1363,7 @@
 
     "deep-is": ["deep-is@0.1.4", "", {}, "sha512-oIPzksmTg4/MriiaYGO+okXDT7ztn/w3Eptv/+gSIdMdKsJo0u4CfYNFJPy+4SKMuCqGw2wxnA+URMg3t8a/bQ=="],
 
-    "deepmerge-ts": ["deepmerge-ts@7.1.6", "", {}, "sha512-gQhL1ksGBLQbHeAo47YU6cs2ahd3Pv+8PFYoWogNZbQnNwQyOh9Ad5kbeHFiWwbKdeWQJ5Z7Y7mwb9ew2hXBLw=="],
+    "deepmerge-ts": ["deepmerge-ts@8.0.1", "", {}, "sha512-szCXE7YLCvLKR9bFPJcvsezOShdalctSvrgN/LM/QGUEPZQajwjmsMObZ6/DuANT5lxzM/wtO8Feubwdkz8myA=="],
 
     "defer-to-connect": ["defer-to-connect@2.0.1", "", {}, "sha512-4tvttepXG1VaYGrRibk5EwJd1t4udunSOVMdLSAL6mId1ix438oPwPZMALY41FCijukO1L0twNcGsdzS7dHgDg=="],
 
@@ -1631,7 +1635,7 @@
 
     "html-escaper": ["html-escaper@2.0.2", "", {}, "sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg=="],
 
-    "html-to-text": ["html-to-text@10.0.0", "", { "dependencies": { "@selderee/plugin-htmlparser2": "~0.12.0", "deepmerge-ts": "^7.1.5", "dom-serializer": "^2.0.0", "htmlparser2": "^10.1.0", "selderee": "~0.12.0" } }, "sha512-2OH59Gtprdczel+7Rxgpz9hGVJREaf8Lt1H4kZwWHpEn70VQKRuMNGsb2eDbwaTzrYzb0hheiOG1P7Dim0B4dQ=="],
+    "html-to-text": ["html-to-text@10.0.1", "", { "dependencies": { "@selderee/plugin-htmlparser2": "~0.12.0", "deepmerge-ts": "^8.0.1", "dom-serializer": "^2.0.0", "htmlparser2": "^10.1.0", "selderee": "~0.12.0" } }, "sha512-GiVhRI1BatGARSCmlXWNCjDT0cWrwBWoeduLoV0WSKAgaV/wa+hUWy5LiQLUs4UwiUrE52ZCMfBGiKD87TDPrg=="],
 
     "html-void-elements": ["html-void-elements@3.0.0", "", {}, "sha512-bEqo66MRXsUGxWHV5IP0PUiAWwoEjba4VCzg0LjFJBpchPaTfyfCKTG6bc5F8ucKec3q5y6qOdGyYTSBEvhCrg=="],
 
@@ -1933,7 +1937,7 @@
 
     "node-releases": ["node-releases@2.0.53", "", {}, "sha512-D9UOmYG3UH1V+ENW56t5QXBwJw1YEY18ruVeus89Rw+SyIgjPkCO84bRzO3uNIYosJbNwiabWVn48o3uJLjxFQ=="],
 
-    "nodemailer": ["nodemailer@7.0.6", "", {}, "sha512-F44uVzgwo49xboqbFgBGkRaiMgtoBrBEWCVincJPK9+S9Adkzt/wXCLKbf7dxucmxfTI5gHGB+bEmdyzN6QKjw=="],
+    "nodemailer": ["nodemailer@9.0.5", "", {}, "sha512-wvjiKvjczmsN7U/8006JOdXubgBk2XFAbioDMbT+sM7cPs0QrhJTa6KBRX7P5REGGkDcLUz/EarWidb8G8C1jQ=="],
 
     "non-error": ["non-error@0.1.0", "", {}, "sha512-TMB1uHiGsHRGv1uYclfhivcnf0/PdFp2pNqRxXjncaAsjYMoisaQJI+SSZCqRq+VliwRTC8tsMQfmrWjDMhkPQ=="],
 
@@ -2532,8 +2536,6 @@
     "lowlight/highlight.js": ["highlight.js@11.11.2", "", {}, "sha512-oaXMACAU0kzOMXBjWpNcX+vlwSBCIAiZ9BHa7gA15NOTtT2L/l8OSZDuqS2XppOhZBPJ7hm4o8ep2kyuip2uEQ=="],
 
     "mailparser/iconv-lite": ["iconv-lite@0.7.3", "", { "dependencies": { "safer-buffer": ">= 2.1.2 < 3.0.0" } }, "sha512-IKXpvIzjnC9XTAUbVBcMfGS0EPaIXtW6v+zr+RRp+hqULEpo0owZax6wyRwPOJbWbzjYspQwusTsfVr0ifh4uQ=="],
-
-    "mailparser/nodemailer": ["nodemailer@9.0.5", "", {}, "sha512-wvjiKvjczmsN7U/8006JOdXubgBk2XFAbioDMbT+sM7cPs0QrhJTa6KBRX7P5REGGkDcLUz/EarWidb8G8C1jQ=="],
 
     "mdast-util-find-and-replace/escape-string-regexp": ["escape-string-regexp@5.0.0", "", {}, "sha512-/veY75JbMK4j1yjvuUxuVsiS/hr/4iHs9FTT6cgTexxdE0Ly/glccBAkloH/DofkjRbZU3bnoj38mOmhkZ0lHw=="],
 

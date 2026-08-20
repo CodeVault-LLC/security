@@ -82,6 +82,7 @@
   --cv-surface-hover: oklch(95.5% 0.005 250);
   --cv-border: oklch(90% 0.005 250);
   --cv-border-strong: oklch(78% 0.008 250);
+  --cv-image-outline: oklch(0% 0 0 / 0.1);
 
   /* --- Text ------------------------------------------------------------- */
   --cv-text: oklch(22% 0.01 250);
@@ -168,6 +169,7 @@
     --cv-surface-hover: oklch(27% 0.012 255);
     --cv-border: oklch(30% 0.012 255);
     --cv-border-strong: oklch(42% 0.015 255);
+    --cv-image-outline: oklch(100% 0 0 / 0.1);
 
     --cv-text: oklch(94% 0.005 250);
     --cv-text-muted: oklch(70% 0.012 250);
@@ -213,6 +215,7 @@
   --cv-surface-hover: oklch(27% 0.012 255);
   --cv-border: oklch(30% 0.012 255);
   --cv-border-strong: oklch(42% 0.015 255);
+  --cv-image-outline: oklch(100% 0 0 / 0.1);
 
   --cv-text: oklch(94% 0.005 250);
   --cv-text-muted: oklch(70% 0.012 250);

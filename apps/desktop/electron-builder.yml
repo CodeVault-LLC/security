@@ -18,6 +18,12 @@ files:
   - "!**/*.map"
   - "!**/*.ts"
 
+extraResources:
+  - from: ../../LICENSE
+    to: LICENSE
+  - from: ../../NOTICE
+    to: NOTICE
+
 # ASAR integrity makes a modified application bundle fail to start, which is
 # what stops an attacker with filesystem access from editing the renderer of an
 # installed client.

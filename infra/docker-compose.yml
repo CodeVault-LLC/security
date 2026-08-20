@@ -11,7 +11,7 @@ name: codevault-security
 
 services:
   postgres:
-    image: postgres:18-alpine
+    image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
     restart: unless-stopped
     environment:
       POSTGRES_USER: codevault
@@ -35,7 +35,7 @@ services:
   # Runs on every stack start, including upgrades with an existing data volume.
   # The SQL is idempotent and provisions only development credentials.
   media-db-init:
-    image: postgres:18-alpine
+    image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
     depends_on:
       postgres:
         condition: service_healthy
@@ -57,7 +57,7 @@ services:
   # development volume, so destructive acceptance fixtures are disposable.
   postgres-e2e:
     profiles: ["e2e"]
-    image: postgres:18-alpine
+    image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
     environment:
       POSTGRES_USER: codevault
       POSTGRES_PASSWORD: codevault_e2e_password
@@ -76,7 +76,7 @@ services:
   # S3-compatible object storage for artifacts. Buckets are private; the API
   # hands out short-lived presigned URLs and never proxies file bytes.
   objectstore:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -95,7 +95,7 @@ services:
     networks: [media-backend, host-access]
 
   objectstore-init:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z@sha256:aead63c77f9db9107f1696fb08ecb0faeda23729cde94b0f663edf4fe09728e3
     depends_on:
       objectstore:
         condition: service_healthy
@@ -116,7 +116,7 @@ services:
   # rule, so stale multipart data is removed by a narrow maintenance process.
   # Production S3 deployments should use AbortIncompleteMultipartUpload ILM.
   objectstore-cleanup:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
+    image: minio/mc:RELEASE.2025-04-16T18-13-26Z@sha256:aead63c77f9db9107f1696fb08ecb0faeda23729cde94b0f663edf4fe09728e3
     restart: unless-stopped
     depends_on:
       objectstore-init:

@@ -1,6 +1,6 @@
 {
   "name": "@codevault/desktop",
-  "version": "1.0.0",
+  "version": "0.1.0-alpha.0",
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
@@ -23,7 +23,7 @@
     "jdenticon": "^3.3.0",
     "lucide-react": "^0.545.0",
     "mailparser": "3.9.15",
-    "nodemailer": "7.0.6",
+    "nodemailer": "9.0.5",
     "openpgp": "6.2.2"
   },
   "devDependencies": {

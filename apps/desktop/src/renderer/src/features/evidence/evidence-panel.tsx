@@ -78,32 +78,60 @@ export function EvidencePanel({
       });
   };
 
+  const loadArtifact = async (artifactId: string): Promise<string> => {
+    const outcome = await bridge().api.request<{ url: string }>(
+      `/v1/artifacts/${artifactId}`,
+    );
+
+    if (!outcome.ok) throw new Error(outcome.message);
+    return outcome.data.url;
+  };
+
   return (
-    <div className="space-y-3 p-4">
-      <div className="flex items-center justify-between">
-        <p className="text-[12px] text-text-muted">
-          {items.length} evidence record{items.length === 1 ? "" : "s"}
-        </p>
+    <section aria-labelledby="evidence-heading" className="p-4 sm:p-6">
+      <div className="flex items-start justify-between gap-4 border-b border-border pb-4">
+        <div>
+          <h2
+            id="evidence-heading"
+            className="text-balance text-[16px] font-semibold text-text"
+          >
+            Evidence
+          </h2>
+          <p className="mt-1 text-pretty text-[12px] text-text-muted">
+            {items.length} evidence record{items.length === 1 ? "" : "s"}
+            {evidence.isFetching && evidence.data !== undefined
+              ? " · Refreshing"
+              : ""}
+          </p>
+        </div>
         {canEdit ? (
           <Button
             variant="primary"
             size="sm"
             onClick={() => setUploadOpen(true)}
           >
-            <Upload aria-hidden className="size-3" />
+            <Upload aria-hidden className="size-3.5" strokeWidth={2} />
             Add evidence
           </Button>
-        ) : null}
+        ) : (
+          <p className="max-w-52 text-right text-pretty text-[11px] leading-4 text-text-muted">
+            Read only. Ask a case editor to add evidence.
+          </p>
+        )}
       </div>
 
-      {evidence.error !== null ? (
-        <QueryError query={evidence} />
+      {evidence.error !== null && evidence.data === undefined ? (
+        <QueryError query={evidence} className="mt-4" />
       ) : evidence.isLoading ? (
-        <LoadingState label="Loading evidence…" />
+        <LoadingState label="Loading evidence records…" />
       ) : items.length === 0 ? (
         <EmptyState
           title="No evidence yet"
-          description="Screenshots, captures, source files, firmware images and proof-of-concept material all live here with their digests."
+          description={
+            canEdit
+              ? "Add screenshots, captures, source files, firmware images, or proof-of-concept material."
+              : "No evidence has been added to this finding."
+          }
           action={
             canEdit ? (
               <Button variant="primary" onClick={() => setUploadOpen(true)}>
@@ -114,7 +142,10 @@ export function EvidencePanel({
           }
         />
       ) : (
-        <div className="grid grid-cols-1 gap-3 2xl:grid-cols-2">
+        <div>
+          {evidence.error === null ? null : (
+            <QueryError query={evidence} className="mt-4" />
+          )}
           {items.map((item) => (
             <EvidenceCard
               key={item.id}
@@ -125,6 +156,7 @@ export function EvidencePanel({
               artifacts={item.artifacts}
               capturedAt={item.capturedAt}
               onOpenArtifact={openArtifact}
+              onLoadArtifact={loadArtifact}
             />
           ))}
         </div>
@@ -136,7 +168,7 @@ export function EvidencePanel({
         caseId={caseId}
         {...(findingId === undefined ? {} : { findingId })}
       />
-    </div>
+    </section>
   );
 }
 
@@ -237,14 +269,23 @@ function UploadDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!busy && !createEvidence.isPending) onOpenChange(nextOpen);
+      }}
+    >
       <DialogContent
         title="Add evidence"
         description="Files are hashed and streamed directly to storage. Nothing passes through this window."
       >
         <DialogBody className="space-y-3">
           <div>
-            <Button variant="secondary" onClick={() => void pickFiles()}>
+            <Button
+              variant="secondary"
+              onClick={() => void pickFiles()}
+              disabled={busy || createEvidence.isPending}
+            >
               Choose files…
             </Button>
           </div>
@@ -259,7 +300,7 @@ function UploadDialog({
                 return (
                   <li
                     key={selection.selectionId}
-                    className="flex items-center gap-2 px-2 py-1.5 text-[12px]"
+                    className="flex min-h-10 items-center gap-2 px-3 py-2 text-[12px]"
                   >
                     <span className="min-w-0 flex-1 truncate">
                       {selection.filename}
@@ -268,13 +309,16 @@ function UploadDialog({
                       {formatBytesApprox(selection.sizeBytes)}
                     </span>
                     <span
-                      className="w-24 shrink-0 truncate font-mono text-[10.5px] text-text-muted"
+                      className="hidden w-24 shrink-0 truncate font-mono text-[10.5px] text-text-muted sm:block"
                       title={selection.sha256}
                     >
                       {selection.sha256.slice(0, 12)}
                     </span>
                     {update === undefined ? null : (
-                      <span className="w-20 shrink-0 text-right text-text-muted">
+                      <span
+                        className="w-20 shrink-0 text-right tabular-nums text-text-muted"
+                        aria-live="polite"
+                      >
                         {update.phase === "UPLOADING" &&
                         update.progress !== null
                           ? `${Math.round(update.progress * 100)}%`
@@ -336,18 +380,31 @@ function UploadDialog({
           </div>
 
           {error === null ? null : (
-            <p className="text-[12px] text-danger">{error}</p>
+            <p role="alert" className="text-pretty text-[12px] text-danger">
+              Upload failed. {error} Your files and description are still here.
+            </p>
           )}
         </DialogBody>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={() => onOpenChange(false)}>
+          <Button
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={busy || createEvidence.isPending}
+          >
             Cancel
           </Button>
           <Button
             variant="primary"
             loading={busy || createEvidence.isPending}
             disabled={selections.length === 0 || title.trim().length === 0}
+            title={
+              selections.length === 0
+                ? "Choose at least one file"
+                : title.trim().length === 0
+                  ? "Enter a title"
+                  : undefined
+            }
             onClick={() => void upload()}
           >
             Upload evidence

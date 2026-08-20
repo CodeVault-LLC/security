@@ -87,4 +87,15 @@ describe("Gmail configuration", () => {
       "http://127.0.0.1:4444/gmail/v1",
     );
   });
+
+  test("refuses known development credentials in production", () => {
+    expect(() =>
+      loadConfig({
+        ...base,
+        NODE_ENV: "production",
+        DATABASE_URL:
+          "postgres://codevault:codevault_dev_password@localhost/test",
+      }),
+    ).toThrow("known development credential");
+  });
 });

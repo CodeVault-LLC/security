@@ -7,6 +7,7 @@ import { sql } from "drizzle-orm";
 import * as QRCode from "qrcode";
 
 import { uuidv7 } from "@codevault/core/crypto";
+import { readSecretSetting } from "@codevault/core/configuration";
 import {
   createDatabase,
   runMigrations,
@@ -273,8 +274,8 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const connectionString = process.env.DATABASE_URL;
-  const rawKeys = process.env.MFA_ENCRYPTION_KEYS;
+  const connectionString = readSecretSetting(process.env, "DATABASE_URL");
+  const rawKeys = readSecretSetting(process.env, "MFA_ENCRYPTION_KEYS");
   if (!connectionString || !rawKeys) {
     console.error("DATABASE_URL and MFA_ENCRYPTION_KEYS must be set.");
     process.exitCode = 1;

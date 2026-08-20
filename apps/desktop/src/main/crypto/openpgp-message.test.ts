@@ -22,11 +22,13 @@ let researcherPrivateKey: string;
 let encryptedResearcherPrivateKey: string;
 
 beforeAll(async () => {
+  const keyCreationTime = new Date("2026-08-17T12:00:00.000Z");
   const vendor = await generateKey({
     type: "ecc",
     curve: "curve25519Legacy",
     userIDs: [{ name: "Vendor PSIRT", email: "security@vendor.test" }],
     format: "armored",
+    date: keyCreationTime,
   });
   vendorPublicKey = vendor.publicKey;
   vendorPrivateKey = vendor.privateKey;
@@ -35,6 +37,7 @@ beforeAll(async () => {
     curve: "curve25519Legacy",
     userIDs: [{ name: "Researcher", email: "researcher@codevault.test" }],
     format: "armored",
+    date: keyCreationTime,
   });
   researcherPublicKey = researcher.publicKey;
   researcherPrivateKey = researcher.privateKey;
@@ -44,6 +47,7 @@ beforeAll(async () => {
     userIDs: [{ name: "Encrypted Researcher", email: "secure@codevault.test" }],
     passphrase: "correct test passphrase",
     format: "armored",
+    date: keyCreationTime,
   });
   encryptedResearcherPrivateKey = encryptedResearcher.privateKey;
 });

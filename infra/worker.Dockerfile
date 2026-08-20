@@ -5,7 +5,7 @@
 # the riskiest work does not belong in the container answering authenticated
 # requests.
 
-FROM oven/bun:1.3-debian AS builder
+FROM oven/bun:1.3-debian@sha256:9dba1a1b43ce28c9d7931bfc4eb00feb63b0114720a0277a8f939ae4dfc9db6f AS builder
 
 WORKDIR /build
 
@@ -19,6 +19,7 @@ COPY packages/contracts/package.json packages/contracts/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
 COPY packages/markdown/package.json packages/markdown/
+COPY packages/mcp/package.json packages/mcp/
 COPY packages/reporting/package.json packages/reporting/
 COPY packages/standards/package.json packages/standards/
 COPY packages/ui/package.json packages/ui/
@@ -39,7 +40,9 @@ RUN bun build apps/worker/src/index.ts \
       --external sharp \
       --external pagedjs
 
-FROM mcr.microsoft.com/playwright:v1.62.1-noble AS runtime
+FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e AS runtime
+
+LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 WORKDIR /app
 
@@ -49,6 +52,8 @@ COPY --from=builder /build/dist ./dist
 RUN groupadd --system --gid 10001 codevault \
  && useradd --system --uid 10001 --gid codevault --create-home codevault \
  && chown -R codevault:codevault /app
+
+COPY LICENSE NOTICE /licenses/
 
 USER codevault
 

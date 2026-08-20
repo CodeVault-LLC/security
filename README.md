@@ -1,5 +1,19 @@
 # CodeVault Security
 
+[![CI](https://github.com/CodeVault-LLC/security/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/CodeVault-LLC/security/actions/workflows/ci.yml)
+[![Security](https://github.com/CodeVault-LLC/security/actions/workflows/security.yml/badge.svg?branch=master)](https://github.com/CodeVault-LLC/security/actions/workflows/security.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Release stage: alpha](https://img.shields.io/badge/release-alpha-orange.svg)](https://github.com/CodeVault-LLC/security/releases)
+[![SLSA target: Build L3](https://img.shields.io/badge/SLSA-Build%20L3%20target-6b4fbb.svg)](docs/compliance/slsa-build-level-3.md)
+
+> **Alpha software:** APIs, migrations, deployment behavior, and release formats
+> can change without compatibility guarantees. Do not treat this release as
+> production-ready or government-approved without an independent assessment.
+
+The SLSA badge states an assurance target, not a certification. The
+[security evidence index](docs/security/security-evidence-index.md) records what
+is implemented, what has been verified, and which gaps remain.
+
 CodeVault Security is a security research, evidence and coordinated-disclosure
 platform for people who find vulnerabilities in real things: software
 components, applications, APIs, devices, firmware, hardware, services, hosts
@@ -46,8 +60,8 @@ packages/
   ai/        Action registry, output schemas, context filtering, proposal mapping
   mcp/       Authenticated stdio tools for terminal AI clients
   ui/        Theme tokens and the semantic security components
-infra/       Development stack and container images
-docs/        Threat model, AI security, data model, report model
+infra/       Development and hardened production deployment definitions
+docs/        Architecture, operations, release, and compliance evidence
 scripts/     Dev runner, administrator bootstrap, development seed, env check
 ```
 
@@ -145,6 +159,18 @@ Linux an RPM for Fedora and an AppImage. Each platform is built and signed on
 its own CI runner; signing credentials come from the environment and are never
 committed.
 
+Official releases also publish digest-addressed server, worker, and media-worker
+images, CycloneDX 1.7 SBOMs, VEX, checksums, signatures, and GitHub
+attestations. Read the [release policy](docs/security/release-policy.md) and
+[verification guide](docs/security/release-verification.md) before consuming an
+official artifact.
+
+For a hardened single-host installation, follow
+[Self-host CodeVault Security in production](docs/operations/self-hosted-production.md).
+The production definition keeps PostgreSQL and object storage private, uses
+file-backed secrets, and runs application images as non-root with read-only
+filesystems and dropped capabilities.
+
 ## Where to read next
 
 - [`docs/architecture/threat-model.md`](docs/architecture/threat-model.md) —
@@ -162,7 +188,14 @@ committed.
 - [`docs/operations/vendor-seed-maintenance.md`](docs/operations/vendor-seed-maintenance.md)
   — provenance, expiry, key verification, and maintainer assignment for starter
   vendor routes.
+- [`SECURITY.md`](SECURITY.md) — private vulnerability reporting, supported
+  versions, security invariants, and reportability rules.
+- [`docs/security/security-evidence-index.md`](docs/security/security-evidence-index.md)
+  — release and assurance evidence, current gaps, and claim limitations.
+- [`docs/compliance/README.md`](docs/compliance/README.md) — SLSA, SSDF, ASVS,
+  OpenSSF OSPS, and NIST 800-53 targets and current assessment state.
 
-## Licence
+## License
 
-Not yet chosen. Treat this repository as all rights reserved until it is.
+Copyright 2026 CodeVault LLC. Licensed under the
+[Apache License 2.0](LICENSE).

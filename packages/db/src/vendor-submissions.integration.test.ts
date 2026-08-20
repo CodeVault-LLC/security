@@ -16,7 +16,10 @@ import {
   submissions,
 } from "./schema/submissions.js";
 import { vendorRoutes, vendors } from "./schema/vendors.js";
-import { organizations } from "./schema/organizations.js";
+import {
+  organizations,
+  organizationSecurityPolicies,
+} from "./schema/organizations.js";
 
 describe("vendor submission schema", () => {
   it("exports the ownership, immutable evidence, and mailbox tables", () => {
@@ -40,12 +43,34 @@ describeIntegration("vendor submission persistence", () => {
 
   beforeAll(async () => {
     handle = createDatabase({ connectionString: connectionString as string });
-    const [organization] = await handle.db
+    let [organization] = await handle.db
       .select({ id: organizations.id })
       .from(organizations)
       .limit(1);
     if (organization === undefined) {
-      throw new Error("The integration database has no organization.");
+      const newOrganizationId = uuidv7();
+      const administratorId = uuidv7();
+      await handle.db.transaction(async (tx) => {
+        await tx.insert(organizations).values({
+          id: newOrganizationId,
+          name: "Vendor Submission Tests",
+        });
+        await tx.insert(organizationSecurityPolicies).values({
+          organizationId: newOrganizationId,
+        });
+        await tx.insert(users).values({
+          id: administratorId,
+          email: `vendor-admin-${administratorId}@codevault.test`,
+          displayName: "Vendor Submission Administrator",
+          passwordHash: "not-a-real-hash",
+        });
+        await tx.insert(organizationMemberships).values({
+          organizationId: newOrganizationId,
+          userId: administratorId,
+          role: "ADMIN",
+        });
+      });
+      organization = { id: newOrganizationId };
     }
     organizationId = organization.id;
   });

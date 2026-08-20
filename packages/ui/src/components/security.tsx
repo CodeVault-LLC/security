@@ -15,6 +15,8 @@ import {
   Globe,
   HardDrive,
   Image as ImageIcon,
+  Eye,
+  EyeOff,
   Monitor,
   Network,
   Package,
@@ -211,7 +213,7 @@ export function HashValue({
       <Button
         variant="ghost"
         size="icon"
-        className="size-5"
+        className="size-10"
         onClick={() => void copy()}
         aria-label={`Copy the full ${algorithm} digest`}
       >
@@ -275,6 +277,7 @@ export interface EvidenceCardProps {
   artifacts: readonly Artifact[];
   capturedAt?: string | null;
   onOpenArtifact?: (artifactId: string) => void;
+  onLoadArtifact?: (artifactId: string) => Promise<string>;
   className?: string;
 }
 
@@ -286,21 +289,24 @@ export function EvidenceCard({
   artifacts,
   capturedAt,
   onOpenArtifact,
+  onLoadArtifact,
   className,
 }: EvidenceCardProps): React.JSX.Element {
   return (
-    <Card className={cn("overflow-hidden", className)}>
-      <div className="flex items-start justify-between gap-3 border-b border-border px-3 py-2">
+    <article
+      className={cn("border-b border-border py-5 last:border-b-0", className)}
+    >
+      <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Mono className="text-text-muted">{reference}</Mono>
-            <span className="truncate text-[13px] font-medium">{title}</span>
-          </div>
+          <Mono className="block text-[11px] text-text-muted">{reference}</Mono>
+          <h3 className="mt-1 text-balance text-[15px] font-semibold leading-5 text-text">
+            {title}
+          </h3>
           {description === null || description === undefined ? null : (
             // Stripped rather than rendered: this is a two-line summary, and a
             // description that opens with a table or a diagram would other-
             // wise arrive as a wall of pipes.
-            <p className="mt-0.5 line-clamp-2 text-[12px] text-text-muted">
+            <p className="mt-1 max-w-3xl text-pretty text-[12px] leading-5 text-text-muted">
               {markdownToPlainText(description)}
             </p>
           )}
@@ -308,37 +314,151 @@ export function EvidenceCard({
         <VisibilityBadge visibility={visibility} />
       </div>
 
-      <ul className="divide-y divide-border">
+      <ul className="mt-3 space-y-2">
         {artifacts.map((artifact) => (
-          <li
+          <EvidenceArtifact
             key={artifact.id}
-            className="flex items-center gap-2 px-3 py-1.5 text-[12px]"
-          >
-            <span className="text-text-muted">
-              {artifactKindIcon(artifact.artifactKind)}
-            </span>
-            <button
-              type="button"
-              className="min-w-0 flex-1 truncate text-left hover:underline"
-              onClick={() => onOpenArtifact?.(artifact.id)}
-              disabled={onOpenArtifact === undefined}
-            >
-              {artifact.filename}
-            </button>
-            <span className="shrink-0 text-text-muted">
-              {formatBytes(artifact.sizeBytes)}
-            </span>
-            <HashValue value={artifact.sha256} className="shrink-0" />
-          </li>
+            artifact={artifact}
+            onOpenArtifact={onOpenArtifact}
+            onLoadArtifact={onLoadArtifact}
+          />
         ))}
       </ul>
 
       {capturedAt === null || capturedAt === undefined ? null : (
-        <div className="border-t border-border px-3 py-1.5 text-[11px] text-text-muted">
+        <p className="mt-3 text-[11px] tabular-nums text-text-muted">
           Captured {capturedAt.slice(0, 19).replace("T", " ")} UTC
-        </div>
+        </p>
       )}
-    </Card>
+    </article>
+  );
+}
+
+function EvidenceArtifact({
+  artifact,
+  onOpenArtifact,
+  onLoadArtifact,
+}: {
+  artifact: Artifact;
+  onOpenArtifact?: ((artifactId: string) => void) | undefined;
+  onLoadArtifact?: ((artifactId: string) => Promise<string>) | undefined;
+}): React.JSX.Element {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const imagePreviewable =
+    artifact.status === "STORED" &&
+    /^(image\/(png|jpeg|webp|gif))$/i.test(artifact.mimeType);
+  const textPreviewable =
+    artifact.previewKind === "TEXT_EXCERPT" && artifact.previewText !== null;
+  const previewable = imagePreviewable || textPreviewable;
+
+  const togglePreview = async (): Promise<void> => {
+    if (previewOpen) {
+      setPreviewOpen(false);
+      return;
+    }
+
+    if (textPreviewable || previewUrl !== null) {
+      setPreviewOpen(true);
+      return;
+    }
+
+    if (!imagePreviewable || onLoadArtifact === undefined) return;
+
+    setPreviewLoading(true);
+    setPreviewError(null);
+    try {
+      setPreviewUrl(await onLoadArtifact(artifact.id));
+      setPreviewOpen(true);
+    } catch {
+      setPreviewError(
+        "Preview could not be loaded. Open the file to try again.",
+      );
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  return (
+    <li className="overflow-hidden rounded-(--cv-radius-lg) bg-surface-raised">
+      <div className="flex min-h-11 items-center gap-2 px-3 py-2 text-[12px]">
+        <span className="shrink-0 text-text-muted">
+          {artifactKindIcon(artifact.artifactKind)}
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate font-medium text-text">{artifact.filename}</p>
+          <p className="truncate text-[11px] tabular-nums text-text-muted">
+            {formatBytes(artifact.sizeBytes)} · {artifact.mimeType}
+            {artifact.status === "STORED"
+              ? ""
+              : ` · ${humaniseState(artifact.status)}`}
+          </p>
+        </div>
+        <HashValue
+          value={artifact.sha256}
+          className="hidden shrink-0 lg:inline-flex"
+        />
+        {previewable ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            loading={previewLoading}
+            aria-expanded={previewOpen}
+            aria-label={`${previewOpen ? "Hide" : "Preview"} ${artifact.filename}`}
+            onClick={() => void togglePreview()}
+          >
+            {previewOpen ? (
+              <EyeOff aria-hidden className="size-4" strokeWidth={1.5} />
+            ) : (
+              <Eye aria-hidden className="size-4" strokeWidth={1.5} />
+            )}
+          </Button>
+        ) : null}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0"
+          aria-label={`Open ${artifact.filename}`}
+          onClick={() => onOpenArtifact?.(artifact.id)}
+          disabled={
+            artifact.status !== "STORED" || onOpenArtifact === undefined
+          }
+          title={
+            artifact.status === "STORED"
+              ? "Open file"
+              : `File is ${humaniseState(artifact.status).toLowerCase()}`
+          }
+        >
+          <ExternalLink aria-hidden className="size-4" strokeWidth={1.5} />
+        </Button>
+      </div>
+
+      {previewError === null ? null : (
+        <p
+          role="alert"
+          className="border-t border-border px-3 py-2 text-[12px] text-danger"
+        >
+          {previewError}
+        </p>
+      )}
+
+      {!previewOpen ? null : imagePreviewable && previewUrl !== null ? (
+        <figure className="border-t border-border bg-background p-2">
+          <img
+            src={previewUrl}
+            alt={`Preview of ${artifact.filename}`}
+            className="max-h-[32rem] w-full rounded-(--cv-radius) object-contain outline outline-1 -outline-offset-1 outline-[var(--cv-image-outline)]"
+          />
+        </figure>
+      ) : textPreviewable ? (
+        <pre className="max-h-80 overflow-auto whitespace-pre-wrap border-t border-border bg-background p-3 font-mono text-[11px] leading-5 text-text">
+          {artifact.previewText}
+        </pre>
+      ) : null}
+    </li>
   );
 }
 

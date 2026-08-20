@@ -1,6 +1,8 @@
+import { readSecretSetting } from "@codevault/core/configuration";
+
 import { runMigrations } from "./migrate.js";
 
-const connectionString = process.env.DATABASE_URL;
+const connectionString = readSecretSetting(process.env, "DATABASE_URL");
 
 if (!connectionString) {
   console.error("DATABASE_URL is not set.");
