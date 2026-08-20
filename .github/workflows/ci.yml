@@ -50,6 +50,11 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Check generated MCP inventory
+        run: |
+          bun run mcp:inventory:check
+          bun run features:check
+
       - name: Unit tests
         run: bunx vitest --run --project node --project dom
 
@@ -96,6 +101,47 @@ jobs:
 
       - name: Integration tests
         run: bunx vitest --run --project node-integration
+
+  end-to-end:
+    name: Existing end-to-end acceptance tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+        env:
+          POSTGRES_USER: codevault
+          POSTGRES_PASSWORD: codevault_ci
+          POSTGRES_DB: codevault
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U codevault"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgres://codevault:codevault_ci@127.0.0.1:5432/codevault
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Migrate
+        run: bun run db:migrate
+
+      - name: End-to-end tests
+        run: bun run e2e
 
   audit:
     name: Dependency advisories

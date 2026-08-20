@@ -36,6 +36,54 @@ const DESKTOP_MANIFEST_PATH = join(
 );
 const CHECKSUM_FILE = "SHA256SUMS";
 const EVIDENCE_FILE = "release-evidence.json";
+const DESKTOP_ARTIFACT_PATTERN = /\.(?:dmg|zip|exe|rpm|AppImage)$/u;
+
+export type DesktopPlatform = "Linux" | "macOS" | "Windows";
+
+export function expectedDesktopPackages(
+  platform: DesktopPlatform,
+  version: string,
+): string[] {
+  const prefix = `CodeVault-Security-${version}`;
+  switch (platform) {
+    case "Linux":
+      return [`${prefix}-x86_64.AppImage`, `${prefix}-x86_64.rpm`];
+    case "macOS":
+      return [
+        `${prefix}-arm64.dmg`,
+        `${prefix}-arm64.zip`,
+        `${prefix}-x64.dmg`,
+        `${prefix}-x64.zip`,
+      ];
+    case "Windows":
+      return [`${prefix}-x64.exe`];
+  }
+}
+
+export function verifyDesktopPackageInventory(
+  directory: string,
+  platform: DesktopPlatform,
+  version: string,
+): number {
+  const expected = expectedDesktopPackages(platform, version).sort();
+  const actual = readdirSync(directory, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        entry.isFile() &&
+        entry.name.includes(version) &&
+        DESKTOP_ARTIFACT_PATTERN.test(entry.name),
+    )
+    .map((entry) => entry.name)
+    .sort();
+  const missing = expected.filter((name) => !actual.includes(name));
+  const unexpected = actual.filter((name) => !expected.includes(name));
+  if (missing.length > 0 || unexpected.length > 0) {
+    throw new Error(
+      `Desktop package inventory mismatch for ${platform}. Missing: ${missing.join(", ") || "none"}. Unexpected: ${unexpected.join(", ") || "none"}.`,
+    );
+  }
+  return actual.length;
+}
 
 function readPackageManifest(): PackageManifest {
   return JSON.parse(
@@ -257,16 +305,15 @@ export function verifyReleaseBundle(directory: string, version: string): void {
   const files = listFiles(directory).map((path) =>
     toPortablePath(relative(directory, path)),
   );
-  const suffixes = [".dmg", ".zip", ".exe", ".rpm", ".AppImage"];
-  for (const suffix of suffixes) {
-    const artifacts = files.filter((path) => path.endsWith(suffix));
-    if (artifacts.length === 0) {
-      throw new Error(`Release bundle has no ${suffix} artifact.`);
+  const desktopArtifacts = (["Linux", "macOS", "Windows"] as const).flatMap(
+    (platform) => expectedDesktopPackages(platform, version),
+  );
+  for (const artifact of desktopArtifacts) {
+    if (!files.includes(artifact)) {
+      throw new Error(`Release bundle has no ${artifact}.`);
     }
-    for (const artifact of artifacts) {
-      if (!files.includes(`${artifact}.cdx.json`)) {
-        throw new Error(`Release bundle has no SBOM for ${artifact}.`);
-      }
+    if (!files.includes(`${artifact}.cdx.json`)) {
+      throw new Error(`Release bundle has no SBOM for ${artifact}.`);
     }
   }
   for (const component of ["server", "worker", "media-worker"]) {
@@ -307,7 +354,7 @@ export function verifyReleaseBundle(directory: string, version: string): void {
 
 function usage(): never {
   throw new Error(
-    "Usage: release-evidence.ts <check-tag|vex|manifest|checksums|verify> [arguments]",
+    "Usage: release-evidence.ts <check-tag|desktop-inventory|vex|manifest|checksums|verify> [arguments]",
   );
 }
 
@@ -325,6 +372,24 @@ async function main(): Promise<void> {
       assertReleaseVersions(version, desktopManifest.version);
       assertReleaseTag(tag, version);
       console.warn(`release tag matches version ${version}`);
+      break;
+    }
+    case "desktop-inventory": {
+      const [platform, directory] = arguments_;
+      if (
+        directory === undefined ||
+        (platform !== "Linux" && platform !== "macOS" && platform !== "Windows")
+      ) {
+        usage();
+      }
+      const count = verifyDesktopPackageInventory(
+        resolve(directory),
+        platform,
+        version,
+      );
+      console.warn(
+        `${platform} desktop package inventory verified (${count}).`,
+      );
       break;
     }
     case "vex": {

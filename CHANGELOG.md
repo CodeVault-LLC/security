@@ -1,0 +1,59 @@
+# Changelog
+
+This file records user-visible and operator-visible changes. The project follows
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html) for release identity,
+with the prerelease sequence defined in [`ROADMAP.md`](ROADMAP.md).
+
+## [Unreleased]
+
+No changes recorded yet.
+
+## [0.1.0-alpha.6] - 2026-08-20
+
+### Added
+
+- Added the feature register with explicit implemented, partial, planned, and
+  deferred states plus acceptance evidence for implemented features.
+- Added a generated inventory of all 53 authenticated MCP tools and a CI drift
+  check based on live MCP discovery.
+- Added an exact desktop package inventory check for every operating system and
+  architecture listed in the release policy.
+- Added this changelog and the release-note template.
+
+### Changed
+
+- Reconciled the master implementation plan, AI expansion design, metrics
+  design, MCP design, README, and security evidence index with current code.
+- Documented the two line-scoped React Compiler exclusions required by TanStack
+  Virtual. Lint now completes without compatibility warnings.
+- Added the two existing end-to-end suites to ordinary CI and the tagged release
+  gate.
+- Updated every workspace package version to `0.1.0-alpha.6`.
+
+### Security
+
+- No security boundary changed. Documentation now distinguishes the in-product
+  AI proposal pipeline from direct, authenticated MCP operations.
+- Release inventory checks now reject missing architectures and unexpected
+  desktop package types before publication.
+
+### Migrations
+
+- No database migration is required from `0.1.0-alpha.5`.
+
+### Compatibility
+
+- APIs, database behavior, and package formats remain alpha interfaces and may
+  change before `0.1.0`.
+- macOS and Windows alpha packages remain unsigned test builds.
+
+### Known gaps
+
+- Folder and external-agent intake, remaining MCP workflow tools, desktop TLP
+  selection, and operational EPSS and KEV refresh are assigned to `alpha.7`.
+- A real `v0.1.0-alpha.6` tag must still produce the cross-platform packages,
+  OCI images, attestations, signatures, SBOMs, and VEX described by the release
+  policy.
+
+[Unreleased]: https://github.com/CodeVault-LLC/security/compare/v0.1.0-alpha.6...HEAD
+[0.1.0-alpha.6]: https://github.com/CodeVault-LLC/security/compare/v0.1.0-alpha.5...v0.1.0-alpha.6

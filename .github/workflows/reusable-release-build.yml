@@ -59,12 +59,16 @@ jobs:
           bun run lint
           bun run format:check
           bun run typecheck
+          bun run mcp:inventory:check
+          bun run features:check
           bunx vitest --run --project node --project dom
           bun run build
       - name: Run database integration tests
         run: |
           bun run db:migrate
           bunx vitest --run --project node-integration
+      - name: Run existing end-to-end acceptance tests
+        run: bun run e2e
       - name: Run dependency and decoder gates
         run: |
           bun audit --audit-level=moderate
@@ -193,22 +197,7 @@ jobs:
           bunx electron-builder --publish never
       - name: Verify expected desktop package inventory
         shell: bash
-        run: |
-          node <<'NODE'
-          const { readdirSync } = require("node:fs");
-          const files = readdirSync("apps/desktop/release");
-          const expected = {
-            Linux: [".rpm", ".AppImage"],
-            macOS: [".dmg", ".zip"],
-            Windows: [".exe"],
-          }[process.env.RUNNER_OS];
-          if (!expected) throw new Error(`Unsupported runner ${process.env.RUNNER_OS}`);
-          for (const suffix of expected) {
-            if (!files.some((file) => file.endsWith(suffix))) {
-              throw new Error(`Missing required ${suffix} desktop package`);
-            }
-          }
-          NODE
+        run: bun run release:verify-desktop -- "$RUNNER_OS" apps/desktop/release
       - name: Attest desktop packages
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
         with:

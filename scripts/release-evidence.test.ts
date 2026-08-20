@@ -8,6 +8,8 @@ import {
   assertReleaseTag,
   assertReleaseVersions,
   createVex,
+  expectedDesktopPackages,
+  verifyDesktopPackageInventory,
   verifyChecksums,
   writeChecksums,
   writeEvidenceManifest,
@@ -30,6 +32,20 @@ describe("release evidence", () => {
     expect(() => assertReleaseVersions("1.2.3", "1.2.4")).toThrow(
       "Desktop version",
     );
+  });
+
+  it("requires every policy-listed desktop architecture", () => {
+    const directory = temporaryDirectory();
+    const expected = expectedDesktopPackages("macOS", "1.2.3");
+    for (const name of expected)
+      writeFileSync(join(directory, name), "package");
+
+    expect(verifyDesktopPackageInventory(directory, "macOS", "1.2.3")).toBe(4);
+
+    writeFileSync(join(directory, "CodeVault-Security-1.2.3-arm64.exe"), "bad");
+    expect(() =>
+      verifyDesktopPackageInventory(directory, "macOS", "1.2.3"),
+    ).toThrow("Unexpected");
   });
 
   it("creates a deterministic CycloneDX 1.7 VEX identity", () => {

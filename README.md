@@ -5,7 +5,7 @@
 [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/CodeVault-LLC/security/badge)](https://securityscorecards.dev/viewer/?uri=github.com/CodeVault-LLC/security)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Release stage: alpha](https://img.shields.io/badge/release-alpha-orange.svg)](https://github.com/CodeVault-LLC/security/releases)
-[![SLSA target: Build L3](https://img.shields.io/badge/SLSA-Build%20L3%20target-6b4fbb.svg)](docs/compliance/slsa-build-level-3.md)
+[![SLSA target: Build L3](https://img.shields.io/badge/SLSA-Build%20L3%20target-6b4fbb.svg)](docs/security/release-policy.md)
 
 > **Alpha software:** APIs, migrations, deployment behavior, and release formats
 > can change without compatibility guarantees. Do not treat this release as
@@ -29,11 +29,18 @@ responsibly.
 
 ## The two rules
 
-**AI drafts; humans own truth.** Claude Code or Codex CLI may propose text, a
-classification, CVSS metrics or a rewrite. A model cannot record that a finding
-is novel, confirmed, fixed, approved or published. Every AI result arrives as a
-proposal with Accept, Edit and Reject, and the researcher can see the exact
-context — item by item, with digests — before anything leaves their machine.
+**In-product AI drafts; humans own truth.** The desktop AI actions may propose
+text, a classification, CVSS metrics, or a rewrite. They cannot record that a
+finding is novel, confirmed, fixed, approved, or published. Every in-product AI
+result arrives as a proposal with Accept, Edit, and Reject. The researcher can
+inspect the exact filtered context and its digests before anything leaves the
+deployment.
+
+Authenticated MCP clients are a separate direct-operation interface. Their
+tools act immediately as the signed-in user, including the reviewed approval
+operations listed in the [generated MCP inventory](docs/operations/mcp-tool-inventory.md).
+The server applies the same permissions, revisions, validation, and audit rules
+as it does for desktop requests.
 
 Existing findings can also enter a case through the intake queue. Intake is not
 canonical data: every draft remains pending until a case writer accepts,
@@ -51,7 +58,7 @@ immediately before the PDF is rendered.
 apps/
   desktop/   Electron client: hardened main process, narrow preload bridge, React renderer
   server/    Fastify API: auth, cases, findings, evidence, reports, AI, search, audit
-  worker/    Background jobs: prior art, artifact previews, EPSS/KEV, PDF export, Gmail send/sync
+  worker/    Background jobs: prior art, artifact previews, PDF export, Gmail send/sync; EPSS/KEV refresh is partial
   media-worker/ Isolated JPEG/PNG decoding and metadata-free avatar derivatives
 packages/
   core/      Domain rules: permissions, visibility, states, policy packs, identifiers
@@ -149,6 +156,11 @@ partly SQL, and a security test against a mocked database proves very little.
 The Gmail E2E suite uses a deterministic loopback provider and `.test`/`.invalid`
 recipients. It cannot contact Google or a real vendor. See
 [`docs/operations/gmail-integration.md`](docs/operations/gmail-integration.md).
+
+The [feature register](docs/feature-register.md) records the current scope,
+acceptance test for each implemented feature, and the remaining release target
+for partial or planned work. The older design and implementation plans are
+decision records, not status trackers.
 
 ## Packaging
 

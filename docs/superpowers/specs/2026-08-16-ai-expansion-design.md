@@ -1,7 +1,13 @@
 # AI expansion: intake, external agents, and model control
 
 **Date:** 2026-08-16
-**Status:** Approved; Phase 1 implemented, Codex provider and Phase 2 in progress
+**Status:** Phase 1, the Codex provider, and manual Phase 2 intake are
+implemented. Folder intake in Phase 3 and scoped external-agent intake in Phase
+4 are planned for `alpha.7`.
+
+The repository also has an authenticated MCP domain interface. It performs
+direct user-authorized operations and is separate from the scoped intake-token
+design in Phase 4. See the [generated MCP inventory](../../operations/mcp-tool-inventory.md).
 
 Adds three things CodeVault's AI layer cannot do today: import existing
 findings from a folder on disk, receive findings from a Claude Code session

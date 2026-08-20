@@ -133,6 +133,9 @@ export function FindingsRoute(): React.JSX.Element {
     void navigate({ to: "/findings", search: {} });
   };
 
+  // TanStack Virtual exposes imperative methods that React Compiler cannot
+  // memoize. Keep this exclusion on the hook call only. See the compatibility note.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: items.length,
     getScrollElement: () => scrollRef.current,
