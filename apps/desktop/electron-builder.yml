@@ -85,6 +85,8 @@ linux:
     coordinated-disclosure platform. AI drafts; humans own truth.
 
 rpm:
+  # RPM package names cannot contain spaces even though productName can.
+  packageName: codevault-security
   # Fedora's Electron packages need these at runtime.
   depends:
     - libXScrnSaver
