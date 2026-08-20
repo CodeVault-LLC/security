@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/CodeVault-LLC/security/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/CodeVault-LLC/security/actions/workflows/ci.yml)
 [![Security](https://github.com/CodeVault-LLC/security/actions/workflows/security.yml/badge.svg?branch=master)](https://github.com/CodeVault-LLC/security/actions/workflows/security.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/CodeVault-LLC/security/badge)](https://securityscorecards.dev/viewer/?uri=github.com/CodeVault-LLC/security)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Release stage: alpha](https://img.shields.io/badge/release-alpha-orange.svg)](https://github.com/CodeVault-LLC/security/releases)
 [![SLSA target: Build L3](https://img.shields.io/badge/SLSA-Build%20L3%20target-6b4fbb.svg)](docs/compliance/slsa-build-level-3.md)
@@ -10,9 +11,10 @@
 > can change without compatibility guarantees. Do not treat this release as
 > production-ready or government-approved without an independent assessment.
 
-The SLSA badge states an assurance target, not a certification. The
-[security evidence index](docs/security/security-evidence-index.md) records what
-is implemented, what has been verified, and which gaps remain.
+The OpenSSF Scorecard is an automated measurement, not a certification or an
+endorsement. The SLSA badge states an assurance target, not an achieved level.
+The [security evidence index](docs/security/security-evidence-index.md) records
+what is implemented, what has been verified, and which gaps remain.
 
 CodeVault Security is a security research, evidence and coordinated-disclosure
 platform for people who find vulnerabilities in real things: software
@@ -155,9 +157,9 @@ bun run --cwd apps/desktop package
 ```
 
 macOS produces a DMG and a ZIP for arm64 and x64, Windows an NSIS installer,
-Linux an RPM for Fedora and an AppImage. Each platform is built and signed on
-its own CI runner; signing credentials come from the environment and are never
-committed.
+Linux an RPM for Fedora and an AppImage. Each platform builds on its native CI
+runner. Alpha packages for macOS and Windows are unsigned test builds. Stable
+releases require platform signing credentials, which are never committed.
 
 Official releases also publish digest-addressed server, worker, and media-worker
 images, CycloneDX 1.7 SBOMs, VEX, checksums, signatures, and GitHub

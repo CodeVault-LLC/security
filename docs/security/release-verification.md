@@ -34,20 +34,27 @@ bun run release:verify -- /absolute/path/to/codevault-v0.1.0-alpha.0
 The command requires all declared desktop formats, all three image SBOMs, the source archive, VEX, evidence manifest, and valid checksums. It also requires every CycloneDX document to use specification version 1.7.
 Each desktop package must have a matching `.cdx.json` SBOM. Each OCI component must have an immutable identity file, a CycloneDX SBOM, and a `trivy-<component>.sarif` scan result. The checksum file must account for every other file in the bundle.
 
-On macOS, verify the native signature and Gatekeeper assessment:
+On macOS, verify the native signature and Gatekeeper assessment for a stable
+release:
 
 ```sh
 codesign --verify --deep --strict --verbose=2 /Applications/CodeVault\ Security.app
 spctl --assess --type execute --verbose=2 /Applications/CodeVault\ Security.app
 ```
 
-On Windows, inspect the Authenticode result in PowerShell:
+On Windows, inspect the Authenticode result for a stable release in PowerShell:
 
 ```powershell
 Get-AuthenticodeSignature .\CodeVault-Security-Setup-0.1.0-alpha.0.exe | Format-List
 ```
 
 Require a `Valid` status and the expected CodeVault publisher identity.
+
+For an alpha prerelease, expect the macOS and Windows signature checks to
+report an unsigned package. Confirm that the GitHub release labels the package
+as unsigned before you install it. On macOS, use Finder's **Open** confirmation
+for the verified app. On Windows, use **More info**, then **Run anyway**, for
+the verified installer. Do not disable Gatekeeper or SmartScreen.
 
 ## Verify an OCI image
 

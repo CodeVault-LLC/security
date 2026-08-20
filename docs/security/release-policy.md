@@ -29,9 +29,22 @@ Workspace packages remain private build inputs. The project does not publish the
 
 An expected desktop package that does not exist fails its build job. An existing GitHub Release for the tag also fails publication. The workflow does not replace published release assets.
 
+## Alpha prereleases
+
+A SemVer prerelease tag, such as `v0.1.0-alpha.0`, creates a GitHub prerelease.
+Alpha releases include the complete source, container, evidence, and desktop
+artifact inventory. The macOS and Windows packages may be unsigned. Release
+notes must identify them as test builds and warn about Gatekeeper and
+SmartScreen prompts.
+
+Unsigned alpha packages are for evaluation on systems controlled by the
+tester. They are not official signed distributions. Verify their checksums and
+GitHub artifact attestations before installation. Stable release tags do not
+receive this exception.
+
 ## Signing credentials
 
-Official macOS releases require Apple notarization credentials and an Apple signing certificate. Official Windows releases require a code-signing certificate. Store these values as secrets in the protected GitHub `release` environment. Desktop and container publication jobs enter that environment; pull-request and ordinary CI jobs do not.
+Stable macOS releases require Apple notarization credentials and an Apple signing certificate. Stable Windows releases require a code-signing certificate. Store these values as secrets in the protected GitHub `release` environment. Desktop and container publication jobs enter that environment; pull-request and ordinary CI jobs do not.
 
 The OCI workflow uses GitHub OIDC and Cosign keyless signing. It has no long-lived Cosign private key. Restrict the `release` environment to version tags and repository administrators.
 

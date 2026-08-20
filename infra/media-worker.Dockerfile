@@ -21,7 +21,7 @@ RUN bun install --frozen-lockfile --ignore-scripts
 # The bundle externalizes sharp so the native module is loaded by Node at
 # runtime. Bun links workspace dependencies below the workspace package; add a
 # root link that remains valid when node_modules is copied into the final image.
-RUN cd node_modules && ln -s .bun/sharp@0.35.3+*/node_modules/sharp sharp
+RUN ln -s .bun/sharp@0.35.3+*/node_modules/sharp node_modules/sharp
 COPY apps/media-worker apps/media-worker
 COPY packages/core packages/core
 COPY packages/db packages/db

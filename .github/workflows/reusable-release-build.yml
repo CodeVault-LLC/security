@@ -121,7 +121,7 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
       - name: Require Apple signing credentials
-        if: runner.os == 'macOS'
+        if: runner.os == 'macOS' && !contains(github.ref_name, '-')
         shell: bash
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -134,7 +134,7 @@ jobs:
             test -n "${!name}" || { echo "Missing required secret ${name}"; exit 1; }
           done
       - name: Require Windows signing credentials
-        if: runner.os == 'Windows'
+        if: runner.os == 'Windows' && !contains(github.ref_name, '-')
         shell: pwsh
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE }}
@@ -153,7 +153,7 @@ jobs:
         run: |
           bun run build
           bunx electron-builder --publish never
-      - name: Build signed and notarized macOS desktop packages
+      - name: Build macOS desktop packages
         if: runner.os == 'macOS'
         working-directory: apps/desktop
         env:
@@ -162,15 +162,21 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
         run: |
           bun run build
-          bunx electron-builder --publish never
-      - name: Build signed Windows desktop packages
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            bunx electron-builder --publish never --config.mac.notarize=false
+          else
+            bunx electron-builder --publish never
+          fi
+      - name: Build Windows desktop packages
         if: runner.os == 'Windows'
         working-directory: apps/desktop
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
         run: |
           bun run build
           bunx electron-builder --publish never
@@ -465,10 +471,18 @@ jobs:
             fi
           }
           trap cleanup_draft EXIT
+          release_flags=()
+          if [[ "$VERSION" == *-* ]]; then
+            release_flags+=(
+              --prerelease
+              --notes $'## Unsigned alpha packages\n\nThe macOS and Windows desktop packages are unsigned test builds. Verify `SHA256SUMS` and the GitHub artifact attestation before installation. macOS Gatekeeper and Windows SmartScreen will warn because these packages have no paid platform certificate.'
+            )
+          fi
           gh release create "$GITHUB_REF_NAME" \
             --verify-tag \
             --title "CodeVault Security ${GITHUB_REF_NAME}" \
             --generate-notes \
+            "${release_flags[@]}" \
             --draft
           created_draft=true
           find release-bundle -type f -print0 \

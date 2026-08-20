@@ -55,6 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
+      actions: read
       contents: read
       security-events: write
     steps:
@@ -112,6 +113,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
+      actions: read
       contents: read
       id-token: write
       security-events: write
@@ -124,8 +126,7 @@ jobs:
         with:
           results_file: scorecard-results.sarif
           results_format: sarif
-          # Keep results private until the repository itself is public.
-          publish_results: false
+          publish_results: true
       - name: Upload Scorecard results
         uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
         with:

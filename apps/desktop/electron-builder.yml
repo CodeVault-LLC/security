@@ -61,7 +61,8 @@ win:
       arch: [x64]
   # Signing runs when WINDOWS_CERTIFICATE_FILE and WINDOWS_CERTIFICATE_PASSWORD
   # are present in the environment.
-  signingHashAlgorithms: [sha256]
+  signtoolOptions:
+    signingHashAlgorithms: [sha256]
 
 nsis:
   oneClick: false
