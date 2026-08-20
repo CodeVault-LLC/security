@@ -38,7 +38,7 @@ async function withTemporaryDatabase(
     await run(pool);
   } finally {
     await pool.end();
-    await admin.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
+    await admin.query(`DROP DATABASE "${databaseName}"`);
     await admin.end();
   }
 }
