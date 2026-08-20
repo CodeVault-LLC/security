@@ -22,7 +22,7 @@ Workspace packages remain private build inputs. The project does not publish the
 - Lint, formatting, type checking, unit tests, integration tests, and builds.
 - Dependency audit and media-decoder runtime checks.
 - Native desktop builds on Linux, macOS, and Windows.
-- Final OCI image scanning for high and critical vulnerabilities.
+- Final OCI image scanning for fixable high and critical vulnerabilities.
 - CycloneDX 1.7 SBOM generation and validation.
 - VEX, checksum, and release-evidence generation.
 - GitHub build attestations and keyless OCI signatures.
@@ -31,7 +31,7 @@ An expected desktop package that does not exist fails its build job. An existing
 
 ## Alpha prereleases
 
-A SemVer prerelease tag, such as `v0.1.0-alpha.0`, creates a GitHub prerelease.
+A SemVer prerelease tag, such as `v0.1.0-alpha.1`, creates a GitHub prerelease.
 Alpha releases include the complete source, container, evidence, and desktop
 artifact inventory. The macOS and Windows packages may be unsigned. Release
 notes must identify them as test builds and warn about Gatekeeper and

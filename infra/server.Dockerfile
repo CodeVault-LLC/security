@@ -60,7 +60,8 @@ COPY --from=builder /build/packages/db/drizzle ./drizzle
 
 RUN groupadd --system --gid 10001 codevault \
  && useradd --system --uid 10001 --gid codevault codevault \
- && chown -R codevault:codevault /app
+ && chown -R codevault:codevault /app \
+ && rm -rf /usr/local/lib/node_modules/npm
 
 COPY LICENSE NOTICE /licenses/
 

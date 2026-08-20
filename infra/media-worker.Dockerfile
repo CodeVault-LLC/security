@@ -36,7 +36,9 @@ WORKDIR /app
 COPY --from=builder /build/node_modules ./node_modules
 COPY --from=builder /build/dist ./dist
 RUN groupadd --system --gid 10002 media \
- && useradd --system --uid 10002 --gid media --no-create-home media
+ && useradd --system --uid 10002 --gid media --no-create-home media \
+ && rm -rf /usr/local/lib/node_modules/npm \
+ && find /app/node_modules/.bun -maxdepth 1 -name '@esbuild+*' -exec rm -rf '{}' +
 COPY LICENSE NOTICE /licenses/
 USER 10002:10002
 ENV NODE_ENV=production

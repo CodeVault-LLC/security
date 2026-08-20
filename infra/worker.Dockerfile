@@ -51,7 +51,9 @@ COPY --from=builder /build/dist ./dist
 
 RUN groupadd --system --gid 10001 codevault \
  && useradd --system --uid 10001 --gid codevault --create-home codevault \
- && chown -R codevault:codevault /app
+ && chown -R codevault:codevault /app \
+ && rm -rf /usr/lib/node_modules/npm \
+ && find /app/node_modules/.bun -maxdepth 1 -name '@esbuild+*' -exec rm -rf '{}' +
 
 COPY LICENSE NOTICE /licenses/
 

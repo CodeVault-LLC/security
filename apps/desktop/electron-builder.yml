@@ -6,6 +6,7 @@
 
 appId: dev.codevault.desktop
 productName: CodeVault Security
+executableName: codevault-security
 copyright: Copyright © 2026 CodeVault
 
 directories:

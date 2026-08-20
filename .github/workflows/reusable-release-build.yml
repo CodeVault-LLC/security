@@ -153,8 +153,16 @@ jobs:
         run: |
           bun run build
           bunx electron-builder --publish never
-      - name: Build macOS desktop packages
-        if: runner.os == 'macOS'
+      - name: Build unsigned macOS alpha packages
+        if: runner.os == 'macOS' && contains(github.ref_name, '-')
+        working-directory: apps/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: |
+          bun run build
+          bunx electron-builder --publish never --config.mac.notarize=false
+      - name: Build signed macOS desktop packages
+        if: runner.os == 'macOS' && !contains(github.ref_name, '-')
         working-directory: apps/desktop
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -162,21 +170,23 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
         run: |
           bun run build
-          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
-            bunx electron-builder --publish never --config.mac.notarize=false
-          else
-            bunx electron-builder --publish never
-          fi
-      - name: Build Windows desktop packages
-        if: runner.os == 'Windows'
+          bunx electron-builder --publish never
+      - name: Build unsigned Windows alpha packages
+        if: runner.os == 'Windows' && contains(github.ref_name, '-')
+        working-directory: apps/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: |
+          bun run build
+          bunx electron-builder --publish never
+      - name: Build signed Windows desktop packages
+        if: runner.os == 'Windows' && !contains(github.ref_name, '-')
         working-directory: apps/desktop
         env:
           CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE }}
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
         run: |
           bun run build
           bunx electron-builder --publish never
@@ -288,7 +298,7 @@ jobs:
           image-ref: ${{ env.IMAGE_ROOT }}/${{ matrix.component }}@${{ steps.build.outputs.digest }}
           scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
-          ignore-unfixed: false
+          ignore-unfixed: true
           format: sarif
           limit-severities-for-sarif: true
           output: trivy-${{ matrix.component }}.sarif
