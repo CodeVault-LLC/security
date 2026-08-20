@@ -1,6 +1,12 @@
 {
   "name": "@codevault/desktop",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
+  "description": "Security research and coordinated disclosure desktop client",
+  "homepage": "https://github.com/CodeVault-LLC/security",
+  "author": {
+    "name": "CodeVault LLC",
+    "email": "61273323+lukasolsen@users.noreply.github.com"
+  },
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
