@@ -10,6 +10,8 @@ import type {
   ServerEvent,
   SessionUser,
   SubmissionDelivery,
+  ImportCaseArchiveResult,
+  IntakeDraft,
 } from "@codevault/contracts";
 
 /**
@@ -99,6 +101,43 @@ export interface UploadBatchResult {
   items: UploadBatchItem[];
 }
 
+export interface FolderIntakeContextInput {
+  findingTitles: string[];
+  artifactDigests: string[];
+}
+
+export interface FolderIntakePreviewResult {
+  rootName: string;
+  files: Array<{
+    relativePath: string;
+    sizeBytes: number;
+    sha256: string;
+    disposition: "MAPPED" | "ATTACHMENT" | "MAPPING_ERROR";
+  }>;
+  candidates: Array<{
+    clientId: string;
+    sourcePath: string;
+    sourceSha256: string;
+    draft: IntakeDraft;
+    status: "READY" | "DUPLICATE";
+    duplicateReasons: string[];
+  }>;
+  attachments: Array<{
+    relativePath: string;
+    sizeBytes: number;
+    sha256: string;
+    duplicateOf: string | null;
+  }>;
+  errors: string[];
+  totalBytes: number;
+  selections: Array<
+    UploadSelection & {
+      relativePath: string;
+      disposition: "MAPPED" | "ATTACHMENT" | "MAPPING_ERROR";
+    }
+  >;
+}
+
 export interface StartUploadRequest {
   caseId: string;
   findingId?: string;
@@ -111,6 +150,11 @@ export interface StartUploadRequest {
 export interface ManualBundleResult {
   saved: boolean;
   packageId: string | null;
+  sha256: string | null;
+}
+
+export interface CaseArchiveExportResult {
+  saved: boolean;
   sha256: string | null;
 }
 
@@ -201,6 +245,18 @@ export interface CodeVaultDesktopApi {
     onProgress(listener: (progress: UploadProgress) => void): () => void;
   };
 
+  intake: {
+    /** Selects and maps a folder without exposing local paths to the renderer. */
+    selectFolder(
+      context: FolderIntakeContextInput,
+    ): Promise<ApiOutcome<FolderIntakePreviewResult | null>>;
+  };
+
+  caseArchives: {
+    exportCase(caseId: string): Promise<ApiOutcome<CaseArchiveExportResult>>;
+    importCase(): Promise<ApiOutcome<ImportCaseArchiveResult | null>>;
+  };
+
   avatars: {
     selectAndUpload(
       target: "USER" | "ORGANIZATION",
@@ -283,6 +339,9 @@ export const IPC_CHANNELS = {
   uploadsStart: "uploads:start",
   uploadsDiscard: "uploads:discard",
   uploadsProgress: "uploads:progress",
+  intakeSelectFolder: "intake:select-folder",
+  caseArchivesExport: "case-archives:export",
+  caseArchivesImport: "case-archives:import",
   avatarsSelectAndUpload: "avatars:select-and-upload",
   avatarsLoad: "avatars:load",
   avatarsLoadUser: "avatars:load-user",

@@ -26,6 +26,7 @@ import type {
   CreateDisclosureEventRequest,
   CreateEvidenceRequest,
   CreateFindingRequest,
+  CreateManualIntakeRequest,
   CreateReferenceRequest,
   CreateReportExportRequest,
   CreateReportRequest,
@@ -40,6 +41,7 @@ import type {
   ExternalReference,
   FindingDetail,
   FindingSummary,
+  IntakeItem,
   ReportDetail,
   ReportExport,
   ReportPreview,
@@ -231,6 +233,16 @@ export class CodeVaultClient {
     options: ListFindingsOptions = {},
   ): Promise<Page<FindingSummary>> {
     return this.#request(`/v1/findings${queryString(options)}`);
+  }
+
+  listIntakeDrafts(caseId: string): Promise<{ items: IntakeItem[] }> {
+    return this.#request(
+      `/v1/intake${queryString({ caseId, status: "PENDING" })}`,
+    );
+  }
+
+  createIntakeDraft(body: CreateManualIntakeRequest): Promise<IntakeItem> {
+    return this.#request("/v1/intake/external-agent", "POST", body);
   }
 
   getFinding(id: string): Promise<FindingDetail> {

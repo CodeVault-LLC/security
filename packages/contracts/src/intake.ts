@@ -161,3 +161,80 @@ export const ListIntakeQuery = Type.Object({
   status: Type.Optional(IntakeItemStatusSchema),
 });
 export type ListIntakeQuery = Static<typeof ListIntakeQuery>;
+
+export const FolderIntakeManifestFile = Type.Object(
+  {
+    relativePath: Type.String({ minLength: 1, maxLength: 1_024 }),
+    sizeBytes: Type.Integer({ minimum: 0 }),
+    sha256: Sha256,
+    disposition: enumOf(["MAPPED", "ATTACHMENT", "MAPPING_ERROR"] as const),
+    artifactId: Type.Optional(Uuid),
+  },
+  { additionalProperties: false },
+);
+
+export const FolderIntakeCreateItem = Type.Object(
+  {
+    draft: IntakeDraft,
+    citations: Type.Array(IntakeCitation, { maxItems: 200 }),
+    confidence: Type.Optional(IntakeConfidenceSchema),
+    duplicateAcknowledged: Type.Optional(Type.Boolean()),
+  },
+  { additionalProperties: false },
+);
+
+export const CreateFolderIntakeRequest = Type.Object(
+  {
+    caseId: Uuid,
+    sourceLabel: Type.String({ minLength: 1, maxLength: 200 }),
+    files: Type.Array(FolderIntakeManifestFile, {
+      minItems: 1,
+      maxItems: 5_000,
+    }),
+    items: Type.Array(FolderIntakeCreateItem, { minItems: 1, maxItems: 500 }),
+  },
+  { additionalProperties: false },
+);
+export type CreateFolderIntakeRequest = Static<
+  typeof CreateFolderIntakeRequest
+>;
+
+export const FolderIntakeContext = Type.Object({
+  findingTitles: Type.Array(Type.String()),
+  artifactDigests: Type.Array(Sha256),
+});
+export type FolderIntakeContext = Static<typeof FolderIntakeContext>;
+
+export const FolderIntakeResult = Type.Object({
+  batchId: Uuid,
+  items: Type.Array(IntakeItem),
+});
+export type FolderIntakeResult = Static<typeof FolderIntakeResult>;
+
+export const FindingExchangeFormatSchema = enumOf(["JSON", "CSV"] as const);
+export const ExportFindingsQuery = Type.Object({
+  caseId: Uuid,
+  format: FindingExchangeFormatSchema,
+});
+export type ExportFindingsQuery = Static<typeof ExportFindingsQuery>;
+
+export const FindingExchangePayload = Type.Object({
+  format: FindingExchangeFormatSchema,
+  filename: Type.String({ minLength: 1, maxLength: 255 }),
+  content: Type.String({ maxLength: 10_000_000 }),
+  sha256: Sha256,
+});
+export type FindingExchangePayload = Static<typeof FindingExchangePayload>;
+
+export const ImportFindingExchangeRequest = Type.Object(
+  {
+    caseId: Uuid,
+    format: FindingExchangeFormatSchema,
+    sourceLabel: Type.String({ minLength: 1, maxLength: 200 }),
+    content: Type.String({ minLength: 1, maxLength: 10_000_000 }),
+  },
+  { additionalProperties: false },
+);
+export type ImportFindingExchangeRequest = Static<
+  typeof ImportFindingExchangeRequest
+>;

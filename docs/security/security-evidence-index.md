@@ -4,7 +4,7 @@ This index states what the repository proves and what still depends on an operat
 
 | Evidence | Repository source | Current state |
 | --- | --- | --- |
-| Product feature inventory | `docs/feature-register.md` | Current for the `0.1.0-alpha.7` source tree; every implemented row links to at least one acceptance test. Published release and pull-request evidence are added when the tag ships. |
+| Product feature inventory | `docs/feature-register.md` | Current for the `0.1.0-alpha.8` source tree; every implemented row links to at least one acceptance test. Published release and pull-request evidence are added when the tag ships. |
 | Threat model | `docs/architecture/threat-model.md` | Implemented; review after trust-boundary changes and at least annually. |
 | AI trust policy | `docs/architecture/ai-security.md` | Implemented for in-product AI proposals. Authenticated MCP clients are a separate direct-operation interface whose calls are attributed to the signed-in user. |
 | Organization isolation | `docs/architecture/organization-security.md` and authorization tests | Implemented in the product; a security assessment remains required before a stable release. |

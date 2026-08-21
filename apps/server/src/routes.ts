@@ -1,6 +1,7 @@
 import type { AppInstance } from "./http/app-instance.js";
 
 import { registerAiRoutes } from "./modules/ai/routes.js";
+import { registerArchiveRoutes } from "./modules/archives/routes.js";
 import { registerAssetRoutes } from "./modules/assets/routes.js";
 import { registerAvatarRoutes } from "./modules/avatars/routes.js";
 import { registerAuthRoutes } from "./modules/auth/routes.js";
@@ -41,6 +42,7 @@ export async function registerRoutes(app: AppInstance): Promise<void> {
   await registerOrganizationRoutes(app);
   await registerSettingsRoutes(app);
   await registerCaseRoutes(app);
+  await registerArchiveRoutes(app);
   await registerAssetRoutes(app);
   await registerVendorRoutes(app);
   await registerSubmissionRoutes(app);

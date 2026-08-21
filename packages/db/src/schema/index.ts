@@ -1,5 +1,6 @@
 export * from "./ai.js";
 export * from "./assets.js";
+export * from "./archives.js";
 export * from "./audit.js";
 export * from "./auth.js";
 export * from "./cases.js";

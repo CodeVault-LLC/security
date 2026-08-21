@@ -6,7 +6,29 @@ with the prerelease sequence defined in [`ROADMAP.md`](ROADMAP.md).
 
 ## [Unreleased]
 
-No changes recorded yet.
+### Added
+
+- Added reviewed folder intake for Markdown, JSON, CSV, captures, images, and
+  attachments with mapping errors, duplicate warnings, original-file
+  preservation, cancellation, and resumable upload state.
+- Added generic JSON and CSV finding exchange plus the `codevault capture`
+  command for files and standard input.
+- Added the versioned `.cvcase` format, verified desktop export, staged artifact
+  import, digest checks, and an all-or-nothing database commit for supported
+  case records.
+- Added MCP tools for listing and creating non-canonical intake drafts.
+
+### Migrations
+
+- Added `0018_case_archive_imports.sql` for expiring non-canonical archive
+  import sessions and staged artifacts.
+
+### Known gaps
+
+- `.cvcase` version 1 does not move submissions, correspondence, disclosure
+  events, prior-art history, PoC run history, or custom report templates.
+- The three external-team adoption runs and the full historical-case end-to-end
+  scenario remain release evidence work.
 
 ## [0.1.0-alpha.7] - 2026-08-21
 

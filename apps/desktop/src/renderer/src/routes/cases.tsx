@@ -18,6 +18,7 @@ import {
 import { PageHeader } from "../components/app-shell.js";
 import { Avatar } from "../components/avatar.js";
 import { CreateCaseDialog } from "../features/cases/create-case-dialog.js";
+import { ImportCaseArchiveButton } from "../features/cases/case-archive-actions.js";
 import { formatDistanceToNowStrict } from "../lib/dates.js";
 import { humanise } from "../lib/format.js";
 import { errorHeading, queryKeys, useApiQuery } from "../lib/api.js";
@@ -69,10 +70,13 @@ export function CasesRoute(): React.JSX.Element {
         description="Research efforts, each with its own assets, findings and reports."
         actions={
           editable ? (
-            <Button variant="primary" onClick={() => setCreateOpen(true)}>
-              <Plus aria-hidden className="size-3.5" />
-              New case
-            </Button>
+            <div className="flex items-start gap-2">
+              <ImportCaseArchiveButton />
+              <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                <Plus aria-hidden className="size-3.5" />
+                New case
+              </Button>
+            </div>
           ) : undefined
         }
       />

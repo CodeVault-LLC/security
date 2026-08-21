@@ -1,0 +1,17 @@
+{
+  "name": "@codevault/cli",
+  "version": "0.1.0-alpha.8",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "codevault": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@codevault/contracts": "workspace:*",
+    "@codevault/core": "workspace:*"
+  }
+}

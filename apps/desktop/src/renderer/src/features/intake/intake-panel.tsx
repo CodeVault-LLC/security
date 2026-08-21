@@ -23,6 +23,7 @@ import {
 
 import { QueryError } from "../../components/query-boundary.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../../lib/api.js";
+import { FolderIntake } from "./folder-intake.js";
 import { ManualIntakeDialog } from "./manual-intake-dialog.js";
 
 export function IntakePanel({
@@ -106,6 +107,8 @@ export function IntakePanel({
           </Button>
         ) : null}
       </div>
+
+      {canEdit ? <FolderIntake key={caseId} caseId={caseId} /> : null}
 
       {error === null ? null : <InlineError>{error.message}</InlineError>}
 

@@ -1,5 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { mkdtemp, open, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { app, dialog, ipcMain, shell, type BrowserWindow } from "electron";
 
@@ -17,7 +20,16 @@ import type {
   SubmissionSendIntent,
   CorrespondenceDecryptIntent,
   SubmissionSealIntent,
+  CaseArchiveSnapshot,
+  PrepareCaseArchiveImportResult,
+  ImportCaseArchiveResult,
 } from "@codevault/contracts";
+import {
+  previewFolder,
+  readCvcase,
+  writeCvcase,
+  type CvcaseManifest,
+} from "@codevault/exchange";
 
 import {
   IPC_CHANNELS,
@@ -624,6 +636,227 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
 
     return results;
+  });
+
+  handle(IPC_CHANNELS.intakeSelectFolder, async (payload) => {
+    const context = payload as {
+      findingTitles?: unknown;
+      artifactDigests?: unknown;
+    };
+    if (
+      !Array.isArray(context.findingTitles) ||
+      context.findingTitles.length > 10_000 ||
+      context.findingTitles.some((title) => typeof title !== "string") ||
+      !Array.isArray(context.artifactDigests) ||
+      context.artifactDigests.length > 100_000 ||
+      context.artifactDigests.some(
+        (digest) =>
+          typeof digest !== "string" || !/^[0-9a-f]{64}$/u.test(digest),
+      )
+    ) {
+      return failure(new Error("invalid folder intake context"));
+    }
+    const window = dependencies.window();
+    const owner = sessionStore.current();
+    if (window === null || owner === null) {
+      return failure(new Error("folder intake is unavailable"));
+    }
+    const selection = await dialog.showOpenDialog(window, {
+      title: "Select existing research folder",
+      properties: ["openDirectory", "dontAddToRecent"],
+    });
+    if (selection.canceled || selection.filePaths[0] === undefined) {
+      return { ok: true as const, data: null };
+    }
+
+    try {
+      const root = resolve(selection.filePaths[0]);
+      const preview = await previewFolder(root, {
+        existingTitles: context.findingTitles,
+        existingDigests: context.artifactDigests,
+      });
+      const currentOwner = sessionStore.current();
+      if (
+        currentOwner === null ||
+        currentOwner.userId !== owner.userId ||
+        currentOwner.serverUrl !== owner.serverUrl ||
+        currentOwner.token !== owner.token
+      ) {
+        return failure(new Error("the session changed during folder intake"));
+      }
+      const selections = [];
+      for (const file of preview.files) {
+        const path = resolve(root, ...file.relativePath.split("/"));
+        const pathFromRoot = relative(root, path);
+        if (
+          pathFromRoot === ".." ||
+          pathFromRoot.startsWith("../") ||
+          pathFromRoot.startsWith("..\\") ||
+          isAbsolute(pathFromRoot)
+        ) {
+          return failure(new Error("folder intake produced an unsafe path"));
+        }
+        const selected = uploadSelections.issue(
+          await hashSelection(path),
+          owner,
+        );
+        selections.push({
+          selectionId: selected.selectionId,
+          filename: selected.filename,
+          sizeBytes: selected.sizeBytes,
+          mimeType: selected.mimeType,
+          sha256: selected.sha256,
+          relativePath: file.relativePath,
+          disposition: file.disposition,
+        });
+      }
+      return { ok: true as const, data: { ...preview, selections } };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.caseArchivesExport, async (payload) => {
+    if (typeof payload !== "string" || !/^[0-9a-f-]{36}$/iu.test(payload)) {
+      return failure(new Error("invalid case archive export request"));
+    }
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+    const destination = await dialog.showSaveDialog(window, {
+      title: "Export complete case archive",
+      defaultPath: `codevault-case-${payload.slice(0, 8)}.cvcase`,
+      filters: [{ name: "CodeVault case archive", extensions: ["cvcase"] }],
+      properties: ["createDirectory", "showOverwriteConfirmation"],
+    });
+    if (destination.canceled || destination.filePath === undefined) {
+      return { ok: true as const, data: { saved: false, sha256: null } };
+    }
+    const temporaryDirectory = await mkdtemp(
+      join(tmpdir(), "codevault-case-export-"),
+    );
+    try {
+      const snapshot = await apiClient.request<CaseArchiveSnapshot>(
+        `/v1/cases/${payload}/archive-snapshot`,
+      );
+      const sources: Array<{ sourceId: string; path: string }> = [];
+      for (const artifact of snapshot.artifacts) {
+        const path = join(temporaryDirectory, artifact.sourceId);
+        await downloadFile(artifact.url, path);
+        const selected = await hashSelection(path);
+        if (
+          selected.sizeBytes !== artifact.sizeBytes ||
+          selected.sha256 !== artifact.sha256
+        ) {
+          throw new Error(
+            `Downloaded artifact ${artifact.filename} failed verification.`,
+          );
+        }
+        sources.push({ sourceId: artifact.sourceId, path });
+      }
+      await writeCvcase(destination.filePath, {
+        manifest: desktopArchiveManifest(snapshot.manifest),
+        records: snapshot.records,
+        artifacts: sources,
+        overwriteExisting: true,
+      });
+      const archive = await hashSelection(destination.filePath);
+      return {
+        ok: true as const,
+        data: { saved: true, sha256: archive.sha256 },
+      };
+    } catch (error: unknown) {
+      return failure(error);
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
+  handle(IPC_CHANNELS.caseArchivesImport, async () => {
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+    const selection = await dialog.showOpenDialog(window, {
+      title: "Import complete case archive",
+      filters: [{ name: "CodeVault case archive", extensions: ["cvcase"] }],
+      properties: ["openFile", "dontAddToRecent"],
+    });
+    const archivePath = selection.filePaths[0];
+    if (selection.canceled || archivePath === undefined) {
+      return { ok: true as const, data: null };
+    }
+    const temporaryDirectory = await mkdtemp(
+      join(tmpdir(), "codevault-case-import-"),
+    );
+    let importId: string | null = null;
+    try {
+      const extracted = await readCvcase(
+        archivePath,
+        join(temporaryDirectory, "verified"),
+      );
+      const confirmation = await dialog.showMessageBox(window, {
+        type: "question",
+        title: "Import case archive",
+        message: `Import ${extracted.manifest.case.title}?`,
+        detail: `${Object.values(extracted.manifest.recordCounts).reduce((sum, count) => sum + count, 0)} records and ${extracted.manifest.artifacts.length} artifacts will be added as a new case. The import is all-or-nothing.`,
+        buttons: ["Import case", "Cancel"],
+        defaultId: 1,
+        cancelId: 1,
+        noLink: true,
+      });
+      if (confirmation.response !== 0) {
+        return { ok: true as const, data: null };
+      }
+      const prepared = await apiClient.request<PrepareCaseArchiveImportResult>(
+        "/v1/case-archives/imports",
+        {
+          method: "POST",
+          body: {
+            manifest: { ...extracted.manifest },
+            records: extracted.records,
+          },
+        },
+      );
+      importId = prepared.importId;
+      const localById = new Map(
+        extracted.artifacts.map((artifact) => [artifact.sourceId, artifact]),
+      );
+      const completions: Array<{
+        sourceId: string;
+        parts: Array<{ partNumber: number; etag: string }>;
+      }> = [];
+      for (const upload of prepared.uploads) {
+        const local = localById.get(upload.sourceId);
+        if (local === undefined) {
+          throw new Error(
+            `The archive is missing artifact ${upload.sourceId}.`,
+          );
+        }
+        completions.push({
+          sourceId: upload.sourceId,
+          parts: await uploadArchiveArtifact(
+            local.path,
+            local.sizeBytes,
+            upload,
+          ),
+        });
+      }
+      const result = await apiClient.request<ImportCaseArchiveResult>(
+        `/v1/case-archives/imports/${prepared.importId}/commit`,
+        { method: "POST", body: { uploads: completions } },
+      );
+      importId = null;
+      return { ok: true as const, data: result };
+    } catch (error: unknown) {
+      if (importId !== null) {
+        await apiClient
+          .request(`/v1/case-archives/imports/${importId}`, {
+            method: "DELETE",
+          })
+          .catch(() => undefined);
+      }
+      return failure(error);
+    } finally {
+      await rm(temporaryDirectory, { recursive: true, force: true });
+    }
   });
 
   handle(IPC_CHANNELS.avatarsSelectAndUpload, async (payload) => {
@@ -1241,4 +1474,102 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       dependencies.cancelRun(payload);
     }
   });
+}
+
+async function downloadFile(url: string, destination: string): Promise<void> {
+  const response = await fetch(url);
+  if (!response.ok || response.body === null) {
+    throw new Error(
+      `Object storage rejected the download (${response.status}).`,
+    );
+  }
+  const handle = await open(destination, "wx", 0o600);
+  const reader = response.body.getReader();
+  try {
+    let position = 0;
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+      await handle.write(next.value, 0, next.value.byteLength, position);
+      position += next.value.byteLength;
+    }
+  } finally {
+    reader.releaseLock();
+    await handle.close();
+  }
+}
+
+function desktopArchiveManifest(value: unknown): CvcaseManifest {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("format" in value) ||
+    value.format !== "codevault.cvcase" ||
+    !("version" in value) ||
+    value.version !== 1 ||
+    !("artifacts" in value) ||
+    !Array.isArray(value.artifacts)
+  ) {
+    throw new Error("The server returned an invalid case archive manifest.");
+  }
+  return value as CvcaseManifest;
+}
+
+async function uploadArchiveArtifact(
+  path: string,
+  sizeBytes: number,
+  instructions: PrepareCaseArchiveImportResult["uploads"][number],
+): Promise<Array<{ partNumber: number; etag: string }>> {
+  if (instructions.strategy === "SINGLE") {
+    if (instructions.url === null) {
+      throw new Error("The server did not return an archive upload URL.");
+    }
+    const requestInit: RequestInit & { duplex: "half" } = {
+      method: "PUT",
+      headers: instructions.requiredHeaders,
+      body: createReadStream(path) as never,
+      duplex: "half",
+    };
+    const response = await fetch(instructions.url, requestInit);
+    if (!response.ok) {
+      throw new Error(
+        `Object storage rejected the archive upload (${response.status}).`,
+      );
+    }
+    return [];
+  }
+
+  const handle = await open(path, "r");
+  const parts: Array<{ partNumber: number; etag: string }> = [];
+  try {
+    for (const [index, url] of instructions.partUrls.entries()) {
+      const length = Math.min(
+        instructions.partSizeBytes,
+        sizeBytes - index * instructions.partSizeBytes,
+      );
+      if (length <= 0) break;
+      const bytes = Buffer.alloc(length);
+      await handle.read(bytes, 0, length, index * instructions.partSizeBytes);
+      const response = await fetch(url, {
+        method: "PUT",
+        headers: { "content-length": String(length) },
+        body: bytes,
+      });
+      if (!response.ok) {
+        throw new Error(
+          `Object storage rejected archive part ${index + 1} (${response.status}).`,
+        );
+      }
+      const etag = response.headers.get("etag");
+      if (etag === null) {
+        throw new Error(
+          `Object storage returned no ETag for archive part ${index + 1}.`,
+        );
+      }
+      parts.push({ partNumber: index + 1, etag });
+    }
+    return parts;
+  } finally {
+    await handle.close();
+  }
 }

@@ -4,7 +4,7 @@ Status: Active
 
 Last reviewed: 2026-08-21
 
-Current version: `0.1.0-alpha.6`
+Current version: `0.1.0-alpha.8`
 
 This roadmap turns the current repository into a release sequence. It covers product work, operational work, and the evidence required to publish each release. A milestone is complete only when its exit criteria pass. Moving unfinished work to a later milestone requires an explicit roadmap change.
 

@@ -20,6 +20,7 @@ import { registerAssetTools } from "./tools/assets.js";
 import { registerCaseTools } from "./tools/cases.js";
 import { registerEvidenceTools } from "./tools/evidence.js";
 import { registerFindingTools } from "./tools/findings.js";
+import { registerIntakeTools } from "./tools/intake.js";
 import { registerReportTools } from "./tools/reports.js";
 import {
   compact,
@@ -231,6 +232,7 @@ export function createCodeVaultMcpServer(client: CodeVaultClient): McpServer {
   );
 
   registerFindingTools(server, client);
+  registerIntakeTools(server, client);
   registerEvidenceTools(server, client);
   registerCaseTools(server, client);
   registerAssetTools(server, client);

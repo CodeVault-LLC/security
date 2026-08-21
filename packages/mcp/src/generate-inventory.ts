@@ -46,7 +46,7 @@ function categoryFor(name: string): Category {
     return "Cases and disclosure";
   }
   if (name.includes("asset")) return "Assets";
-  if (name.includes("finding")) return "Findings";
+  if (name.includes("finding") || name.includes("intake")) return "Findings";
   if (name.includes("evidence") || name.includes("artifact")) {
     return "Evidence and artifacts";
   }

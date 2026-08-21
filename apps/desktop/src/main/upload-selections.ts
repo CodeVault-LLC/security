@@ -4,7 +4,7 @@ import type { LocalUploadSelection } from "./file-uploads.js";
 import type { StoredSession } from "./session-store.js";
 
 const DEFAULT_TTL_MS = 15 * 60_000;
-const DEFAULT_MAX_SELECTIONS = 100;
+const DEFAULT_MAX_SELECTIONS = 5_000;
 
 type SelectionOwner = Pick<StoredSession, "serverUrl" | "token" | "userId">;
 type PendingSelection = {

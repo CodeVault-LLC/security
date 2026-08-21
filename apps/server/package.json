@@ -1,6 +1,6 @@
 {
   "name": "@codevault/server",
-  "version": "0.1.0-alpha.7",
+  "version": "0.1.0-alpha.8",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -17,6 +17,7 @@
     "@codevault/contracts": "workspace:*",
     "@codevault/core": "workspace:*",
     "@codevault/db": "workspace:*",
+    "@codevault/exchange": "workspace:*",
     "@codevault/reporting": "workspace:*",
     "@codevault/standards": "workspace:*",
     "@fastify/cors": "^11.3.0",

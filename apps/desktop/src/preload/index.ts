@@ -132,6 +132,25 @@ const api: CodeVaultDesktopApi = {
       subscribe<UploadProgress>(IPC_CHANNELS.uploadsProgress, listener),
   },
 
+  intake: {
+    selectFolder: (context) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.intakeSelectFolder,
+        context,
+      ) as ReturnType<CodeVaultDesktopApi["intake"]["selectFolder"]>,
+  },
+
+  caseArchives: {
+    exportCase: (caseId) =>
+      ipcRenderer.invoke(IPC_CHANNELS.caseArchivesExport, caseId) as ReturnType<
+        CodeVaultDesktopApi["caseArchives"]["exportCase"]
+      >,
+    importCase: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.caseArchivesImport) as ReturnType<
+        CodeVaultDesktopApi["caseArchives"]["importCase"]
+      >,
+  },
+
   avatars: {
     selectAndUpload: (target) =>
       ipcRenderer.invoke(

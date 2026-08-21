@@ -83,6 +83,52 @@ describeIntegration("finding intake", () => {
     expect(findings.json<{ items: FindingDetail[] }>().items).toHaveLength(0);
   });
 
+  it("creates one audited folder batch without accepting any proposal", async () => {
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/intake/folder",
+      headers: owner.headers,
+      payload: {
+        caseId: researchCase.id,
+        sourceLabel: "historical-case",
+        files: [
+          {
+            relativePath: "finding.md",
+            sizeBytes: 42,
+            sha256: "a".repeat(64),
+            disposition: "MAPPED",
+          },
+        ],
+        items: [
+          {
+            draft: {
+              title: "Imported request smuggling finding",
+              summaryMarkdown: "Conflicting message lengths split the request.",
+              suggestedCweIds: ["CWE-444"],
+              affectedVersions: [],
+            },
+            citations: [
+              {
+                kind: "FILE",
+                path: "finding.md",
+                sha256: "a".repeat(64),
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const result = response.json<{ batchId: string; items: IntakeItem[] }>();
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      status: "PENDING",
+      createdFindingId: null,
+      batch: { id: result.batchId, source: "FOLDER_SCAN" },
+    });
+  });
+
   it("shows restricted-case intake to another cleared organization member", async () => {
     await createManual();
 

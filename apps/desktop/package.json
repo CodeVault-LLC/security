@@ -1,6 +1,6 @@
 {
   "name": "@codevault/desktop",
-  "version": "0.1.0-alpha.7",
+  "version": "0.1.0-alpha.8",
   "description": "Security research and coordinated disclosure desktop client",
   "homepage": "https://github.com/CodeVault-LLC/security",
   "author": {
@@ -20,6 +20,7 @@
   "dependencies": {
     "@codevault/contracts": "workspace:*",
     "@codevault/core": "workspace:*",
+    "@codevault/exchange": "workspace:*",
     "@codevault/markdown": "workspace:*",
     "@codevault/standards": "workspace:*",
     "@codevault/ui": "workspace:*",

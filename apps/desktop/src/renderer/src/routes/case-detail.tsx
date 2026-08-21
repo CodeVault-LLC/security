@@ -29,6 +29,7 @@ import {
 } from "@codevault/ui";
 
 import { CreateFindingDialog } from "../features/findings/create-finding-dialog.js";
+import { ExportCaseArchiveButton } from "../features/cases/case-archive-actions.js";
 import { Avatar } from "../components/avatar.js";
 import { DisclosurePanel } from "../features/disclosure/disclosure-panel.js";
 import { EvidencePanel } from "../features/evidence/evidence-panel.js";
@@ -139,15 +140,18 @@ export function CaseDetailRoute({
             )}
           </div>
 
-          {canEdit ? (
-            <Button
-              variant="primary"
-              onClick={() => setCreateFindingOpen(true)}
-            >
-              <Plus aria-hidden className="size-3" />
-              New finding
-            </Button>
-          ) : null}
+          <div className="flex items-start gap-2">
+            <ExportCaseArchiveButton caseId={caseId} />
+            {canEdit ? (
+              <Button
+                variant="primary"
+                onClick={() => setCreateFindingOpen(true)}
+              >
+                <Plus aria-hidden className="size-3" />
+                New finding
+              </Button>
+            ) : null}
+          </div>
         </div>
       </header>
 

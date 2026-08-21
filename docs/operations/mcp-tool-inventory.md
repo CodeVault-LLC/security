@@ -4,7 +4,7 @@ This file is generated from live MCP discovery. Do not edit it by hand.
 Regenerate it with `bun run mcp:inventory` and check drift with
 `bun run mcp:inventory:check`.
 
-CodeVault exposes 53 authenticated MCP tools. Read-only and write
+CodeVault exposes 55 authenticated MCP tools. Read-only and write
 annotations are client hints. The API still applies the authenticated user's
 permissions, case access, validation, revision checks, and audit behavior.
 State-changing tools act immediately when a client calls them.
@@ -52,8 +52,10 @@ State-changing tools act immediately when a client calls them.
 | `codevault_add_finding_reference` | Additive write | Attach an external reference URL and its provenance to a finding. |
 | `codevault_add_finding_score` | Additive write | Calculate and add a score from a vector, or add sourced intelligence. Set approve to true to approve it immediately; otherwise it remains proposed. |
 | `codevault_approve_finding_score` | State changing | Approve the specified proposed score immediately as the authenticated CodeVault user. |
+| `codevault_create_intake_draft` | Additive write | Create a cited finding proposal for human review. This does not create, validate, approve, disclose, or publish a finding. |
 | `codevault_get_finding` | Read only | Read the full finding, including narrative, assets, affected ranges, classifications, scores, claims, and references. |
 | `codevault_list_findings` | Read only | Search for an existing finding by title or reference, optionally within a case or asset, before recording a duplicate. |
+| `codevault_list_intake_drafts` | Read only | List pending, non-canonical finding drafts for a case before creating another draft. |
 | `codevault_record_finding` | Additive write | Create a draft finding with narrative, CWE classifications, explicit asset UUID links, and affected-version ranges. Search cases, assets, and findings first. This does not validate, approve, disclose, score, or publish the finding. |
 | `codevault_update_finding` | State changing | Update a finding's narrative, lifecycle states, visibility, CWE classifications, or title immediately. |
 
