@@ -5,6 +5,8 @@ import {
   ContentVisibilitySchema,
   HumanReference,
   Markdown,
+  PaginatedResponse,
+  PaginationQuery,
   ReportAudienceSchema,
   ReviewStateSchema,
   RevisionField,
@@ -100,6 +102,26 @@ export const ReportSummary = Type.Object({
 });
 
 export type ReportSummary = Static<typeof ReportSummary>;
+
+export const ReportListItem = Type.Object({
+  ...ReportSummary.properties,
+  case: Type.Object({
+    id: Uuid,
+    ref: HumanReference,
+    title: Type.String(),
+  }),
+});
+
+export const ListReportsQuery = Type.Object({
+  ...PaginationQuery.properties,
+  caseId: Type.Optional(Uuid),
+});
+
+export const ReportListResponse = PaginatedResponse(ReportListItem);
+
+export type ReportListItem = Static<typeof ReportListItem>;
+export type ListReportsQuery = Static<typeof ListReportsQuery>;
+export type ReportListResponse = Static<typeof ReportListResponse>;
 
 export const ReportDetail = Type.Object({
   ...ReportSummary.properties,

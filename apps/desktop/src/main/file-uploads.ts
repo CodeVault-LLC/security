@@ -7,6 +7,7 @@ import type { UploadInstructions } from "@codevault/contracts";
 
 import type {
   StartUploadRequest,
+  UploadBatchResult,
   UploadProgress,
   UploadSelection,
 } from "../preload/contracts.js";
@@ -97,16 +98,37 @@ export interface RunUploadsOptions {
 
 export async function runUploads(
   options: RunUploadsOptions,
-): Promise<string[]> {
-  const artifactIds: string[] = [];
+): Promise<UploadBatchResult> {
+  const items: UploadBatchResult["items"] = [];
 
   for (const selection of options.request.selections) {
-    const artifactId = await uploadOne(selection, options);
-
-    artifactIds.push(artifactId);
+    try {
+      const artifactId = await uploadOne(selection, options);
+      items.push({
+        selectionId: selection.selectionId,
+        artifactId,
+        error: null,
+      });
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "The upload failed.";
+      options.onProgress({
+        selectionId: selection.selectionId,
+        uploadId: null,
+        filename: selection.filename,
+        phase: "FAILED",
+        progress: null,
+        message,
+      });
+      items.push({
+        selectionId: selection.selectionId,
+        artifactId: null,
+        error: message,
+      });
+    }
   }
 
-  return artifactIds;
+  return { items };
 }
 
 async function uploadOne(
@@ -135,6 +157,7 @@ async function uploadOne(
   );
 
   onProgress({
+    selectionId: selection.selectionId,
     uploadId: instructions.artifactId,
     filename: selection.filename,
     phase: "UPLOADING",
@@ -149,6 +172,7 @@ async function uploadOne(
         : await uploadMultipart(selection, instructions, onProgress);
 
     onProgress({
+      selectionId: selection.selectionId,
       uploadId: instructions.artifactId,
       filename: selection.filename,
       phase: "COMPLETING",
@@ -162,6 +186,7 @@ async function uploadOne(
     });
 
     onProgress({
+      selectionId: selection.selectionId,
       uploadId: instructions.artifactId,
       filename: selection.filename,
       phase: "DONE",
@@ -177,6 +202,7 @@ async function uploadOne(
       })
       .catch(() => undefined);
     onProgress({
+      selectionId: selection.selectionId,
       uploadId: instructions.artifactId,
       filename: selection.filename,
       phase: "FAILED",
@@ -214,6 +240,7 @@ async function uploadSingle(
       uploaded += typeof chunk === "string" ? chunk.length : chunk.byteLength;
 
       onProgress({
+        selectionId: selection.selectionId,
         uploadId: instructions.artifactId,
         filename: selection.filename,
         phase: "UPLOADING",
@@ -296,6 +323,7 @@ async function uploadMultipart(
       parts.push({ partNumber: index + 1, etag });
 
       onProgress({
+        selectionId: selection.selectionId,
         uploadId: instructions.artifactId,
         filename: selection.filename,
         phase: "UPLOADING",

@@ -1,11 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import type {
   AuditEvent,
   CaseSummary,
-  ReportSummary,
+  ReportListItem,
+  ReportListResponse,
 } from "@codevault/contracts";
 import {
   Button,
@@ -21,7 +22,7 @@ import {
 
 import { PageBody, PageHeader } from "../components/app-shell.js";
 import { Avatar } from "../components/avatar.js";
-import { QueryBoundary, QueryError } from "../components/query-boundary.js";
+import { QueryBoundary } from "../components/query-boundary.js";
 import { formatDateTime } from "../lib/dates.js";
 import { humanise } from "../lib/format.js";
 import { errorHeading, queryKeys, useApiQuery } from "../lib/api.js";
@@ -39,10 +40,17 @@ interface Paginated<T> {
 
 /** Reports across every case the researcher can read. */
 export function ReportsRoute(): React.JSX.Element {
-  const cases = useApiQuery<Paginated<CaseSummary>>(
-    queryKeys.cases(),
-    "/v1/cases?limit=100",
+  const [limit, setLimit] = useState(100);
+  const reports = useApiQuery<ReportListResponse>(
+    queryKeys.reports(),
+    `/v1/reports?limit=${limit}`,
   );
+  const grouped = new Map<string, ReportListItem[]>();
+  for (const report of reports.data?.items ?? []) {
+    const current = grouped.get(report.case.id) ?? [];
+    current.push(report);
+    grouped.set(report.case.id, current);
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -52,17 +60,30 @@ export function ReportsRoute(): React.JSX.Element {
       />
 
       <PageBody className="space-y-3">
-        <QueryBoundary query={cases} loadingLabel="Loading cases…">
+        <QueryBoundary query={reports} loadingLabel="Loading reports…">
           {(data) =>
             data.items.length === 0 ? (
               <EmptyState
-                title="No cases yet"
+                title="No reports yet"
                 description="Reports are created from a case, once there is something to report."
               />
             ) : (
-              data.items.map((item) => (
-                <CaseReports key={item.id} caseSummary={item} />
-              ))
+              <>
+                {[...grouped.values()].map((items) => (
+                  <CaseReports key={items[0]?.case.id} items={items} />
+                ))}
+                {data.nextCursor === null ? null : (
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      variant="secondary"
+                      loading={reports.isFetching}
+                      onClick={() => setLimit((current) => current + 100)}
+                    >
+                      Load more reports
+                    </Button>
+                  </div>
+                )}
+              </>
             )
           }
         </QueryBoundary>
@@ -72,24 +93,12 @@ export function ReportsRoute(): React.JSX.Element {
 }
 
 function CaseReports({
-  caseSummary,
+  items,
 }: {
-  caseSummary: CaseSummary;
+  items: ReportListItem[];
 }): React.JSX.Element {
-  const reports = useApiQuery<{ items: ReportSummary[] }>(
-    queryKeys.reports(caseSummary.id),
-    `/v1/reports?caseId=${caseSummary.id}`,
-  );
-
-  const items = reports.data?.items ?? [];
-
-  if (reports.error !== null) {
-    return <QueryError query={reports} />;
-  }
-
-  if (items.length === 0) {
-    return <></>;
-  }
+  const caseSummary = items[0]?.case;
+  if (caseSummary === undefined) return <></>;
 
   return (
     <Card>

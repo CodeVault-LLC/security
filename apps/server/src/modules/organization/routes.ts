@@ -237,7 +237,24 @@ export async function registerOrganizationRoutes(
       const admin = requireOrganizationAdminWithRecentMfa(request);
       const [organization] = await app.db
         .update(schema.organizations)
-        .set({ name: request.body.name.trim(), updatedAt: sql`now()` })
+        .set({
+          ...(request.body.name === undefined
+            ? {}
+            : { name: request.body.name.trim() }),
+          ...(request.body.contactName === undefined
+            ? {}
+            : { contactName: request.body.contactName?.trim() ?? null }),
+          ...(request.body.contactEmail === undefined
+            ? {}
+            : {
+                contactEmail:
+                  request.body.contactEmail?.trim().toLowerCase() ?? null,
+              }),
+          ...(request.body.reportFooter === undefined
+            ? {}
+            : { reportFooter: request.body.reportFooter?.trim() ?? null }),
+          updatedAt: sql`now()`,
+        })
         .where(eq(schema.organizations.id, admin.organizationId))
         .returning();
       return {

@@ -4,6 +4,7 @@ import type { CoordinationState, MessageClassification } from "@codevault/core";
 
 import {
   DashboardResponse,
+  EvaluationWorkspaceResponse,
   ListAuditQuery,
   AuditEvent,
   PaginatedResponse,
@@ -33,6 +34,53 @@ const ATTENTION_WINDOW_DAYS = 14;
 const CHANGE_WINDOW_DAYS = 14;
 
 export async function registerDashboardRoutes(app: AppInstance): Promise<void> {
+  app.get(
+    "/v1/evaluation-workspace",
+    { schema: { response: { 200: EvaluationWorkspaceResponse } } },
+    async (request) => {
+      const user = actingUser(request);
+      const result = await app.db.execute<{
+        case_id: string;
+        case_ref: string;
+        case_title: string;
+        finding_id: string;
+        report_id: string;
+      }>(sql`
+        SELECT c.id AS case_id, c.ref AS case_ref, c.title AS case_title,
+               f.id AS finding_id, r.id AS report_id
+        FROM cases c
+        JOIN LATERAL (
+          SELECT id FROM findings
+          WHERE findings.case_id = c.id
+          ORDER BY findings.created_at ASC
+          LIMIT 1
+        ) f ON true
+        JOIN LATERAL (
+          SELECT id FROM reports
+          WHERE reports.case_id = c.id AND reports.audience = 'INTERNAL'
+          ORDER BY reports.created_at ASC
+          LIMIT 1
+        ) r ON true
+        WHERE c.organization_id = ${user.organizationId}
+          AND c.metadata->>'evaluation' = 'true'
+        ORDER BY c.created_at ASC
+        LIMIT 1
+      `);
+      const row = result.rows[0];
+      if (row === undefined) return { available: false as const };
+      return {
+        available: true as const,
+        case: {
+          id: row.case_id,
+          ref: row.case_ref,
+          title: row.case_title,
+        },
+        findingId: row.finding_id,
+        reportId: row.report_id,
+      };
+    },
+  );
+
   app.get(
     "/v1/dashboard",
     { schema: { response: { 200: DashboardResponse } } },

@@ -73,6 +73,12 @@ export function PriorArtPanel({
   const checks = useApiQuery<{ items: PriorArtCheck[] }>(
     queryKeys.priorArt(finding.id),
     `/v1/findings/${finding.id}/prior-art-checks`,
+    {
+      refetchInterval: (query) => {
+        const status = query.state.data?.items[0]?.status;
+        return status === "QUEUED" || status === "RUNNING" ? 2_000 : false;
+      },
+    },
   );
 
   const startCheck = useApiMutation<PriorArtCheck>(
@@ -102,6 +108,8 @@ export function PriorArtPanel({
 
   const latest = checks.data?.items[0];
   const previous = checks.data?.items[1];
+  const checkInProgress =
+    latest?.status === "QUEUED" || latest?.status === "RUNNING";
 
   const openExternal = (url: string): void => {
     void bridge().app.openExternal(url);
@@ -139,13 +147,18 @@ export function PriorArtPanel({
                   })
                 }
                 loading={startCheck.isPending}
+                disabled={checkInProgress}
               >
                 {latest === undefined ? (
                   <ShieldQuestion aria-hidden className="size-3" />
                 ) : (
                   <RefreshCw aria-hidden className="size-3" />
                 )}
-                {latest === undefined ? "Check prior art" : "Re-run check"}
+                {checkInProgress
+                  ? "Check in progress"
+                  : latest === undefined
+                    ? "Check prior art"
+                    : "Re-run check"}
               </Button>
             ) : null}
           </div>
@@ -286,7 +299,16 @@ export function PriorArtPanel({
                   : ` · ${newSinceLastCheck.size} new since the previous check`}
               </h3>
 
-              {latest.matches.length === 0 ? (
+              {checkInProgress ? (
+                <LoadingState
+                  label={
+                    latest.status === "QUEUED"
+                      ? "Prior-art check queued…"
+                      : "Searching prior-art sources…"
+                  }
+                  className="rounded-(--cv-radius) border border-border py-5"
+                />
+              ) : latest.matches.length === 0 ? (
                 <p className="rounded-(--cv-radius) border border-border px-2 py-3 text-center text-[12px] text-text-muted">
                   Nothing came back from the sources that were checked.
                 </p>

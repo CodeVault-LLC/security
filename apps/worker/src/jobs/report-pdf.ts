@@ -78,7 +78,6 @@ export async function generateReportPdf(
         : `Embargoed until ${embargoEnd.slice(0, 10)}. Do not distribute beyond the recipients named above.`;
 
     const rendered = await renderReportHtml(db, data.reportId, {
-      organisation: "CodeVault",
       authorName: requesters[0]?.displayName ?? "CodeVault",
       notice,
     });

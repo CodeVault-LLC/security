@@ -95,6 +95,24 @@ export const DashboardResponse = Type.Object({
 
 export type DashboardResponse = Static<typeof DashboardResponse>;
 
+export const EvaluationWorkspaceResponse = Type.Union([
+  Type.Object({ available: Type.Literal(false) }),
+  Type.Object({
+    available: Type.Literal(true),
+    case: Type.Object({
+      id: Uuid,
+      ref: HumanReference,
+      title: Type.String(),
+    }),
+    findingId: Uuid,
+    reportId: Uuid,
+  }),
+]);
+
+export type EvaluationWorkspaceResponse = Static<
+  typeof EvaluationWorkspaceResponse
+>;
+
 export const AuditEvent = Type.Object({
   id: Uuid,
   action: Type.String({ maxLength: 80 }),

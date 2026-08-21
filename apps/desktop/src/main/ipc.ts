@@ -208,6 +208,32 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     return true;
   });
 
+  handle(IPC_CHANNELS.authPreflight, async (payload) => {
+    if (typeof payload !== "string") {
+      return failure(new Error("invalid server address"));
+    }
+
+    try {
+      const health = await apiClient.request<{
+        status: "ok";
+        apiVersion: string;
+        serverVersion: string;
+      }>("/health", {
+        serverUrl: payload,
+        anonymous: true,
+      });
+      return {
+        ok: true as const,
+        data: {
+          ...health,
+          compatible: health.apiVersion === "v1",
+        },
+      };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
   handle(IPC_CHANNELS.authLoginStart, async (payload) => {
     const request = payload as {
       serverUrl?: unknown;
@@ -675,8 +701,8 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       }
       const owner = sessionStore.current();
       if (owner === null) return failure(new Error("missing upload session"));
-      const resolved = uploadSelections.consume(selectionIds, owner);
-      const artifactIds = await runUploads({
+      const resolved = uploadSelections.resolve(selectionIds, owner);
+      const result = await runUploads({
         request: {
           caseId: request.caseId,
           ...(request.findingId === undefined
@@ -692,7 +718,39 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
         },
       });
 
-      return { ok: true as const, data: artifactIds };
+      const completedSelectionIds = result.items
+        .filter((item) => item.artifactId !== null)
+        .map((item) => item.selectionId);
+      if (completedSelectionIds.length > 0) {
+        uploadSelections.consume(completedSelectionIds, owner);
+      }
+
+      return { ok: true as const, data: result };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.uploadsDiscard, async (payload) => {
+    if (
+      !Array.isArray(payload) ||
+      payload.length === 0 ||
+      payload.some(
+        (item) =>
+          typeof item !== "string" ||
+          !/^[0-9a-f]{8}-[0-9a-f-]{27}$/iu.test(item),
+      )
+    ) {
+      return failure(new Error("invalid artifact cleanup request"));
+    }
+
+    try {
+      for (const artifactId of [...new Set(payload)]) {
+        await apiClient.request(`/v1/artifacts/${artifactId}`, {
+          method: "DELETE",
+        });
+      }
+      return { ok: true as const, data: { ok: true as const } };
     } catch (error: unknown) {
       return failure(error);
     }

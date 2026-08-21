@@ -17,7 +17,7 @@ import {
   Users,
   WifiOff,
 } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import {
   cn,
@@ -107,6 +107,20 @@ export function AppSidebar({
   const eventsConnected = useSession((state) => state.eventsConnected);
   const [signingOut, setSigningOut] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [version, setVersion] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void bridge()
+      .app.version()
+      .then((value) => {
+        if (active) setVersion(value);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const renderItem = (item: NavigationItem): React.JSX.Element => (
     <Link
@@ -119,7 +133,7 @@ export function AppSidebar({
       inactiveProps={{
         className: "text-text-muted hover:bg-surface-hover hover:text-text",
       }}
-      className="flex min-h-9 items-center gap-2 rounded-(--cv-radius) px-2 text-[13px] transition-colors max-lg:justify-center"
+      className="flex min-h-9 items-center gap-2 rounded-(--cv-radius) px-2 text-[13px] transition-colors max-lg:justify-center max-sm:px-1"
     >
       <span className="shrink-0">{item.icon}</span>
       <span className="truncate max-lg:hidden">{item.label}</span>
@@ -142,7 +156,7 @@ export function AppSidebar({
   return (
     <nav
       aria-label="Primary"
-      className="flex h-full w-52 shrink-0 flex-col border-r border-border bg-surface max-lg:w-16"
+      className="flex h-full w-52 shrink-0 flex-col border-r border-border bg-surface max-lg:w-14 max-sm:w-12"
     >
       <div className="cv-drag-region flex h-14 items-center px-3 max-lg:justify-center max-lg:px-1">
         <BrandWordmark compact className="max-lg:hidden" />
@@ -287,6 +301,12 @@ export function AppSidebar({
                 Settings
               </Link>
             </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            {version === null ? null : (
+              <DropdownMenuLabel className="font-mono text-[10.5px] font-normal text-text-muted">
+                CodeVault Desktop {version}
+              </DropdownMenuLabel>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuItem
               disabled={signingOut}

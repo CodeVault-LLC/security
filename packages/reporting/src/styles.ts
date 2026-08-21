@@ -164,6 +164,14 @@ pre {
   color: #b42318;
 }
 
+.cv-cover-footer {
+  margin-top: 8mm;
+  padding-top: 4mm;
+  border-top: 1px solid #e4e7ec;
+  font-size: 9pt;
+  color: #475467;
+}
+
 /* --- Contents ---------------------------------------------------------- */
 
 .cv-toc {

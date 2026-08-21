@@ -5,18 +5,37 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LoginScreen } from "./login-screen.js";
 
 const authBridge = vi.hoisted(() => ({
+  preflight: vi.fn(),
   loginStart: vi.fn(),
   loginComplete: vi.fn(),
 }));
 
+const appBridge = vi.hoisted(() => ({ version: vi.fn() }));
+
 vi.mock("../../lib/bridge.js", () => ({
-  bridge: () => ({ auth: authBridge }),
+  bridge: () => ({ app: appBridge, auth: authBridge }),
 }));
+
+function resetBridge(): void {
+  authBridge.preflight.mockReset();
+  authBridge.preflight.mockResolvedValue({
+    ok: true,
+    data: {
+      status: "ok",
+      apiVersion: "v1",
+      serverVersion: "0.1.0-alpha.7",
+      compatible: true,
+    },
+  });
+  authBridge.loginStart.mockReset();
+  authBridge.loginComplete.mockReset();
+  appBridge.version.mockReset();
+  appBridge.version.mockResolvedValue("0.1.0-alpha.7");
+}
 
 describe("LoginScreen branding", () => {
   beforeEach(() => {
-    authBridge.loginStart.mockReset();
-    authBridge.loginComplete.mockReset();
+    resetBridge();
   });
 
   it("identifies the product as CodeVault Security", () => {
@@ -74,8 +93,7 @@ describe("LoginScreen branding", () => {
 
 describe("LoginScreen session persistence", () => {
   beforeEach(() => {
-    authBridge.loginStart.mockReset();
-    authBridge.loginComplete.mockReset();
+    resetBridge();
   });
 
   it("passes the remember-me choice into the login flow", async () => {
@@ -95,10 +113,11 @@ describe("LoginScreen session persistence", () => {
     );
     await user.type(screen.getByLabelText("Password"), "long-test-password");
     await user.click(screen.getByRole("checkbox", { name: "Remember me" }));
+    await screen.findByText(/Connected to CodeVault Server/u);
     await user.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(authBridge.loginStart).toHaveBeenCalledWith(
-      "https://codevault.internal",
+      "http://127.0.0.1:4310",
       "researcher@example.test",
       "long-test-password",
       true,
@@ -115,6 +134,8 @@ describe("LoginScreen session persistence", () => {
 });
 
 describe("LoginScreen credential autofill", () => {
+  beforeEach(() => resetBridge());
+
   it("exposes a standard username and current-password form", () => {
     render(<LoginScreen />);
 

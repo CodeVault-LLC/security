@@ -187,6 +187,8 @@ filesystems and dropped capabilities.
 
 ## Where to read next
 
+- [`docs/evaluation/alpha-7.md`](docs/evaluation/alpha-7.md) describes the
+  disposable Alpha 7 sample-report evaluation path.
 - [`docs/architecture/threat-model.md`](docs/architecture/threat-model.md) —
   what is being protected, from whom, and which code and test enforce each
   boundary.

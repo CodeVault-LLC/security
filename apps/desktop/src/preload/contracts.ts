@@ -35,6 +35,13 @@ export interface LoginChallengeResult {
   expiresAt: string;
 }
 
+export interface ServerPreflight {
+  status: "ok";
+  apiVersion: string;
+  serverVersion: string;
+  compatible: boolean;
+}
+
 export interface EnrollmentSetup {
   provisioningUri: string;
   manualSecret: string;
@@ -71,12 +78,25 @@ export interface UploadSelection {
 }
 
 export interface UploadProgress {
-  uploadId: string;
+  /** Stable renderer capability for the selected file. */
+  selectionId: string;
+  /** Server artifact ID once registration has succeeded. */
+  uploadId: string | null;
   filename: string;
   phase: "HASHING" | "UPLOADING" | "COMPLETING" | "DONE" | "FAILED";
   /** 0-1; null while a phase has no measurable progress. */
   progress: number | null;
   message: string | null;
+}
+
+export interface UploadBatchItem {
+  selectionId: string;
+  artifactId: string | null;
+  error: string | null;
+}
+
+export interface UploadBatchResult {
+  items: UploadBatchItem[];
 }
 
 export interface StartUploadRequest {
@@ -128,6 +148,7 @@ export interface CodeVaultDesktopApi {
   };
 
   auth: {
+    preflight(serverUrl: string): Promise<ApiOutcome<ServerPreflight>>;
     loginStart(
       serverUrl: string,
       email: string,
@@ -174,7 +195,9 @@ export interface CodeVaultDesktopApi {
   uploads: {
     /** Opens the native picker and hashes each selection out of process. */
     select(): Promise<UploadSelection[]>;
-    start(request: StartUploadRequest): Promise<ApiOutcome<string[]>>;
+    start(request: StartUploadRequest): Promise<ApiOutcome<UploadBatchResult>>;
+    /** Deletes uploaded artifacts that were never attached to a record. */
+    discard(artifactIds: string[]): Promise<ApiOutcome<{ ok: true }>>;
     onProgress(listener: (progress: UploadProgress) => void): () => void;
   };
 
@@ -244,6 +267,7 @@ export const IPC_CHANNELS = {
   appPlatform: "app:platform",
   appOpenExternal: "app:open-external",
   authLoginStart: "auth:login-start",
+  authPreflight: "auth:preflight",
   authLoginComplete: "auth:login-complete",
   authEnrollmentStart: "auth:enrollment-start",
   authEnrollmentConfirm: "auth:enrollment-confirm",
@@ -257,6 +281,7 @@ export const IPC_CHANNELS = {
   apiRequest: "api:request",
   uploadsSelect: "uploads:select",
   uploadsStart: "uploads:start",
+  uploadsDiscard: "uploads:discard",
   uploadsProgress: "uploads:progress",
   avatarsSelectAndUpload: "avatars:select-and-upload",
   avatarsLoad: "avatars:load",

@@ -74,6 +74,7 @@ export async function apiRequest<T>(
 export const queryKeys = {
   me: ["me"] as const,
   dashboard: ["dashboard"] as const,
+  evaluationWorkspace: ["evaluation-workspace"] as const,
   users: ["users"] as const,
   invites: ["invites"] as const,
   cases: (filters?: Record<string, unknown>) =>
@@ -109,7 +110,10 @@ export const queryKeys = {
     filters === undefined
       ? (["evidence"] as const)
       : (["evidence", filters] as const),
-  reports: (caseId: string) => ["reports", caseId] as const,
+  reports: (caseId?: string) =>
+    caseId === undefined
+      ? (["reports"] as const)
+      : (["reports", caseId] as const),
   report: (id: string) => ["report", id] as const,
   reportLint: (id: string) => ["report", id, "lint"] as const,
   reportPreview: (id: string) => ["report", id, "preview"] as const,

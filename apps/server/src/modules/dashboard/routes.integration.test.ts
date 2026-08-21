@@ -1,13 +1,16 @@
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type {
   CaseDetail,
   DashboardResponse,
+  EvaluationWorkspaceResponse,
   SubmissionDetail,
   VendorDetail,
   VendorRoute,
 } from "@codevault/contracts";
 import { uuidv7 } from "@codevault/core/crypto";
+import { schema } from "@codevault/db";
 
 import {
   createHarness,
@@ -141,5 +144,76 @@ describeIntegration("submission coordination dashboard", () => {
     expect(
       dashboard.needsAttention.some((item) => item.entityId === submission.id),
     ).toBe(true);
+  });
+
+  it("deep-links the signed-in evaluator to the synthetic case", async () => {
+    const existingResponse = await harness.app.inject({
+      method: "GET",
+      url: "/v1/evaluation-workspace",
+      headers: owner.headers,
+    });
+    expect(existingResponse.statusCode, existingResponse.body).toBe(200);
+    const existing = existingResponse.json<EvaluationWorkspaceResponse>();
+    if (existing.available) {
+      expect(existing.case.id).toBeTruthy();
+      expect(existing.findingId).toBeTruthy();
+      expect(existing.reportId).toBeTruthy();
+      return;
+    }
+
+    const caseResponse = await harness.app.inject({
+      method: "POST",
+      url: "/v1/cases",
+      headers: owner.headers,
+      payload: {
+        title: `Evaluation workspace ${uuidv7()}`,
+        profile: "COORDINATED_DISCLOSURE",
+      },
+    });
+    expect(caseResponse.statusCode, caseResponse.body).toBe(200);
+    const researchCase = caseResponse.json<CaseDetail>();
+    await harness.dbHandle.db
+      .update(schema.cases)
+      .set({ metadata: { evaluation: true } })
+      .where(eq(schema.cases.id, researchCase.id));
+
+    const findingResponse = await harness.app.inject({
+      method: "POST",
+      url: "/v1/findings",
+      headers: owner.headers,
+      payload: {
+        caseId: researchCase.id,
+        title: "Synthetic evaluator finding",
+        summaryMarkdown: "Synthetic evaluator data.",
+      },
+    });
+    expect(findingResponse.statusCode, findingResponse.body).toBe(200);
+    const finding = findingResponse.json<{ id: string }>();
+
+    const reportResponse = await harness.app.inject({
+      method: "POST",
+      url: "/v1/reports",
+      headers: owner.headers,
+      payload: { caseId: researchCase.id, audience: "INTERNAL" },
+    });
+    expect(reportResponse.statusCode, reportResponse.body).toBe(200);
+    const report = reportResponse.json<{ id: string }>();
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/evaluation-workspace",
+      headers: owner.headers,
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    expect(response.json<EvaluationWorkspaceResponse>()).toMatchObject({
+      available: true,
+      case: {
+        id: researchCase.id,
+        ref: researchCase.ref,
+        title: researchCase.title,
+      },
+      findingId: finding.id,
+      reportId: report.id,
+    });
   });
 });

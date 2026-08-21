@@ -60,6 +60,24 @@ describe("upload selection capabilities", () => {
     ).toThrow(/expired/u);
   });
 
+  it("keeps a capability available until an upload succeeds", () => {
+    const store = new UploadSelectionStore();
+    const issued = store.issue(selection, firstOwner, 1_000);
+
+    expect(store.resolve([issued.selectionId], firstOwner, 1_001)).toEqual([
+      issued,
+    ]);
+    expect(store.resolve([issued.selectionId], firstOwner, 1_002)).toEqual([
+      issued,
+    ]);
+    expect(store.consume([issued.selectionId], firstOwner, 1_003)).toEqual([
+      issued,
+    ]);
+    expect(() =>
+      store.resolve([issued.selectionId], firstOwner, 1_004),
+    ).toThrow(/expired/u);
+  });
+
   it("rejects duplicate identifiers without consuming the capability", () => {
     const store = new UploadSelectionStore();
     const issued = store.issue(selection, firstOwner, 1_000);

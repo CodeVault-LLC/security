@@ -203,6 +203,57 @@ describeIntegration("uploads", () => {
     expect(harness.jobs.sent.at(-1)?.queue).toBe("artifact-integrity");
   });
 
+  it("discards an uploaded artifact that was never attached", async () => {
+    const instructions = await startUpload();
+    harness.storage.objects.set(instructions.objectKey, new Uint8Array(1_024));
+    await harness.app.inject({
+      method: "POST",
+      url: `/v1/uploads/${instructions.artifactId}/complete`,
+      headers: user.headers,
+      payload: {},
+    });
+
+    const response = await harness.app.inject({
+      method: "DELETE",
+      url: `/v1/artifacts/${instructions.artifactId}`,
+      headers: user.headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const [artifact] = await harness.dbHandle.db
+      .select({ status: schema.artifacts.status })
+      .from(schema.artifacts)
+      .where(eq(schema.artifacts.id, instructions.artifactId));
+    expect(artifact?.status).toBe("DELETED");
+    expect(harness.jobs.sent.at(-1)?.queue).toBe("artifact-delete");
+  });
+
+  it("does not discard an artifact after it is attached", async () => {
+    const instructions = await startUpload();
+    await harness.app.inject({
+      method: "POST",
+      url: "/v1/evidence",
+      headers: user.headers,
+      payload: {
+        caseId: researchCase.id,
+        title: "Attached capture",
+        visibility: "INTERNAL",
+        artifactIds: [instructions.artifactId],
+      },
+    });
+
+    const response = await harness.app.inject({
+      method: "DELETE",
+      url: `/v1/artifacts/${instructions.artifactId}`,
+      headers: user.headers,
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json<{ error: { message: string } }>().error.message).toBe(
+      "An attached artifact cannot be discarded.",
+    );
+  });
+
   it("refuses to complete the same upload twice", async () => {
     const instructions = await startUpload();
 

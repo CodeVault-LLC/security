@@ -394,7 +394,7 @@ function ReportsPanel({
       method: "POST",
       body: { caseId, audience },
     }),
-    () => [queryKeys.reports(caseId)],
+    () => [queryKeys.reports(caseId), queryKeys.reports()],
   );
 
   const audiences = ["INTERNAL", "VENDOR", "PUBLIC"] as const;

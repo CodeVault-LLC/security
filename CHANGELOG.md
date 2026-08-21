@@ -8,6 +8,36 @@ with the prerelease sequence defined in [`ROADMAP.md`](ROADMAP.md).
 
 No changes recorded yet.
 
+## [0.1.0-alpha.7] - 2026-08-21
+
+### Added
+
+- Added a disposable local evaluation command, fixed evaluator credentials,
+  synthetic export-ready report, five-step in-product checklist, and evaluation
+  and removal guides.
+- Added pre-sign-in server compatibility checks, exact desktop and server
+  versions, report contact settings, and organization report footers.
+- Added organization-wide paginated report listing and case list filters.
+
+### Changed
+
+- Made partial evidence uploads recoverable with per-file retries, stable
+  progress identities, and cleanup for unattached artifacts.
+- Polls active prior-art jobs and blocks report approval and export while known
+  blockers remain.
+- Made the report workspace usable at accessibility zoom with compact
+  navigation and an overflow action menu.
+
+### Migrations
+
+- Added `0017_organization_report_branding.sql` for report contact and footer
+  fields.
+
+### Compatibility
+
+- Desktop Alpha 7 requires API `v1` and verifies compatibility before sign-in.
+- Alpha packages remain test builds and may change before `0.1.0`.
+
 ## [0.1.0-alpha.6] - 2026-08-20
 
 ### Added
@@ -55,5 +85,6 @@ No changes recorded yet.
   OCI images, attestations, signatures, SBOMs, and VEX described by the release
   policy.
 
-[Unreleased]: https://github.com/CodeVault-LLC/security/compare/v0.1.0-alpha.6...HEAD
+[Unreleased]: https://github.com/CodeVault-LLC/security/compare/v0.1.0-alpha.7...HEAD
+[0.1.0-alpha.7]: https://github.com/CodeVault-LLC/security/compare/v0.1.0-alpha.6...v0.1.0-alpha.7
 [0.1.0-alpha.6]: https://github.com/CodeVault-LLC/security/compare/v0.1.0-alpha.5...v0.1.0-alpha.6

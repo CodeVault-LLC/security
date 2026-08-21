@@ -2,7 +2,7 @@
 
 Status: Active
 
-Last reviewed: 2026-08-20
+Last reviewed: 2026-08-21
 
 Current version: `0.1.0-alpha.6`
 
@@ -30,53 +30,85 @@ The local baseline passed on 2026-08-20:
 
 That baseline does not prove release readiness. Database integration tests, the two end-to-end suites, native packages, OCI images, and a real tagged release were not run as part of this roadmap review.
 
-## What is missing or needs work
+## Who `0.1.0` is for
 
-### Product completeness
+The first supported release is for a research or product-security team with 2 to 10 members. The team performs original vulnerability research, handles embargoed evidence, and coordinates disclosure with vendors. The team accepts self-hosting because it needs custody of the research corpus.
 
-1. Finish intake automation. Manual intake exists, but the planned folder import and external-agent intake flows are not complete.
-2. Finish the MCP domain. The current implementation covers much of the model, but disclosure operations and some workflow actions still lack first-class tools. Reconcile the implementation with `docs/superpowers/specs/2026-08-19-complete-mcp-domain-tools-design.md` and publish a generated tool inventory.
-3. Make the full research path recoverable. Draft persistence exists in report and finding work, but every create, upload, AI, export, submission, and synchronization flow needs interruption and retry coverage.
-4. Add bulk work where volume makes single-record actions impractical. The first candidates are intake decisions, finding ownership and state changes, evidence classification, and vendor-route review.
-5. Add import and export boundaries. Define a stable case archive that includes structured records, report revisions, evidence manifests, and digests without silently exporting restricted bytes.
-6. Add notification policy and delivery. The dashboard shows due work, but users need durable in-product notifications for invitations, MFA resets, failed jobs, vendor replies, approaching disclosure dates, and stale prior-art or intelligence checks.
-7. Complete accessibility verification. Keyboard access and semantic controls are design requirements, but the repository lacks a complete keyboard walkthrough, screen-reader review, contrast evidence, zoom coverage, and automated accessibility checks for critical screens.
-8. Define supported scale. Measure large cases, long reports, large evidence sets, search volume, correspondence threads, and worker backlogs. Set limits and show useful errors when a limit is reached.
-9. Finish TLP controls. Reports store and validate TLP labels, exports print them, and MCP can update them. Add a permitted desktop control for selecting an audience-compatible label and cover that flow with an acceptance test.
-10. Make EPSS and KEV refresh operational. Enqueue refreshes when a finding gains or changes a CVE, add scheduled staleness refresh, expose manual refresh and status, record both positive and negative KEV results, clear superseded values, surface provider failures, and add worker and end-to-end tests.
+The release does not try to replace scanner aggregation, ticketing, a bug-bounty platform, or a pentest consultancy portal. It must earn adoption by making one sensitive research case safer and easier to finish than the team's existing combination of files, Markdown, and email.
 
-### Reliability and operations
+## Adoption outcomes
 
-1. Add backup and restore commands, retention guidance, and a restore rehearsal. Production Compose is hardened, but a stable release needs a proven recovery path for PostgreSQL and object storage as one consistent dataset.
-2. Define upgrades and rollbacks. Test every migration from the previous supported release, document irreversible migrations, and block startup when an unsafe version skew exists between the server and workers.
-3. Add operational health and telemetry. Expose health, readiness, queue depth, job age, failure counts, storage reachability, database pool pressure, mail-watch expiry, and build version without leaking case data.
-4. Add job recovery controls. Operators need bounded retries, dead-letter inspection, safe replay, cancellation where possible, and idempotency evidence for every externally consequential job.
-5. Test resource exhaustion and partial failure. Cover full disks, unavailable object storage, database failover, interrupted uploads, malformed provider responses, Gmail quota failures, expired OAuth grants, and media-worker crashes.
-6. Ship a verified desktop update system before `beta.1`. The default Stable channel receives only stable releases. Users may opt into Beta or Alpha, and they may return to a less experimental channel. Beta receives beta, release-candidate, and stable releases. Alpha receives every prerelease and stable release. A channel change must never silently downgrade the installed application or database.
-7. Show the application version and selected update channel on the sign-in screen and in **Settings > Updates**. Let the user copy the version, channel, platform, architecture, and server compatibility details for a support report.
-8. Publish signed update metadata and release notes from the protected release workflow. The desktop application must verify the update source, version, digest, and native signature before offering installation. An update feed must never bypass the artifact checks in `docs/security/release-verification.md`.
-9. Make update behavior explicit and recoverable. Support automatic checks, **Check for updates**, download progress, **Install and restart**, **Remind me later**, download or verification failure, insufficient disk space, unsupported platform, offline, no-update, and restart-required states. Never interrupt active edits, uploads, AI runs, report exports, or submission delivery.
-10. Publish platform support. Name tested operating-system versions, CPU architectures, PostgreSQL and S3-compatible services, Gmail prerequisites, and minimum workstation resources.
+The following outcomes are release work. They are not marketing measurements.
 
-### Security and assurance
+1. **Evaluate.** A person who has not contributed to CodeVault can start a disposable deployment, open a realistic sample case, and export a vendor report within 15 minutes. The person does not need a source checkout, Node, Bun, Gmail, or an AI provider.
+2. **Bring existing work.** A researcher can preview and import a directory of Markdown, JSON, CSV, and attachments into a new or existing case. The import identifies duplicates, preserves original files, and makes no authoritative claim without review.
+3. **Reach first value.** A first-run path takes a researcher through creating or importing a case, recording one finding and its evidence, and producing a vendor-report preview. The path shows the value before asking for mail or AI access.
+4. **Keep control of the data.** A researcher can export a complete, versioned case archive and import it into a clean compatible deployment. The archive has a manifest, record counts, artifact digests, visibility metadata, and an option to encrypt the export for named recipients.
+5. **Collaborate without exposing every case.** An administrator can grant read or write access to a case. A user without read access cannot discover the case, its title, activity, metrics, search matches, evidence, reports, or identifiers.
+6. **Recover.** An operator can back up PostgreSQL, object storage, and required secrets as one recovery point. The operator can restore that point into an empty deployment and verify record counts and artifact digests.
+7. **Return to unfinished work.** Drafts, uploads, imports, exports, AI proposals, report rendering, and delivery jobs survive interruption or fail with a visible recovery action.
+8. **Communicate through a real team mailbox.** CodeVault supports manual delivery, Gmail, and Microsoft 365 through the same reviewed submission and correspondence rules. Provider failure never causes an automatic duplicate send.
+9. **Install software that identifies itself.** Signed desktop packages show their version, channel, server compatibility, and publisher before and after sign-in. Updates preserve active work and verify the new artifact before installation.
+10. **Get help without leaking research.** A user can create a redacted diagnostic bundle that includes versions, health results, job identifiers, and configuration names. It excludes case content, addresses, tokens, filenames, and evidence bytes.
 
-1. Apply the external GitHub settings in `docs/security/repository-settings.md`: account MFA, branch and tag rulesets, required checks, the protected `release` environment, secret scanning, push protection, and code scanning.
-2. Run the full ASVS 5.0.0 Level 3 assessment. The current register marks the requirements as gaps pending verification.
-3. Commission an independent security assessment before the stable release. Resolve critical and high findings. Record accepted lower-severity risk with an owner and review date.
-4. Exercise security response. Run a private vulnerability-report drill, an artifact-withdrawal drill, a signing-credential rotation drill, and a mail-token and MFA-key rotation drill.
-5. Verify a real release. Check the generated SBOMs, VEX, checksums, attestations, OCI signatures, native signatures, and SLSA claim against published artifacts.
-6. Add data lifecycle controls. Define retention, secure deletion, legal hold, export, and administrator-visible deletion status for database rows, object-store data, quarantined uploads, logs, and backups.
-7. Produce a privacy and data-flow review for local AI tools, Gmail, NVD, OSV, GitHub Advisories, and any future provider. The UI must state which data leaves the deployment before a user enables an integration.
+## What has to be built
 
-### Test and engineering quality
+### A supported evaluation path
 
-1. Expand end-to-end coverage beyond the two vendor and Gmail scenarios. Cover login and recovery, invitations, case creation, finding and evidence work, report approval and export, restricted-case access, AI proposal review, and failed-job recovery.
-2. Add migration tests from released database snapshots, not only a clean database.
-3. Add API contract compatibility tests between the desktop client, server, worker, media worker, and MCP client.
-4. Add performance and memory budgets for the desktop renderer, search, report rendering, large uploads, and background queues.
-5. Resolve or deliberately suppress the two React Compiler warnings with a linked explanation and a regression check.
-6. Remove stale plan status. The metrics and MCP design documents still describe implemented work as pending. Keep one feature register that links a requirement to code, tests, documentation, and its release.
-7. Add changelog automation and release-note checks. Every user-visible or operator-visible change needs a migration note, security impact, and compatibility statement when applicable.
+- Publish a disposable evaluation bundle with synthetic cases and fixed local credentials. Keep it separate from production data and make removal explicit.
+- Add a connection and preflight screen that checks the server version, database, object storage, workers, and clock before the user signs in.
+- Add a first-run checklist for create or import, finding, evidence, vendor-report preview, and archive export. Let the user dismiss it and reopen it.
+- Add a guided sample case that explains the three report audiences through actual records. Do not require AI, mail, or external network access.
+- Publish a five-minute evaluation guide and a separate production-installation guide. Do not mix evaluation shortcuts into production instructions.
+
+### Migration and capture
+
+- Add a folder importer for Markdown, JSON, CSV, images, captures, and arbitrary attachments. Show a preview, mapping errors, duplicate candidates, visibility, and the exact records that acceptance will create.
+- Add a small `codevault capture` command for files and standard input. It records the case, evidence type, visibility, source time, original name, size, and digest without opening the desktop client.
+- Complete external-agent intake and the MCP domain needed to create drafts, attach evidence, inspect readiness, and prepare reports. Direct approval and disclosure operations remain explicit and audited.
+- Add a versioned `.cvcase` archive. Export and import must stream large artifacts, verify digests, reject path traversal, report incompatible versions, and support cancellation without partial canonical records.
+- Add generic CSV and JSON finding exchange. This is a migration boundary, not recurring scanner ingestion.
+- Add an organization contact block and restrained report branding so a vendor report identifies the researcher, the return address, and the organization without editing generated files.
+
+### Confidential collaboration
+
+- Replace organization-wide read clearance with case read membership. Keep organization roles for administration and use case grants for read, write, approval, and disclosure authority.
+- Add an access review that lists who can read, edit, approve, or disclose each case. Record every grant and revocation in the audit trail.
+- Add passkeys through WebAuthn. Keep TOTP recovery during the transition and let an administrator require phishing-resistant authentication for privileged roles.
+- Preserve the single-organization deployment boundary for `0.1.0`. Do not use multi-organization hosting as a substitute for correct case isolation.
+- Add retention and deletion controls for closed cases, exports, quarantined uploads, logs, and backups. Deletion must show scope, delay, legal-hold conflicts, and the parts an operator must remove outside the application.
+
+### Daily research and disclosure
+
+- Make drafts and pending work recoverable across create, edit, upload, import, AI, export, submission, and synchronization flows.
+- Add bulk intake decisions, finding assignment and state changes, evidence classification, and vendor-route review. Every bulk action shows its object count and permission failures before it commits.
+- Finish TLP controls, prior-art retry behavior, EPSS refresh, and KEV refresh. Mark stale or failed intelligence instead of presenting it as current.
+- Add durable notifications and a failed-job view for invitations, MFA changes, failed jobs, vendor replies, disclosure dates, stale intelligence, and expiring mail connections.
+- Finish Gmail delivery and synchronization. Add Microsoft 365 delivery and synchronization through Microsoft Graph. Apply the same sealing, idempotency, reply-correlation, and audit rules to both providers.
+- Add a provider-independent correspondence export so a team can leave CodeVault or change mail providers without losing the disclosure record.
+- Complete keyboard, screen-reader, 200 percent zoom, reduced-motion, contrast, long-content, and network-failure paths for the core research and disclosure flows.
+
+### Trust, distribution, and operations
+
+- Add backup and restore commands for one consistent PostgreSQL and object-storage recovery point. Include a manifest and a verification command.
+- Test upgrades from every published prerelease snapshot. Block incompatible server, worker, media-worker, MCP, and desktop versions before they mutate data.
+- Add health, readiness, queue depth, job age, failure counts, storage reachability, database pressure, mail-watch expiry, and build-version telemetry without case content.
+- Add bounded retries, dead-letter inspection, safe replay, and cancellation where the job allows it. Require idempotency evidence for every job that communicates externally.
+- Publish signed desktop packages and immutable OCI images. Add verified Stable, Beta, and Alpha update channels before inviting external pilot teams to store real research.
+- Publish supported operating systems, CPU architectures, PostgreSQL versions, S3-compatible services, mail prerequisites, and minimum workstation and server resources.
+- Commission an independent security assessment before stable release. Apply the repository protections, rehearse vulnerability response and release withdrawal, and verify a real release as a consumer.
+- Add API contract, migration, load, failure, and long-running worker tests. Keep the feature register as the link between each supported capability, its acceptance test, its documentation, and its release evidence.
+
+## Pilot evidence
+
+CodeVault does not enter beta on implementation evidence alone. Record these results without collecting unpublished vulnerability details:
+
+- Five people who have not contributed to the repository complete the evaluation outcome. At least four finish without the maintainer taking control of their machine or deployment.
+- Three external teams import an existing historical or sanitized case, add new evidence, and export a vendor report.
+- Two external teams use the same deployment for at least 30 days and return to an unfinished case after an update or service interruption.
+- One pilot uses case-level read restrictions with at least three users and proves that an ungranted user cannot discover the case through any interface.
+- One operator who did not write the backup code restores a pilot deployment into an empty environment and verifies the archive and artifact manifests.
+- Every accepted pilot blocker has an owner and a target release. Publish aggregate completion times, failure categories, and abandonment points without user or case identifiers.
 
 ## Versioning rules
 
@@ -84,7 +116,7 @@ Continue the current line as `0.1.0-alpha.N`. Do not publish `0.1.1-alpha.1` bef
 
 ```text
 0.1.0-alpha.5
-0.1.0-alpha.6  current, then through alpha.9
+0.1.0-alpha.6  current, then through alpha.10
 0.1.0-beta.1   through beta.2
 0.1.0-rc.1
 0.1.0           first supported release
@@ -110,66 +142,85 @@ Goal: establish one reliable inventory and a reproducible baseline.
 
 Exit criteria: the clean-checkout build works, every current CI gate passes, package inventory matches the release policy, and no document labels shipped work as pending.
 
-### `0.1.0-alpha.7`: Complete the core research loop
+### `0.1.0-alpha.7`: Let people evaluate the product
 
-Goal: make a researcher able to take a case from intake to an approved report without a manual database repair.
+Goal: let a new evaluator reach the report-projection value without adopting the product first.
 
-- Complete folder intake and external-agent intake with preview, deduplication, accept, merge, reject, cancellation, and audit history.
-- Complete missing MCP case, disclosure, evidence, report, and workflow operations from the approved design.
-- Add a versioned case export and a verified import or restore path.
-- Add bulk intake review and the smallest set of bulk finding and evidence actions proven necessary by realistic datasets.
-- Make local drafts and retry behavior consistent across create, edit, upload, AI, and export flows.
-- Add the desktop TLP control and complete the EPSS and KEV refresh path, including triggers, staleness, negative KEV results, failure visibility, and tests.
-- Add end-to-end scenarios for case creation, finding assessment, evidence upload, AI proposal review, report approval, and PDF export.
+- Publish the disposable evaluation bundle with synthetic data and no external-service requirement.
+- Add server connection preflight and compatibility diagnostics.
+- Add the first-run checklist and the guided sample case.
+- Add the organization contact block and basic report branding.
+- Build signed test packages from a tagged release and display the exact version and publisher.
+- Write separate evaluation, production installation, and removal guides.
+- Run the evaluation path with five non-contributors and record time, failures, and abandonment points.
 
-Exit criteria: a seeded case can complete the core research loop through both the desktop client and supported MCP operations, with audit records and no direct database edits.
+Exit criteria: at least four of five evaluators start CodeVault and export the sample vendor report within 15 minutes without the maintainer taking control.
 
-### `0.1.0-alpha.8`: Complete coordinated disclosure
+### `0.1.0-alpha.8`: Bring existing research into CodeVault
 
-Goal: make vendor coordination safe under interruption and provider failure.
+Goal: let a researcher adopt CodeVault with an existing case instead of starting from an empty database.
 
-- Add durable in-product notifications and an operator-visible failed-job view.
-- Finish Gmail connection lifecycle, watch renewal, token revocation, quota handling, reply correlation, attachment handling, and safe replay tests.
-- Test manual, plaintext Gmail, encrypted Gmail, signed and encrypted Gmail, and inbound encrypted-reply workflows.
+- Add folder intake for Markdown, JSON, CSV, images, captures, and arbitrary attachments with preview, mapping, deduplication, cancellation, and audit history.
+- Add `codevault capture` for files and standard input.
+- Add generic CSV and JSON finding exchange.
+- Add the versioned `.cvcase` archive with verified, resumable export and all-or-nothing import.
+- Complete the MCP operations needed for draft intake, evidence, readiness, and report preparation.
+- Make create, edit, upload, import, AI, export, and report-rendering work recoverable after interruption.
+- Add end-to-end scenarios for importing a historical case, adding evidence, reviewing intake, approving a report, exporting PDF and Markdown, and moving the case to a clean deployment.
+- Run this path with three external teams.
+
+Exit criteria: each pilot team imports existing work, produces a vendor report, exports the complete case, and imports it into a clean compatible deployment without direct database edits or lost artifacts.
+
+### `0.1.0-alpha.9`: Make team research and disclosure safe
+
+Goal: let a small team collaborate on real embargoed research without exposing every case or depending on Gmail.
+
+- Add case-level read, write, approval, and disclosure grants. Hide ungranted case existence across every query and interface.
+- Add case access review and audit history for grants and revocations.
+- Add WebAuthn passkeys and an organization policy that can require them for privileged roles.
+- Add bulk intake review, finding assignment and state changes, evidence classification, and vendor-route review with a dry-run summary.
+- Finish TLP controls, prior-art retry behavior, EPSS refresh, and KEV refresh.
+- Add durable notifications and a failed-job view.
+- Finish Gmail delivery and synchronization. Add Microsoft 365 delivery and synchronization through Microsoft Graph.
+- Add provider-independent correspondence export.
+- Test manual, Gmail, Microsoft 365, plaintext, encrypted, signed, reply, quota, revocation, replay, and delivery-unknown paths.
 - Add route expiry, stale-key, missed-follow-up, and disclosure-deadline warnings.
-- Add end-to-end tests for approval, sealing, delivery idempotency, correspondence sync, retry, and withdrawal before delivery.
-- Document provider data flows and consent at configuration time.
 
-Exit criteria: no network retry can send a submission twice, every external action has a human approval record, and failed delivery or sync work is visible and recoverable.
+Exit criteria: a three-person pilot proves case isolation, completes a reviewed vendor delivery, recovers from a simulated provider failure, and exports the correspondence record. No network retry sends a submission twice.
 
-### `0.1.0-alpha.9`: Prove operability and scale
+### `0.1.0-alpha.10`: Make adoption recoverable
 
-Goal: make a self-hosted installation recoverable and measurable.
+Goal: make a self-hosted pilot safe to operate, update, diagnose, and leave running.
 
-- Add consistent backup and restore tooling for PostgreSQL and object storage.
+- Add consistent backup and restore commands for PostgreSQL, object storage, and required secrets.
 - Rehearse restore into an empty deployment and compare record counts and artifact digests.
-- Test upgrades from `alpha.6`, `alpha.7`, and `alpha.8` snapshots. Document rollback limits.
+- Test upgrades from every published alpha snapshot. Document rollback limits and block unsafe version skew.
 - Add health, readiness, queue, storage, database, mail-watch, and build-version telemetry.
-- Add dead-letter inspection and safe job replay.
-- Publish supported platform and resource requirements.
-- Set and test scale budgets for cases, findings, evidence, report size, search, and queue latency.
-- Add a protected update feed for signed macOS, Windows, and supported Linux artifacts. Publish channel-specific metadata for Stable, Beta, and Alpha.
-- Add the update client, automatic checks, manual checks, download progress, release-note display, verified installation, restart handling, and failure recovery.
-- Add an update-channel control with three visible choices. Default new installations to Stable. Warn before Alpha or Beta opt-in and explain which versions each channel receives.
-- Show the exact application version and channel on the sign-in screen and in **Settings > Updates**. Add a copyable diagnostics summary.
-- Add desktop and release-workflow tests for channel promotion, SemVer ordering, feed authenticity, digest mismatch, signature failure, interrupted downloads, rollback refusal, active-work deferral, and server compatibility.
-- Document platform-specific behavior. If an installed package cannot update itself safely, detect that package and give the user a verified download action instead of reporting that automatic updates are available.
+- Add dead-letter inspection, bounded retries, cancellation, and safe job replay.
+- Add a redacted diagnostic bundle and verify its exclusion rules with hostile fixture data.
+- Publish supported platforms, dependencies, resource requirements, and scale budgets.
+- Add protected update feeds for signed macOS, Windows, and supported Linux artifacts. Publish Stable, Beta, and Alpha metadata.
+- Add update checks, release notes, download progress, verification, deferral, installation, restart handling, and failure recovery.
+- Show the exact application version, update channel, platform, architecture, and server compatibility before and after sign-in.
+- Test channel promotion, SemVer ordering, feed authenticity, digest mismatch, signature failure, interrupted downloads, rollback refusal, active-work deferral, and server compatibility.
+- Complete the 30-day pilot, external restore rehearsal, and update-interruption evidence in **Pilot evidence**.
 
-Exit criteria: an operator can install, observe, back up, restore, upgrade, and diagnose the product using documented commands. A user on each update channel can discover, verify, install, defer, and recover from an update without losing work.
+Exit criteria: an operator who did not build the feature installs, observes, backs up, restores, upgrades, and diagnoses a pilot deployment without direct database edits. The two 30-day pilot teams recover their unfinished work after an update or service interruption.
 
 ### `0.1.0-beta.1`: Feature complete
 
 Goal: freeze everything intended for `0.1.0`.
 
-- Close or defer every product-completeness item in this roadmap.
+- Close or defer every item in **What has to be built**.
+- Complete every result in **Pilot evidence** and publish the aggregate evidence.
 - Block beta publication unless updates from the latest alpha to `beta.1` pass on every supported desktop installation type.
 - Freeze public API contracts, the database migration path, artifact names, configuration names, and the supported deployment shape.
 - Complete keyboard-only, screen-reader, 200 percent zoom, reduced-motion, and contrast reviews for critical workflows.
 - Add end-to-end coverage for authentication, recovery, invitations, restricted cases, all core research work, report export, vendor delivery, and recovery from failed jobs.
 - Publish administrator, operator, researcher, integration, backup, restore, upgrade, and troubleshooting documentation.
-- Start a beta feedback register. Give every accepted blocker an owner and target release.
+- Continue the pilot feedback register. Give every accepted blocker an owner and target release.
 
-Exit criteria: no planned `0.1.0` feature is missing, no known data-loss path is open, and all supported workflows have acceptance evidence.
+Exit criteria: no planned `0.1.0` feature is missing, no known data-loss path is open, every adoption outcome has pilot evidence, and all supported workflows have acceptance evidence.
 
 ### `0.1.0-beta.2`: Security and compatibility complete
 
@@ -179,7 +230,7 @@ Goal: remove release blockers without adding product scope.
 - Complete an independent security assessment. Fix all critical and high findings.
 - Run failure, load, migration, backup, restore, and long-running worker tests.
 - Apply and record the required GitHub organization, repository, tag, environment, and security settings.
-- Obtain and test Apple and Windows signing credentials.
+- Revalidate Apple and Windows signing access, rotation, timestamping, and protected-environment restrictions.
 - Run vulnerability-report, release-withdrawal, credential-rotation, and disaster-recovery exercises.
 - Triage all beta feedback. Fix blockers and record deferred work.
 
@@ -222,15 +273,23 @@ The following list is the release gate for `0.1.0` and later stable versions.
 
 - The release scope and deferred work are written in the changelog.
 - Every supported workflow has an acceptance test and user documentation.
+- The evaluation bundle works without a source checkout, mail provider, AI provider, or access to production data.
+- A new evaluator can reach the vendor-report preview through a sample case before the product requests optional integration access.
+- Folder import, generic finding exchange, `codevault capture`, and `.cvcase` import and export pass against historical pilot cases.
+- A complete `.cvcase` archive can move between clean compatible deployments without losing records, revisions, visibility, correspondence, or artifact bytes.
 - No critical workflow depends on an optional AI provider.
 - External communication and publication always require a permitted human action.
 - Restricted case existence and content remain hidden from unauthorized users.
+- Case access review shows every user who can read, write, approve, or disclose the case.
+- Manual, Gmail, and Microsoft 365 disclosure paths preserve the same approval, sealing, idempotency, and audit rules.
 - Import, export, backup, restore, upgrade, and failure recovery paths have passed against release artifacts.
 - The application displays its exact version and selected update channel before and after sign-in.
 - Stable, Beta, and Alpha channel selection works as documented. Stable is the default.
 - Update checks, release notes, download, verification, deferral, installation, restart, and recovery have passed on every supported desktop installation type.
 - The updater preserves active work, rejects untrusted or older artifacts, and gives users a verified manual path when self-update is unavailable.
+- The redacted diagnostic bundle passes tests that seed case titles, addresses, filenames, tokens, and evidence markers and prove that none appear in the bundle.
 - Accessibility acceptance covers keyboard use, focus, names, contrast, zoom, reduced motion, and non-color meaning.
+- Every result in **Pilot evidence** is complete. The published aggregate contains no user, vendor, or vulnerability identifiers.
 
 ### Quality
 
@@ -253,6 +312,7 @@ The following list is the release gate for `0.1.0` and later stable versions.
 ### Operations
 
 - A clean install, backup, restore, upgrade, rollback rehearsal, and disaster-recovery exercise pass.
+- An operator who did not implement backup and restore completes the documented recovery rehearsal on an empty host.
 - Health and readiness checks detect unavailable required dependencies.
 - Operators can inspect and recover failed background work without direct database edits.
 - Supported platforms, dependencies, capacity limits, data retention, and support policy are published.
@@ -274,15 +334,15 @@ Keep these features out of the first stable release unless the product owner mov
 
 - Multi-organization hosting and organization switching.
 - A hosted SaaS control plane.
-- Scanner ingestion, questionnaire workflows, or a general workflow designer.
+- Recurring scanner synchronization, scanner orchestration, questionnaire workflows, or a general workflow designer. Generic CSV and JSON migration remain in `0.1.0`.
 - Automated portal submission or autonomous vendor contact.
 - AI approval of facts, scores, novelty, fixes, submissions, or publications.
 - Mobile applications.
 - Plugin execution or arbitrary command providers inside the desktop application.
 - SLSA Source Level 4 or assurance claims that require a second trusted maintainer or an external authority.
 
-These exclusions protect the first release from turning into a different product. Revisit them through a written product decision after `0.1.0` usage provides evidence.
+These exclusions keep the first release focused on original research and coordinated disclosure. Revisit them through a written product decision after the pilot evidence identifies a repeated job that the current product cannot complete.
 
 ## Maintaining this roadmap
 
-Review this file at each version bump. For every shipped item, link the pull request, acceptance test, operator documentation, and release evidence in the feature register. Record scope changes in the changelog. Never mark a milestone complete because most of its work is done.
+Review this file at each version bump. For every shipped item, link the pull request, acceptance test, operator documentation, and release evidence in the feature register. Record scope changes in the changelog. Update the aggregate pilot evidence when a release changes an adoption outcome. Never mark a milestone complete because most of its work is done.

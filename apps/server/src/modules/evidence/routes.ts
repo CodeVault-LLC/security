@@ -353,6 +353,101 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
     },
   );
 
+  app.delete(
+    "/v1/artifacts/:id",
+    {
+      schema: {
+        params: IdParam,
+        response: { 200: OkResponse, 400: ErrorResponse, 404: ErrorResponse },
+      },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const principal = principalOf(request);
+      const [artifact] = await app.db
+        .select()
+        .from(schema.artifacts)
+        .where(eq(schema.artifacts.id, request.params.id))
+        .limit(1);
+
+      if (artifact === undefined || artifact.status === "DELETED") {
+        throw notFound("Artifact");
+      }
+      await requireCaseWrite(app.db, user, artifact.caseId);
+      if (artifact.uploadedBy !== user.id) {
+        throw validationError(
+          "Only the person who uploaded this unattached file can discard it.",
+        );
+      }
+
+      const [links] = await app.db
+        .select({
+          evidence: sql<number>`(
+            SELECT count(*)::int FROM evidence_artifacts
+            WHERE evidence_artifacts.artifact_id = ${artifact.id}
+          )`,
+          poc: sql<number>`(
+            SELECT count(*)::int FROM poc_artifacts
+            WHERE poc_artifacts.artifact_id = ${artifact.id}
+          )`,
+          report: sql<number>`(
+            SELECT count(*)::int FROM report_exports
+            WHERE report_exports.artifact_id = ${artifact.id}
+          )`,
+        })
+        .from(schema.artifacts)
+        .where(eq(schema.artifacts.id, artifact.id));
+
+      if (
+        links === undefined ||
+        links.evidence > 0 ||
+        links.poc > 0 ||
+        links.report > 0
+      ) {
+        throw validationError("An attached artifact cannot be discarded.");
+      }
+
+      if (artifact.status === "PENDING" && artifact.uploadId !== null) {
+        await app.storage
+          .abortMultipartUpload(artifact.objectKey, artifact.uploadId)
+          .catch(() => undefined);
+      }
+
+      await app.db
+        .update(schema.artifacts)
+        .set({
+          status: "DELETED",
+          uploadId: null,
+          deletedAt: sql`now()`,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(schema.artifacts.id, artifact.id));
+
+      await app.jobs.send(JOB_QUEUES.artifactDelete, {
+        artifactId: artifact.id,
+        objectKey: artifact.objectKey,
+        previewObjectKey: artifact.previewObjectKey,
+      });
+      await app.audit.write(
+        app.db,
+        {
+          actorId: user.id,
+          sessionId: principal.session.id,
+          requestId: request.requestId,
+        },
+        {
+          action: "artifact.discarded",
+          entityType: "artifact",
+          entityId: artifact.id,
+          caseId: artifact.caseId,
+          after: { filename: artifact.filename },
+        },
+      );
+
+      return { ok: true as const };
+    },
+  );
+
   app.get(
     "/v1/evidence",
     {

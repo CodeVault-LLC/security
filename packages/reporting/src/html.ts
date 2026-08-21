@@ -28,6 +28,9 @@ export interface ReportDocumentInput {
   /** ISO date shown on the cover. */
   generatedAt: string;
   organisation: string;
+  contactName?: string | null;
+  contactEmail?: string | null;
+  reportFooter?: string | null;
   authorName: string;
   templateVersion: string;
   sections: readonly RenderedSection[];
@@ -48,6 +51,17 @@ function coverPage(input: ReportDocumentInput): string {
     input.notice === undefined || input.notice === null
       ? ""
       : `<p class="cv-cover-notice">${escapeHtml(input.notice)}</p>`;
+  const contact = [input.contactName, input.contactEmail]
+    .filter((value): value is string => value !== undefined && value !== null)
+    .join(" · ");
+  const contactRow =
+    contact.length === 0
+      ? ""
+      : `<div><dt>Contact</dt><dd>${escapeHtml(contact)}</dd></div>`;
+  const footer =
+    input.reportFooter === undefined || input.reportFooter === null
+      ? ""
+      : `<p class="cv-cover-footer">${escapeHtml(input.reportFooter)}</p>`;
 
   return `
     <section class="cv-cover">
@@ -62,12 +76,14 @@ function coverPage(input: ReportDocumentInput): string {
         <div><dt>Date</dt><dd>${escapeHtml(input.generatedAt)}</dd></div>
         <div><dt>Prepared by</dt><dd>${escapeHtml(input.authorName)}</dd></div>
         <div><dt>Organisation</dt><dd>${escapeHtml(input.organisation)}</dd></div>
+        ${contactRow}
       </dl>
       <div class="cv-cover-tlp cv-tlp-${slugify(tlp.shortName)}">
         <span class="cv-tlp-label">${escapeHtml(tlp.label)}</span>
         <span class="cv-tlp-rule">${escapeHtml(tlp.sharingRule)}</span>
       </div>
       ${notice}
+      ${footer}
     </section>
   `;
 }

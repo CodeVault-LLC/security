@@ -263,9 +263,12 @@ export async function renderReportHtml(
   db: Database,
   reportId: string,
   options: {
-    organisation: string;
+    organisation?: string;
     authorName: string;
     notice?: string | null;
+    contactName?: string | null;
+    contactEmail?: string | null;
+    reportFooter?: string | null;
   },
 ): Promise<RenderedReport> {
   const report = await loadReportDetail(db, reportId);
@@ -277,8 +280,18 @@ export async function renderReportHtml(
   });
 
   const caseRows = await db
-    .select({ ref: schema.cases.ref })
+    .select({
+      ref: schema.cases.ref,
+      organizationName: schema.organizations.name,
+      contactName: schema.organizations.contactName,
+      contactEmail: schema.organizations.contactEmail,
+      reportFooter: schema.organizations.reportFooter,
+    })
     .from(schema.cases)
+    .innerJoin(
+      schema.organizations,
+      eq(schema.organizations.id, schema.cases.organizationId),
+    )
     .where(eq(schema.cases.id, report.caseId))
     .limit(1);
 
@@ -310,7 +323,11 @@ export async function renderReportHtml(
     tlp: report.tlp,
     caseReference: caseRows[0]?.ref ?? report.caseId,
     generatedAt: new Date().toISOString().slice(0, 10),
-    organisation: options.organisation,
+    organisation:
+      options.organisation ?? caseRows[0]?.organizationName ?? "CodeVault",
+    contactName: options.contactName ?? caseRows[0]?.contactName ?? null,
+    contactEmail: options.contactEmail ?? caseRows[0]?.contactEmail ?? null,
+    reportFooter: options.reportFooter ?? caseRows[0]?.reportFooter ?? null,
     authorName: options.authorName,
     templateVersion: template.version,
     sections,

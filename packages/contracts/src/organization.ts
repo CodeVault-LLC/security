@@ -5,12 +5,24 @@ import { Timestamp, Uuid, UserRoleSchema } from "./common.js";
 export const OrganizationSettings = Type.Object({
   id: Uuid,
   name: Type.String(),
+  contactName: Type.Union([Type.String(), Type.Null()]),
+  contactEmail: Type.Union([Type.String({ format: "email" }), Type.Null()]),
+  reportFooter: Type.Union([Type.String(), Type.Null()]),
   avatarId: Type.Union([Uuid, Type.Null()]),
   createdAt: Timestamp,
   updatedAt: Timestamp,
 });
 export const UpdateOrganizationSettings = Type.Object({
-  name: Type.String({ minLength: 2, maxLength: 120 }),
+  name: Type.Optional(Type.String({ minLength: 2, maxLength: 120 })),
+  contactName: Type.Optional(
+    Type.Union([Type.String({ minLength: 1, maxLength: 120 }), Type.Null()]),
+  ),
+  contactEmail: Type.Optional(
+    Type.Union([Type.String({ format: "email", maxLength: 320 }), Type.Null()]),
+  ),
+  reportFooter: Type.Optional(
+    Type.Union([Type.String({ maxLength: 300 }), Type.Null()]),
+  ),
 });
 export const OrganizationSecurityPolicy = Type.Object({
   mfaRequired: Type.Literal(true),

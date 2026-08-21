@@ -40,6 +40,7 @@ async function temporaryDatabase(): Promise<{ url: string; pool: pg.Pool }> {
     "0005_serialize_final_admin_check.sql",
     "0007_migrated_mfa_enrollment.sql",
     "0008_login_attempt_stages.sql",
+    "0017_organization_report_branding.sql",
   ]) {
     await pool.query(
       await readFile(

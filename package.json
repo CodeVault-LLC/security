@@ -1,6 +1,6 @@
 {
   "name": "codevault",
-  "version": "0.1.0-alpha.6",
+  "version": "0.1.0-alpha.7",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.14",
@@ -18,6 +18,10 @@
     "postinstall": "bun run scripts/install-electron.ts",
     "dev": "bun run scripts/dev.ts",
     "dev:services": "bun run scripts/dev.ts --only server,worker",
+    "evaluation:start": "bun run scripts/evaluation.ts start",
+    "evaluation:setup": "bun run scripts/evaluation.ts setup",
+    "evaluation:code": "bun run scripts/evaluation.ts code",
+    "evaluation:remove": "bun run scripts/evaluation.ts remove",
     "electron:install": "bun run scripts/install-electron.ts",
     "build": "bun run --filter '*' build",
     "test": "vitest --run",
@@ -75,6 +79,7 @@
   "dependencies": {
     "@codevault/core": "workspace:*",
     "@codevault/db": "workspace:*",
+    "@codevault/reporting": "workspace:*",
     "@codevault/server": "workspace:*",
     "drizzle-orm": "^0.45.2",
     "pg": "^8.23.0",

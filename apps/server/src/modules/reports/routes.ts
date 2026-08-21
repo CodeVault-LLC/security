@@ -1,5 +1,5 @@
 import type { AppInstance } from "../../http/app-instance.js";
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, lt, or, sql, type SQL } from "drizzle-orm";
 
 import {
   ApproveReportRequest,
@@ -8,10 +8,11 @@ import {
   ErrorResponse,
   IdParam,
   LintResult,
+  ListReportsQuery,
   ReportDetail,
   ReportExport,
   ReportPreview,
-  ReportSummary,
+  ReportListResponse,
   ReportTemplateSummary,
   UpdateReportRequest,
   UpdateReportSectionRequest,
@@ -35,6 +36,7 @@ import { Type } from "@sinclair/typebox";
 
 import { assertRevision } from "../../http/concurrency.js";
 import { actingUser, principalOf, requireAuthor } from "../../http/guards.js";
+import { decodeCursor, pageSize, paginate } from "../../http/pagination.js";
 import { JOB_QUEUES } from "../../services/jobs.js";
 import {
   requireCaseRead,
@@ -55,7 +57,6 @@ import {
  * and export is refused while the linter reports anything BLOCKING.
  */
 
-const ReportListResponse = Type.Object({ items: Type.Array(ReportSummary) });
 const TemplateListResponse = Type.Object({
   items: Type.Array(ReportTemplateSummary),
 });
@@ -87,18 +88,41 @@ export async function registerReportRoutes(app: AppInstance): Promise<void> {
     "/v1/reports",
     {
       schema: {
-        querystring: Type.Object({ caseId: IdParam.properties.id }),
+        querystring: ListReportsQuery,
         response: { 200: ReportListResponse },
       },
     },
     async (request) => {
       const user = actingUser(request);
+      const size = pageSize(request.query.limit);
+      const cursor = decodeCursor(request.query.cursor);
+      const filters: SQL[] = [
+        eq(schema.cases.organizationId, user.organizationId),
+      ];
 
-      await requireCaseRead(app.db, user, request.query.caseId);
+      if (request.query.caseId !== undefined) {
+        await requireCaseRead(app.db, user, request.query.caseId);
+        filters.push(eq(schema.reports.caseId, request.query.caseId));
+      }
+      if (cursor !== null) {
+        filters.push(
+          or(
+            lt(schema.reports.updatedAt, cursor.timestamp),
+            and(
+              eq(schema.reports.updatedAt, cursor.timestamp),
+              lt(schema.reports.id, cursor.id),
+            ),
+          ) as SQL,
+        );
+      }
 
       const rows = await app.db
         .select({
+          id: schema.reports.id,
           report: schema.reports,
+          caseId: schema.cases.id,
+          caseRef: schema.cases.ref,
+          caseTitle: schema.cases.title,
           sectionCount: sql<number>`(
             SELECT count(*)::int FROM report_sections
             WHERE report_sections.report_id = ${schema.reports.id}
@@ -110,26 +134,41 @@ export async function registerReportRoutes(app: AppInstance): Promise<void> {
           )`,
         })
         .from(schema.reports)
-        .where(eq(schema.reports.caseId, request.query.caseId))
-        .orderBy(asc(schema.reports.audience));
+        .innerJoin(schema.cases, eq(schema.cases.id, schema.reports.caseId))
+        .where(and(...filters))
+        .orderBy(desc(schema.reports.updatedAt), desc(schema.reports.id))
+        .limit(size + 1);
+
+      const page = paginate(rows, size, (row) => row.report.updatedAt);
 
       return {
-        items: rows.map(({ report, sectionCount, approvedSectionCount }) => ({
-          id: report.id,
-          ref: report.ref,
-          caseId: report.caseId,
-          audience: report.audience,
-          templateId: report.templateId,
-          title: report.title,
-          tlp: report.tlp,
-          visibilityCeiling: report.visibilityCeiling,
-          status: report.status,
-          sectionCount,
-          approvedSectionCount,
-          createdAt: report.createdAt,
-          updatedAt: report.updatedAt,
-          revision: report.revision,
-        })),
+        items: page.items.map(
+          ({
+            report,
+            sectionCount,
+            approvedSectionCount,
+            caseId,
+            caseRef,
+            caseTitle,
+          }) => ({
+            id: report.id,
+            ref: report.ref,
+            caseId: report.caseId,
+            audience: report.audience,
+            templateId: report.templateId,
+            title: report.title,
+            tlp: report.tlp,
+            visibilityCeiling: report.visibilityCeiling,
+            status: report.status,
+            sectionCount,
+            approvedSectionCount,
+            createdAt: report.createdAt,
+            updatedAt: report.updatedAt,
+            revision: report.revision,
+            case: { id: caseId, ref: caseRef, title: caseTitle },
+          }),
+        ),
+        nextCursor: page.nextCursor,
       };
     },
   );
@@ -461,7 +500,6 @@ export async function registerReportRoutes(app: AppInstance): Promise<void> {
       await requireCaseRead(app.db, user, report.caseId);
 
       const rendered = await renderReportHtml(app.db, report.id, {
-        organisation: "CodeVault",
         authorName: principal.user.displayName,
       });
       const lint = await lintReportById(app.db, report.id);

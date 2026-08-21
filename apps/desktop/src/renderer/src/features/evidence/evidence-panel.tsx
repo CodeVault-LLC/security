@@ -189,12 +189,18 @@ function UploadDialog({
   const [artifactKind, setArtifactKind] = useState<string>("SCREENSHOT");
   const [visibility, setVisibility] = useState<string>("INTERNAL");
   const [progress, setProgress] = useState<Record<string, UploadProgress>>({});
+  const [uploadedArtifacts, setUploadedArtifacts] = useState<
+    Record<string, string>
+  >({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = bridge().uploads.onProgress((update) => {
-      setProgress((current) => ({ ...current, [update.uploadId]: update }));
+      setProgress((current) => ({
+        ...current,
+        [update.selectionId]: update,
+      }));
     });
 
     return unsubscribe;
@@ -223,14 +229,24 @@ function UploadDialog({
 
     const picked = await bridge().uploads.select();
 
+    if (picked.length === 0) return;
+
+    const uploadedIds = Object.values(uploadedArtifacts);
+    if (uploadedIds.length > 0) {
+      void bridge().uploads.discard(uploadedIds);
+    }
+
     setSelections(picked);
+    setProgress({});
+    setUploadedArtifacts({});
+    setArtifactKind(inferArtifactKind(picked));
 
     if (title.trim().length === 0 && picked[0] !== undefined) {
       setTitle(picked[0].filename);
     }
   };
 
-  const upload = async (): Promise<void> => {
+  const upload = async (onlySelectionId?: string): Promise<void> => {
     if (selections.length === 0 || title.trim().length === 0) {
       return;
     }
@@ -239,29 +255,69 @@ function UploadDialog({
     setError(null);
 
     try {
-      const outcome = await bridge().uploads.start({
-        caseId,
-        ...(findingId === undefined ? {} : { findingId }),
-        artifactKind,
-        visibility: visibility as "INTERNAL" | "VENDOR" | "PUBLIC",
-        selections,
-      });
+      const pendingSelections = selections.filter(
+        (selection) =>
+          uploadedArtifacts[selection.selectionId] === undefined &&
+          (onlySelectionId === undefined ||
+            selection.selectionId === onlySelectionId),
+      );
+      const nextUploaded = { ...uploadedArtifacts };
 
-      if (!outcome.ok) {
-        setError(outcome.message);
+      if (pendingSelections.length > 0) {
+        const outcome = await bridge().uploads.start({
+          caseId,
+          ...(findingId === undefined ? {} : { findingId }),
+          artifactKind,
+          visibility: visibility as "INTERNAL" | "VENDOR" | "PUBLIC",
+          selections: pendingSelections,
+        });
 
+        if (!outcome.ok) {
+          setError(outcome.message);
+          return;
+        }
+
+        for (const item of outcome.data.items) {
+          if (item.artifactId !== null) {
+            nextUploaded[item.selectionId] = item.artifactId;
+          }
+        }
+        setUploadedArtifacts(nextUploaded);
+
+        const failed = outcome.data.items.filter(
+          (item) => item.artifactId === null,
+        );
+        if (failed.length > 0) {
+          setError(
+            `${failed.length} file${failed.length === 1 ? "" : "s"} could not be uploaded. Retry each failed file below.`,
+          );
+          return;
+        }
+      }
+
+      const artifactIds = selections
+        .map((selection) => nextUploaded[selection.selectionId])
+        .filter((id): id is string => id !== undefined);
+      if (artifactIds.length !== selections.length) {
+        setError(
+          `${artifactIds.length} of ${selections.length} files are stored. Retry the remaining failed files.`,
+        );
         return;
       }
 
-      createEvidence.mutate(outcome.data, {
+      createEvidence.mutate(artifactIds, {
         onSuccess: () => {
           onOpenChange(false);
           setSelections([]);
           setTitle("");
           setDescription("");
           setProgress({});
+          setUploadedArtifacts({});
         },
-        onError: (mutationError) => setError(mutationError.message),
+        onError: (mutationError) =>
+          setError(
+            `The files are stored, but the evidence record was not created. ${mutationError.message} Retry to attach the stored files without uploading them again.`,
+          ),
       });
     } finally {
       setBusy(false);
@@ -272,7 +328,18 @@ function UploadDialog({
     <Dialog
       open={open}
       onOpenChange={(nextOpen) => {
-        if (!busy && !createEvidence.isPending) onOpenChange(nextOpen);
+        if (busy || createEvidence.isPending) return;
+        if (!nextOpen) {
+          const uploadedIds = Object.values(uploadedArtifacts);
+          if (uploadedIds.length > 0) {
+            void bridge().uploads.discard(uploadedIds);
+          }
+          setSelections([]);
+          setProgress({});
+          setUploadedArtifacts({});
+          setError(null);
+        }
+        onOpenChange(nextOpen);
       }}
     >
       <DialogContent
@@ -293,9 +360,9 @@ function UploadDialog({
           {selections.length === 0 ? null : (
             <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
               {selections.map((selection) => {
-                const update = Object.values(progress).find(
-                  (item) => item.filename === selection.filename,
-                );
+                const update = progress[selection.selectionId];
+                const uploaded =
+                  uploadedArtifacts[selection.selectionId] !== undefined;
 
                 return (
                   <li
@@ -314,7 +381,11 @@ function UploadDialog({
                     >
                       {selection.sha256.slice(0, 12)}
                     </span>
-                    {update === undefined ? null : (
+                    {uploaded ? (
+                      <span className="w-20 shrink-0 text-right text-success">
+                        stored
+                      </span>
+                    ) : update === undefined ? null : (
                       <span
                         className="w-20 shrink-0 text-right tabular-nums text-text-muted"
                         aria-live="polite"
@@ -325,6 +396,17 @@ function UploadDialog({
                           : update.phase.toLowerCase()}
                       </span>
                     )}
+                    {update?.phase === "FAILED" && !uploaded ? (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={busy || createEvidence.isPending}
+                        title={update.message ?? "Retry this file"}
+                        onClick={() => void upload(selection.selectionId)}
+                      >
+                        Retry
+                      </Button>
+                    ) : null}
                   </li>
                 );
               })}
@@ -381,7 +463,8 @@ function UploadDialog({
 
           {error === null ? null : (
             <p role="alert" className="text-pretty text-[12px] text-danger">
-              Upload failed. {error} Your files and description are still here.
+              {error} Your files and description remain available until you
+              cancel this dialog.
             </p>
           )}
         </DialogBody>
@@ -389,7 +472,17 @@ function UploadDialog({
         <DialogFooter>
           <Button
             variant="ghost"
-            onClick={() => onOpenChange(false)}
+            onClick={() => {
+              const uploadedIds = Object.values(uploadedArtifacts);
+              if (uploadedIds.length > 0) {
+                void bridge().uploads.discard(uploadedIds);
+              }
+              setSelections([]);
+              setProgress({});
+              setUploadedArtifacts({});
+              setError(null);
+              onOpenChange(false);
+            }}
             disabled={busy || createEvidence.isPending}
           >
             Cancel
@@ -407,10 +500,41 @@ function UploadDialog({
             }
             onClick={() => void upload()}
           >
-            Upload evidence
+            {Object.keys(uploadedArtifacts).length === selections.length &&
+            selections.length > 0
+              ? "Attach stored files"
+              : Object.keys(uploadedArtifacts).length > 0
+                ? "Retry remaining files"
+                : "Upload evidence"}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function inferArtifactKind(selections: readonly UploadSelection[]): string {
+  const kinds = new Set(
+    selections.map((selection) => {
+      const filename = selection.filename.toLowerCase();
+      if (filename.endsWith(".har")) return "HAR";
+      if (filename.endsWith(".pcap") || filename.endsWith(".pcapng"))
+        return "PCAP";
+      if (filename.endsWith(".log")) return "LOG";
+      if (/\.(?:c|cpp|go|java|js|py|rb|rs|ts)$/u.test(filename))
+        return "SOURCE_CODE";
+      if (/\.(?:zip|tar|gz|7z)$/u.test(filename)) return "ARCHIVE";
+      if (selection.mimeType.startsWith("image/")) return "SCREENSHOT";
+      if (selection.mimeType.startsWith("video/")) return "VIDEO";
+      if (
+        selection.mimeType.startsWith("text/") ||
+        selection.mimeType === "application/json" ||
+        selection.mimeType === "application/pdf"
+      )
+        return "DOCUMENT";
+      return "OTHER";
+    }),
+  );
+
+  return kinds.size === 1 ? ([...kinds][0] ?? "OTHER") : "OTHER";
 }

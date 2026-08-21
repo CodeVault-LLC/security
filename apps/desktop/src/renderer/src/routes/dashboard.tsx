@@ -1,9 +1,11 @@
 import { Link } from "@tanstack/react-router";
+import { useState } from "react";
 import { formatDistanceToNowStrict } from "../lib/dates.js";
 
 import type {
   AttentionItem,
   DashboardResponse,
+  EvaluationWorkspaceResponse,
   MetricsResponse,
 } from "@codevault/contracts";
 import {
@@ -80,6 +82,10 @@ export function DashboardRoute(): React.JSX.Element {
     queryKeys.metrics({ window: "90d" }),
     "/v1/metrics?window=90d",
   );
+  const evaluation = useApiQuery<EvaluationWorkspaceResponse>(
+    queryKeys.evaluationWorkspace,
+    "/v1/evaluation-workspace",
+  );
 
   const data = dashboard.data;
   const stats = metrics.data;
@@ -92,6 +98,9 @@ export function DashboardRoute(): React.JSX.Element {
       />
 
       <PageBody className="space-y-6">
+        {evaluation.data?.available === true ? (
+          <EvaluationChecklist workspace={evaluation.data} />
+        ) : null}
         {dashboard.error !== null ? (
           <ErrorState
             title={errorHeading(dashboard.error)}
@@ -295,6 +304,102 @@ export function DashboardRoute(): React.JSX.Element {
         </details>
       </PageBody>
     </div>
+  );
+}
+
+function EvaluationChecklist({
+  workspace,
+}: {
+  workspace: Extract<EvaluationWorkspaceResponse, { available: true }>;
+}): React.JSX.Element {
+  const storageKey = `codevault.evaluation.${workspace.case.id}`;
+  const [completed, setCompleted] = useState<string[]>(() => {
+    try {
+      const stored = JSON.parse(
+        window.localStorage.getItem(storageKey) ?? "[]",
+      ) as unknown;
+      return Array.isArray(stored)
+        ? stored.filter((item): item is string => typeof item === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  });
+  const steps = [
+    {
+      id: "case",
+      label: "Open the synthetic sample case",
+      to: `/cases/${workspace.case.id}`,
+    },
+    {
+      id: "finding",
+      label: "Review the recorded finding and prior-art conclusion",
+      to: `/findings/${workspace.findingId}`,
+    },
+    {
+      id: "evidence",
+      label: "Inspect the sample evidence and custody metadata",
+      to: `/cases/${workspace.case.id}`,
+    },
+    {
+      id: "report",
+      label: "Confirm that the internal report has no blocking issues",
+      to: `/reports/${workspace.reportId}`,
+    },
+    {
+      id: "export",
+      label: "Export the sample report as PDF",
+      to: `/reports/${workspace.reportId}`,
+    },
+  ];
+
+  const toggle = (id: string): void => {
+    const next = completed.includes(id)
+      ? completed.filter((item) => item !== id)
+      : [...completed, id];
+    setCompleted(next);
+    window.localStorage.setItem(storageKey, JSON.stringify(next));
+  };
+
+  return (
+    <Card aria-labelledby="evaluation-heading">
+      <CardHeader>
+        <div>
+          <CardTitle id="evaluation-heading">Alpha 7 evaluation</CardTitle>
+          <p className="mt-0.5 text-[11px] text-text-muted">
+            Synthetic data in a disposable local workspace
+          </p>
+        </div>
+        <span className="text-[11px] tabular-nums text-text-muted">
+          {completed.length} of {steps.length} complete
+        </span>
+      </CardHeader>
+      <ol className="divide-y divide-border">
+        {steps.map((step) => (
+          <li
+            key={step.id}
+            className="flex min-h-11 items-center gap-3 px-3 py-2"
+          >
+            <input
+              type="checkbox"
+              checked={completed.includes(step.id)}
+              onChange={() => toggle(step.id)}
+              aria-label={`Mark "${step.label}" complete`}
+              className="size-4 shrink-0 accent-accent"
+            />
+            <Link
+              to={step.to}
+              className="min-w-0 flex-1 text-[12px] text-accent underline-offset-2 hover:underline"
+            >
+              {step.label}
+            </Link>
+          </li>
+        ))}
+      </ol>
+      <div className="border-t border-border px-3 py-2 text-[11px] text-text-muted">
+        Sample: <Mono>{workspace.case.ref}</Mono> {workspace.case.title}
+      </div>
+    </Card>
   );
 }
 

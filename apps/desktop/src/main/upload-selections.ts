@@ -22,11 +22,12 @@ function hasSameOwner(left: SelectionOwner, right: SelectionOwner): boolean {
 }
 
 /**
- * One-use, session-bound capabilities for local files chosen in the OS picker.
+ * Short-lived, session-bound capabilities for local files chosen in the OS picker.
  *
  * The renderer receives only an opaque identifier. A capability cannot cross
- * an account/server transition, cannot be replayed, and expires even when the
- * renderer abandons it without logging out.
+ * an account/server transition and expires even when the renderer abandons it
+ * without logging out. It remains usable after a failed upload and is consumed
+ * only after that file reaches canonical storage.
  */
 export class UploadSelectionStore {
   private readonly selections = new Map<string, PendingSelection>();
@@ -86,6 +87,26 @@ export class UploadSelectionStore {
 
     for (const selectionId of selectionIds) this.selections.delete(selectionId);
     return resolved;
+  }
+
+  resolve(
+    selectionIds: readonly string[],
+    owner: SelectionOwner,
+    now = Date.now(),
+  ): LocalUploadSelection[] {
+    this.prune(now);
+    const uniqueIds = new Set(selectionIds);
+    if (uniqueIds.size !== selectionIds.length) {
+      throw new Error("An upload selection cannot appear twice in one batch.");
+    }
+
+    return selectionIds.map((selectionId) => {
+      const pending = this.selections.get(selectionId);
+      if (!pending || !hasSameOwner(pending.owner, owner)) {
+        throw new Error("The upload selection expired or changed session.");
+      }
+      return pending.selection;
+    });
   }
 
   clear(): void {

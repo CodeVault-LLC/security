@@ -127,10 +127,18 @@ export function CreateCaseDialog({
               id="case-title"
               value={title}
               onChange={(event) => setTitle(event.target.value)}
+              maxLength={200}
+              aria-describedby="case-title-limit"
               placeholder="Acme Router RT-1200 firmware review"
               autoFocus
               className="mt-1"
             />
+            <p
+              id="case-title-limit"
+              className="mt-1 text-right text-[11px] tabular-nums text-text-muted"
+            >
+              {title.length}/200
+            </p>
           </div>
 
           <div>

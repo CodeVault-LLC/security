@@ -53,6 +53,10 @@ const api: CodeVaultDesktopApi = {
   },
 
   auth: {
+    preflight: (serverUrl) =>
+      ipcRenderer.invoke(IPC_CHANNELS.authPreflight, serverUrl) as ReturnType<
+        CodeVaultDesktopApi["auth"]["preflight"]
+      >,
     loginStart: (serverUrl, email, password, rememberMe) =>
       ipcRenderer.invoke(IPC_CHANNELS.authLoginStart, {
         serverUrl,
@@ -116,9 +120,14 @@ const api: CodeVaultDesktopApi = {
         UploadSelection[]
       >,
     start: (request: StartUploadRequest) =>
-      ipcRenderer.invoke(IPC_CHANNELS.uploadsStart, request) as Promise<
-        ApiOutcome<string[]>
+      ipcRenderer.invoke(IPC_CHANNELS.uploadsStart, request) as ReturnType<
+        CodeVaultDesktopApi["uploads"]["start"]
       >,
+    discard: (artifactIds) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.uploadsDiscard,
+        artifactIds,
+      ) as ReturnType<CodeVaultDesktopApi["uploads"]["discard"]>,
     onProgress: (listener) =>
       subscribe<UploadProgress>(IPC_CHANNELS.uploadsProgress, listener),
   },

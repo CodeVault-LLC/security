@@ -1,6 +1,6 @@
 # Feature register
 
-This register is the current product inventory for `0.1.0-alpha.6`. Design
+This register is the current product inventory for `0.1.0-alpha.7`. Design
 documents explain decisions, but their task lists do not report implementation
 status. Update this file when code changes a feature state.
 
@@ -20,6 +20,7 @@ evidence URL when a release ships.
 
 | Feature | State | Implementation | Acceptance test | Remaining work or release target |
 | --- | --- | --- | --- | --- |
+| Disposable Alpha 7 evaluation workspace, fixed local account, guided sample, and removal path | `implemented` | [`scripts/evaluation.ts`](../scripts/evaluation.ts), [`scripts/seed-dev.ts`](../scripts/seed-dev.ts), [`apps/desktop/src/renderer/src/routes/dashboard.tsx`](../apps/desktop/src/renderer/src/routes/dashboard.tsx), and [`docs/evaluation`](evaluation) | [`apps/server/src/modules/dashboard/routes.integration.test.ts`](../apps/server/src/modules/dashboard/routes.integration.test.ts) and [`apps/desktop/src/renderer/src/features/auth/login-screen.test.tsx`](../apps/desktop/src/renderer/src/features/auth/login-screen.test.tsx) | Published package evidence is created by the `alpha.7` tag workflow |
 | Password, TOTP MFA, recovery, and re-enrollment | `implemented` | [`apps/server/src/modules/auth`](../apps/server/src/modules/auth) and [`apps/server/src/auth`](../apps/server/src/auth) | [`apps/server/src/mfa-security.integration.test.ts`](../apps/server/src/mfa-security.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
 | Invitations, membership, roles, and organization settings | `implemented` | [`apps/server/src/modules/organization`](../apps/server/src/modules/organization) and [`apps/server/src/modules/users`](../apps/server/src/modules/users) | [`apps/server/src/invitation-onboarding.integration.test.ts`](../apps/server/src/invitation-onboarding.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
 | Restricted-case authorization and hidden existence | `implemented` | [`apps/server/src/services/case-access.ts`](../apps/server/src/services/case-access.ts) | [`apps/server/src/authorization.integration.test.ts`](../apps/server/src/authorization.integration.test.ts) | Release evidence: `alpha.6` tag workflow |
@@ -64,5 +65,5 @@ evidence URL when a release ships.
 | Bulk workflow actions | `planned` | No supported bulk mutation interface | None | `alpha.7` after realistic dataset review |
 | Versioned case archive import and export | `planned` | No stable archive format | None | `alpha.7` |
 | Supported scale and resource budgets | `planned` | No published limits | None | `alpha.9` |
-| Desktop updates, release channels, release notes, and version display | `planned` | `app.getVersion()` is exposed through the preload bridge, but the renderer does not display it; packaging has `publish: null` and no updater | None | `alpha.9`: signed Stable, Beta, and Alpha feeds; verified update installation or a verified platform fallback; version and channel display; beta exit gate |
+| Desktop updates, release channels, release notes, and version display | `partial` | The login screen and account menu display the exact desktop version; packaging still has `publish: null` and no updater | [`apps/desktop/src/renderer/src/features/auth/login-screen.test.tsx`](../apps/desktop/src/renderer/src/features/auth/login-screen.test.tsx) | `alpha.9`: signed Stable, Beta, and Alpha feeds plus verified update installation or a verified platform fallback |
 | Multi-organization hosting, SaaS control plane, mobile apps, and plugin execution | `deferred` | Outside the first stable release | None | Reconsider after `0.1.0` usage |

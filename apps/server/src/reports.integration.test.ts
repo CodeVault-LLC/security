@@ -6,6 +6,7 @@ import type {
   FindingDetail,
   LintResult,
   ReportDetail,
+  ReportListResponse,
   ReportPreview,
 } from "@codevault/contracts";
 import { generateObjectKey, uuidv7 } from "@codevault/core/crypto";
@@ -350,6 +351,26 @@ describeIntegration("report export", () => {
     });
 
     expect(duplicate.statusCode).toBe(400);
+  });
+
+  it("lists organization reports with accurate counts in one paginated response", async () => {
+    const response = await harness.app.inject({
+      method: "GET",
+      url: "/v1/reports?limit=100",
+      headers: user.headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json<ReportListResponse>();
+    const report = body.items.find(
+      (item) => item.case.id === fixture.researchCase.id,
+    );
+    expect(report?.case.ref).toBe(fixture.researchCase.ref);
+    expect(report?.sectionCount).toBeGreaterThan(0);
+    expect(report?.approvedSectionCount).toBeLessThanOrEqual(
+      report?.sectionCount ?? 0,
+    );
+    expect(body.nextCursor).toBeNull();
   });
 
   it("drops an approved section back to review when it is edited", async () => {

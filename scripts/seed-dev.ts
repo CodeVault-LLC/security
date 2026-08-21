@@ -1,8 +1,10 @@
 import { and, eq, sql } from "drizzle-orm";
+import { pathToFileURL } from "node:url";
 
 import type { CreateVendorRouteRequest } from "@codevault/contracts";
 import { uuidv7 } from "@codevault/core/crypto";
 import { allocateReference, createDatabase, schema } from "@codevault/db";
+import { INTERNAL_TEMPLATE } from "@codevault/reporting";
 import { seedBuiltIns } from "../apps/server/src/startup/seed.js";
 
 /**
@@ -18,7 +20,7 @@ import { seedBuiltIns } from "../apps/server/src/startup/seed.js";
 
 const SEED_MARKER = "codevault-dev-seed";
 
-async function main(): Promise<void> {
+export async function seedDevelopmentData(): Promise<void> {
   const connectionString = process.env.DATABASE_URL;
 
   if (connectionString === undefined) {
@@ -238,7 +240,7 @@ async function main(): Promise<void> {
           profile: "COORDINATED_DISCLOSURE",
           ownerId: owner.id,
           disclosureEnabled: true,
-          metadata: { seed: SEED_MARKER },
+          metadata: { seed: SEED_MARKER, evaluation: true },
         })
         .returning({ id: schema.cases.id });
 
@@ -350,6 +352,109 @@ async function main(): Promise<void> {
         .update(schema.findings)
         .set({ severity: "MEDIUM", score: 6.9 })
         .where(sql`${schema.findings.id} = ${finding.id}`);
+
+      const sampleReportContent: Record<string, string> = {
+        executive_summary:
+          "The Hummingbird Performance cache purge endpoint accepts an unauthenticated request. Repeated requests force cache rebuilds and reduce site availability.",
+        research_context:
+          "This synthetic case records a focused source review and local reproduction against version 3.4.1.",
+        target:
+          "Hummingbird Performance 3.4.1, represented by the WordPress package identifier recorded on the case asset.",
+        affected_versions:
+          "Version 3.4.1 was reproduced locally. Source review supports the recorded affected range from 3.0.0 through 3.4.1.",
+        technical_analysis:
+          "The unauthenticated action reaches the cache purge routine before a capability or nonce check. The handler performs work that only an authorized administrator should trigger.",
+        attack_preconditions:
+          "The attacker needs network access to the WordPress site. No account or user interaction is required.",
+        attack_path:
+          "Send repeated requests to the exposed cache purge action. Each accepted request starts another cache rebuild.",
+        impact:
+          "An attacker can keep the cache cold and increase server work for ordinary page requests, which degrades availability.",
+        reproduction:
+          "Use the synthetic request fixture from the case. Confirm that the endpoint accepts the request without a session, then observe a new cache rebuild.",
+        poc: "No executable proof of concept is attached to this evaluation sample.",
+        evidence:
+          "The evaluation sample relies on the recorded source path, reproduction notes, affected-version conclusion, and approved score.",
+        scoring:
+          "CVSS 4.0 is 6.9 with vector `CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N`.",
+        alternatives:
+          "Requests to authenticated-only administrative actions did not reproduce the issue.",
+        remediation_analysis:
+          "Require an authenticated administrator capability and verify a request nonce before the purge routine runs.",
+        prior_art:
+          "The synthetic record starts with no prior-art conclusion. Evaluators can run or review the check without changing the export gate.",
+        vendor_context:
+          "The vendor and route data in this workspace are synthetic and must not be used for external contact.",
+        disclosure_strategy:
+          "Do not contact an external party from this sample. It exists only to evaluate the local report workflow.",
+        disclosure_timeline:
+          "The synthetic finding was recorded and reproduced during workspace setup. No external disclosure event occurred.",
+        references:
+          "No external reference is required for this synthetic evaluation report.",
+        appendices:
+          "The workspace contains the canonical sample records used to render this report.",
+      };
+      const reportRef = await allocateReference(
+        tx,
+        owner.organizationId,
+        "report",
+      );
+      const [sampleReport] = await tx
+        .insert(schema.reports)
+        .values({
+          ref: reportRef,
+          caseId: pluginCase.id,
+          audience: INTERNAL_TEMPLATE.audience,
+          templateId: INTERNAL_TEMPLATE.id,
+          title: "Hummingbird Performance evaluation report",
+          tlp: INTERNAL_TEMPLATE.defaultTlp,
+          visibilityCeiling: INTERNAL_TEMPLATE.visibilityCeiling,
+          status: "APPROVED",
+          createdBy: owner.id,
+        })
+        .returning({ id: schema.reports.id });
+      if (sampleReport === undefined) {
+        throw new Error("Could not create the evaluation report.");
+      }
+      const approvedAt = new Date().toISOString();
+      const reportSections = await tx
+        .insert(schema.reportSections)
+        .values(
+          INTERNAL_TEMPLATE.sections.map((section, position) => ({
+            reportId: sampleReport.id,
+            key: section.key,
+            title: section.title,
+            position,
+            required: section.required,
+            contentMarkdown:
+              sampleReportContent[section.key] ??
+              "No additional material is recorded for this synthetic sample.",
+            reviewState: "APPROVED" as const,
+            promptPurpose: section.promptPurpose,
+            approvedBy: owner.id,
+            approvedAt,
+            approvedRevision: 1,
+            lastEditedBy: owner.id,
+          })),
+        )
+        .returning({ id: schema.reportSections.id });
+      await tx.insert(schema.reportRevisions).values(
+        reportSections.map((section, index) => ({
+          sectionId: section.id,
+          revision: 1,
+          contentMarkdown:
+            sampleReportContent[INTERNAL_TEMPLATE.sections[index]?.key ?? ""] ??
+            "No additional material is recorded for this synthetic sample.",
+          reviewState: "APPROVED" as const,
+          authoredBy: owner.id,
+        })),
+      );
+      await tx.insert(schema.reportApprovals).values({
+        reportId: sampleReport.id,
+        approvedBy: owner.id,
+        approvedRevision: 1,
+        note: "Approved synthetic evaluation fixture.",
+      });
 
       await tx.insert(schema.stakeholders).values({
         caseId: pluginCase.id,
@@ -659,4 +764,7 @@ async function main(): Promise<void> {
   }
 }
 
-await main();
+const invokedDirectly =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+if (invokedDirectly) await seedDevelopmentData();

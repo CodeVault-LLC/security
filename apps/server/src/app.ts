@@ -22,6 +22,7 @@ import { createGmailProvider } from "./modules/mail/gmail-provider.js";
 import { canReadCase } from "@codevault/core";
 
 import "./plugins/types.js";
+import { API_VERSION, SERVER_VERSION } from "./version.js";
 
 /**
  * Application assembly.
@@ -229,7 +230,11 @@ export async function buildApp(
 
   registerErrorHandler(app);
 
-  app.get("/health", async () => ({ status: "ok" }));
+  app.get("/health", async () => ({
+    status: "ok",
+    apiVersion: API_VERSION,
+    serverVersion: SERVER_VERSION,
+  }));
 
   await registerRoutes(app);
 

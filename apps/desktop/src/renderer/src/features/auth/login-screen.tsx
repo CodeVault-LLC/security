@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button, Input, Label } from "@codevault/ui";
 
@@ -17,7 +17,7 @@ export function LoginScreen(): React.JSX.Element {
   const [serverUrl, setServerUrl] = useState(
     () =>
       window.localStorage.getItem(DEFAULT_SERVER_KEY) ??
-      "https://codevault.internal",
+      "http://127.0.0.1:4310",
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,7 +28,64 @@ export function LoginScreen(): React.JSX.Element {
   const [enrollment, setEnrollment] = useState<EnrollmentSetup | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [desktopVersion, setDesktopVersion] = useState<string | null>(null);
+  const [preflight, setPreflight] = useState<
+    | { state: "CHECKING" }
+    | { state: "READY"; serverVersion: string }
+    | { state: "INCOMPATIBLE"; message: string }
+    | { state: "UNREACHABLE"; message: string }
+  >({ state: "CHECKING" });
   const normalizedServer = serverUrl.trim().replace(/\/+$/, "");
+
+  useEffect(() => {
+    let active = true;
+    void bridge()
+      .app.version()
+      .then((version) => {
+        if (active) setDesktopVersion(version);
+      })
+      .catch(() => undefined);
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void bridge()
+        .auth.preflight(normalizedServer)
+        .then((outcome) => {
+          if (!active) return;
+          if (!outcome.ok) {
+            setPreflight({ state: "UNREACHABLE", message: outcome.message });
+          } else if (!outcome.data.compatible) {
+            setPreflight({
+              state: "INCOMPATIBLE",
+              message: `This desktop requires API v1. The server provides ${outcome.data.apiVersion}.`,
+            });
+          } else {
+            setPreflight({
+              state: "READY",
+              serverVersion: outcome.data.serverVersion,
+            });
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setPreflight({
+              state: "UNREACHABLE",
+              message: "The server health check failed.",
+            });
+          }
+        });
+    }, 400);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [normalizedServer]);
 
   if (mode === "INVITATION") {
     return (
@@ -132,10 +189,31 @@ export function LoginScreen(): React.JSX.Element {
               id="server"
               name="server"
               value={serverUrl}
-              onChange={(event) => setServerUrl(event.target.value)}
+              onChange={(event) => {
+                setServerUrl(event.target.value);
+                setPreflight({ state: "CHECKING" });
+              }}
               autoComplete="url"
               className="mt-1"
+              aria-describedby="server-preflight"
             />
+            <p
+              id="server-preflight"
+              role="status"
+              className={`mt-1 text-[11px] ${
+                preflight.state === "READY"
+                  ? "text-success"
+                  : preflight.state === "CHECKING"
+                    ? "text-text-muted"
+                    : "text-danger"
+              }`}
+            >
+              {preflight.state === "CHECKING"
+                ? "Checking server compatibility…"
+                : preflight.state === "READY"
+                  ? `Connected to CodeVault Server ${preflight.serverVersion} · API v1`
+                  : preflight.message}
+            </p>
           </div>
           <div>
             <Label htmlFor="email">Organization email</Label>
@@ -191,7 +269,12 @@ export function LoginScreen(): React.JSX.Element {
           variant="primary"
           size="lg"
           className="mt-4 w-full"
-          disabled={busy || email.length === 0 || password.length === 0}
+          disabled={
+            busy ||
+            preflight.state !== "READY" ||
+            email.length === 0 ||
+            password.length === 0
+          }
         >
           {busy ? "Checking credentials…" : "Continue"}
         </Button>
@@ -202,9 +285,12 @@ export function LoginScreen(): React.JSX.Element {
         >
           I have an organization invitation
         </button>
-        <p className="mt-4 border-t border-border pt-3 text-[11px] leading-relaxed text-text-muted">
-          Authorized access only. Activity is monitored and audited.
-        </p>
+        <div className="mt-4 flex items-start justify-between gap-3 border-t border-border pt-3 text-[11px] leading-relaxed text-text-muted">
+          <p>Authorized access only. Activity is monitored and audited.</p>
+          {desktopVersion === null ? null : (
+            <span className="shrink-0 font-mono">Desktop {desktopVersion}</span>
+          )}
+        </div>
       </form>
     </div>
   );

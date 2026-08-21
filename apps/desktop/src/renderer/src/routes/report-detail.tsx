@@ -1,5 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Check, Download, FileWarning } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  Download,
+  Eye,
+  FileWarning,
+  MoreHorizontal,
+} from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
 import type {
@@ -22,9 +29,14 @@ import {
   CardTitle,
   EmptyState,
   ErrorState,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   LoadingState,
   Mono,
   ReportSectionStatus,
+  Select,
   TlpBadge,
 } from "@codevault/ui";
 
@@ -217,11 +229,26 @@ export function ReportDetailRoute({
   const blocking = lint.data?.findings.filter(
     (finding) => finding.severity === "BLOCKING",
   );
+  const reportBlocked =
+    lint.isLoading || lint.error !== null || (blocking?.length ?? 0) > 0;
+  const requiredApprovalCount = sections.filter(
+    (section) =>
+      section.required &&
+      section.reviewState !== "APPROVED" &&
+      section.reviewState !== "LOCKED",
+  ).length;
+  const actionBlockReason = lint.isLoading
+    ? "Checking the report for blockers."
+    : lint.error !== null
+      ? "Reload the report checks before approval or export."
+      : (blocking?.length ?? 0) > 0
+        ? `Resolve ${blocking?.length ?? 0} blocking issue${blocking?.length === 1 ? "" : "s"} first.`
+        : null;
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-3 py-3 sm:px-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
             <Mono className="text-text-muted">{data.ref}</Mono>
             <TlpBadge label={data.tlp} />
             <span className="rounded border border-border px-1 text-[10px] uppercase text-text-muted">
@@ -231,7 +258,7 @@ export function ReportDetailRoute({
               {data.status.replace("_", " ").toLowerCase()}
             </span>
           </div>
-          <h1 className="mt-0.5 truncate text-[15px] font-semibold">
+          <h1 className="mt-1 break-words text-[15px] font-semibold leading-5">
             {data.title}
           </h1>
           <p className="text-[11px] text-text-muted">
@@ -239,7 +266,7 @@ export function ReportDetailRoute({
           </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="hidden shrink-0 flex-wrap items-center justify-end gap-2 sm:flex">
           <Button
             variant="secondary"
             size="sm"
@@ -252,7 +279,17 @@ export function ReportDetailRoute({
               <Button
                 variant="secondary"
                 size="sm"
-                disabled={approveReport.isPending}
+                disabled={
+                  reportBlocked ||
+                  requiredApprovalCount > 0 ||
+                  approveReport.isPending
+                }
+                title={
+                  actionBlockReason ??
+                  (requiredApprovalCount > 0
+                    ? `Approve ${requiredApprovalCount} required section${requiredApprovalCount === 1 ? "" : "s"} first.`
+                    : "Approve the report.")
+                }
                 onClick={() =>
                   approveReport.mutate(undefined, {
                     onError: (mutationError) => setError(mutationError.message),
@@ -265,7 +302,8 @@ export function ReportDetailRoute({
               <Button
                 variant="primary"
                 size="sm"
-                disabled={exportReport.isPending}
+                disabled={reportBlocked || exportReport.isPending}
+                title={actionBlockReason ?? "Export this report as PDF."}
                 onClick={() =>
                   exportReport.mutate(undefined, {
                     onError: (mutationError) => setError(mutationError.message),
@@ -278,6 +316,67 @@ export function ReportDetailRoute({
             </>
           ) : null}
         </div>
+        <div className="sm:hidden">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="secondary"
+                size="icon"
+                aria-label="Report actions"
+              >
+                <MoreHorizontal aria-hidden className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={() => setShowPreview((current) => !current)}
+              >
+                <Eye aria-hidden className="size-4" />
+                {showPreview ? "Edit section" : "Show preview"}
+              </DropdownMenuItem>
+              {canEdit ? (
+                <>
+                  <DropdownMenuItem
+                    disabled={
+                      reportBlocked ||
+                      requiredApprovalCount > 0 ||
+                      approveReport.isPending
+                    }
+                    onSelect={() =>
+                      approveReport.mutate(undefined, {
+                        onError: (mutationError) =>
+                          setError(mutationError.message),
+                      })
+                    }
+                  >
+                    <Check aria-hidden className="size-4" />
+                    Approve report
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={reportBlocked || exportReport.isPending}
+                    onSelect={() =>
+                      exportReport.mutate(undefined, {
+                        onError: (mutationError) =>
+                          setError(mutationError.message),
+                      })
+                    }
+                  >
+                    <Download aria-hidden className="size-4" />
+                    Export PDF
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        {actionBlockReason === null ? null : (
+          <p
+            id="report-action-blocker"
+            className="w-full text-[11px] text-danger sm:text-right"
+          >
+            {actionBlockReason}
+          </p>
+        )}
       </header>
 
       {error === null ? null : (
@@ -292,7 +391,8 @@ export function ReportDetailRoute({
           <div>
             <p className="font-medium">
               {blocking.length} blocking issue
-              {blocking.length === 1 ? "" : "s"} prevent approval and export.
+              {blocking.length === 1 ? " prevents" : "s prevent"} approval and
+              export.
             </p>
             <ul className="mt-0.5 list-disc pl-4">
               {blocking.slice(0, 4).map((finding, index) => (
@@ -315,7 +415,7 @@ export function ReportDetailRoute({
       <ReportExportStrip items={exports.data?.items ?? []} onError={setError} />
 
       <div className="flex min-h-0 flex-1">
-        <aside className="w-56 shrink-0 overflow-y-auto border-r border-border p-2">
+        <aside className="hidden w-56 shrink-0 overflow-y-auto border-r border-border p-2 md:block">
           <p className="px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted">
             Sections
           </p>
@@ -333,6 +433,19 @@ export function ReportDetailRoute({
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col">
+          {activeSection === null ? null : (
+            <div className="border-b border-border p-2 md:hidden">
+              <Select
+                aria-label="Report section"
+                value={activeSection.id}
+                onValueChange={setActiveSectionId}
+                options={sections.map((section) => ({
+                  value: section.id,
+                  label: `${section.title}${section.required ? " · required" : ""}`,
+                }))}
+              />
+            </div>
+          )}
           {activeSection === null ? (
             <EmptyState title="This report has no sections" />
           ) : (
@@ -592,7 +705,9 @@ function SectionWorkspace({
       )}
 
       <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden border-r border-border">
+        <div
+          className={`min-w-0 flex-1 flex-col overflow-hidden border-r border-border ${showPreview ? "hidden lg:flex" : "flex"}`}
+        >
           {locked ? null : (
             <MarkdownToolbar
               onCommand={(command: Command) => editorRef.current?.run(command)}
@@ -618,7 +733,7 @@ function SectionWorkspace({
         </div>
 
         {showPreview ? (
-          <div className="min-w-0 flex-1 overflow-y-auto">
+          <div className="flex min-w-0 flex-1 overflow-y-auto">
             <PreviewPane
               html={previewHtml}
               lint={lint}

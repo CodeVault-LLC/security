@@ -1,14 +1,17 @@
 import { Link } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { useState } from "react";
 
-import type { CaseSummary } from "@codevault/contracts";
+import type { CaseSummary, OrganizationUserList } from "@codevault/contracts";
+import { CASE_STATUSES } from "@codevault/core";
 import {
   Button,
   EmptyState,
   ErrorState,
+  Input,
   LoadingState,
   Mono,
+  Select,
   StateBadge,
 } from "@codevault/ui";
 
@@ -19,6 +22,7 @@ import { formatDistanceToNowStrict } from "../lib/dates.js";
 import { humanise } from "../lib/format.js";
 import { errorHeading, queryKeys, useApiQuery } from "../lib/api.js";
 import { canWrite, useSession } from "../lib/session.js";
+import { useDebouncedValue } from "../hooks/use-debounced-value.js";
 
 /**
  * The case list.
@@ -38,10 +42,22 @@ export function CasesRoute(): React.JSX.Element {
   const editable = canWrite(user);
   const [createOpen, setCreateOpen] = useState(false);
   const [limit, setLimit] = useState(100);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("ALL");
+  const [ownerId, setOwnerId] = useState("ALL");
+  const debouncedSearch = useDebouncedValue(search.trim(), 250);
+  const users = useApiQuery<OrganizationUserList>(
+    ["organization", "users"],
+    "/v1/organization/users",
+  );
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (debouncedSearch.length > 0) params.set("query", debouncedSearch);
+  if (status !== "ALL") params.set("status", status);
+  if (ownerId !== "ALL") params.set("ownerId", ownerId);
 
   const cases = useApiQuery<Paginated<CaseSummary>>(
-    queryKeys.cases({ limit }),
-    `/v1/cases?limit=${limit}`,
+    queryKeys.cases({ limit, query: debouncedSearch, status, ownerId }),
+    `/v1/cases?${params.toString()}`,
   );
 
   const items = cases.data?.items ?? [];
@@ -60,6 +76,57 @@ export function CasesRoute(): React.JSX.Element {
           ) : undefined
         }
       />
+
+      <div className="flex flex-wrap items-center gap-2 border-b border-border bg-surface-raised px-4 py-2">
+        <label className="relative min-w-52 flex-1 sm:max-w-80">
+          <span className="sr-only">Search cases</span>
+          <Search
+            aria-hidden
+            className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-text-muted"
+          />
+          <Input
+            value={search}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setLimit(100);
+            }}
+            placeholder="Search by title or case reference"
+            className="pl-9"
+          />
+        </label>
+        <Select
+          aria-label="Filter cases by status"
+          value={status}
+          onValueChange={(value) => {
+            setStatus(value);
+            setLimit(100);
+          }}
+          className="w-40"
+          options={[
+            { value: "ALL", label: "All statuses" },
+            ...CASE_STATUSES.map((value) => ({
+              value,
+              label: humanise(value),
+            })),
+          ]}
+        />
+        <Select
+          aria-label="Filter cases by owner"
+          value={ownerId}
+          onValueChange={(value) => {
+            setOwnerId(value);
+            setLimit(100);
+          }}
+          className="w-48"
+          options={[
+            { value: "ALL", label: "All owners" },
+            ...(users.data?.items ?? []).map((owner) => ({
+              value: owner.id,
+              label: owner.displayName,
+            })),
+          ]}
+        />
+      </div>
 
       {cases.error !== null ? (
         <ErrorState
@@ -80,11 +147,17 @@ export function CasesRoute(): React.JSX.Element {
         <LoadingState label="Loading cases…" />
       ) : items.length === 0 ? (
         <EmptyState
-          title="No cases yet"
+          title={
+            debouncedSearch.length > 0 || status !== "ALL" || ownerId !== "ALL"
+              ? "No cases match these filters"
+              : "No cases yet"
+          }
           description={
-            editable
-              ? "Start a case for one research effort. Findings, evidence, and audience-specific reports stay attached to it."
-              : "No cases are available to you. Restricted case names are hidden unless you are a member."
+            debouncedSearch.length > 0 || status !== "ALL" || ownerId !== "ALL"
+              ? "Change or clear a filter to see more cases."
+              : editable
+                ? "Start a case for one research effort. Findings, evidence, and audience-specific reports stay attached to it."
+                : "No cases are available to you. Restricted case names are hidden unless you are a member."
           }
           action={
             editable ? (

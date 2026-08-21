@@ -463,12 +463,34 @@ export function OrganizationSettingsRoute(): React.JSX.Element {
     "/v1/organization/settings",
   );
   const [nameDraft, setNameDraft] = useState<string | null>(null);
+  const [contactNameDraft, setContactNameDraft] = useState<string | null>(null);
+  const [contactEmailDraft, setContactEmailDraft] = useState<string | null>(
+    null,
+  );
+  const [reportFooterDraft, setReportFooterDraft] = useState<string | null>(
+    null,
+  );
   const name = nameDraft ?? organization.data?.name ?? "";
+  const contactName = contactNameDraft ?? organization.data?.contactName ?? "";
+  const contactEmail =
+    contactEmailDraft ?? organization.data?.contactEmail ?? "";
+  const reportFooter =
+    reportFooterDraft ?? organization.data?.reportFooter ?? "";
   const update = useApiMutation<OrganizationSettings>(
     () => ({
       path: "/v1/organization/settings",
       method: "PATCH",
-      body: { name: name.trim() },
+      body: {
+        name: name.trim(),
+        contactName:
+          contactName.trim().length === 0 ? null : contactName.trim(),
+        contactEmail:
+          contactEmail.trim().length === 0
+            ? null
+            : contactEmail.trim().toLowerCase(),
+        reportFooter:
+          reportFooter.trim().length === 0 ? null : reportFooter.trim(),
+      },
     }),
     () => [["organization", "settings"]],
   );
@@ -493,20 +515,73 @@ export function OrganizationSettingsRoute(): React.JSX.Element {
               boundary that owns every user, case, role, and policy.
             </p>
             {admin ? (
-              <div className="mt-3 max-w-md border-t border-border pt-3">
-                <Label htmlFor="organization-name">Organization name</Label>
-                <div className="mt-1 flex gap-2">
+              <div className="mt-3 max-w-2xl space-y-3 border-t border-border pt-3">
+                <div>
+                  <Label htmlFor="organization-name">Organization name</Label>
                   <Input
                     id="organization-name"
                     value={name}
                     onChange={(event) => setNameDraft(event.target.value)}
+                    maxLength={120}
+                    className="mt-1"
                   />
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="organization-contact-name">
+                      Report contact name
+                    </Label>
+                    <Input
+                      id="organization-contact-name"
+                      value={contactName}
+                      onChange={(event) =>
+                        setContactNameDraft(event.target.value)
+                      }
+                      maxLength={120}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="organization-contact-email">
+                      Report contact email
+                    </Label>
+                    <Input
+                      id="organization-contact-email"
+                      type="email"
+                      value={contactEmail}
+                      onChange={(event) =>
+                        setContactEmailDraft(event.target.value)
+                      }
+                      maxLength={320}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="organization-report-footer">
+                    Report identity line
+                  </Label>
+                  <Input
+                    id="organization-report-footer"
+                    value={reportFooter}
+                    onChange={(event) =>
+                      setReportFooterDraft(event.target.value)
+                    }
+                    maxLength={300}
+                    placeholder="Security team · security@example.com"
+                    className="mt-1"
+                  />
+                  <p className="mt-1 text-[11px] text-text-muted">
+                    Printed on the report cover with the organization contact.
+                  </p>
+                </div>
+                <div className="flex justify-end">
                   <Button
                     variant="primary"
                     disabled={name.trim().length < 2 || update.isPending}
                     onClick={() => update.mutate()}
                   >
-                    Save
+                    Save report identity
                   </Button>
                 </div>
                 <p className="mt-2 text-[11px] text-warning">

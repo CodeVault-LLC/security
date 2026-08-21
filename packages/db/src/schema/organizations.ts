@@ -14,6 +14,9 @@ export const organizations = pgTable("organizations", {
   id: primaryId(),
   singletonKey: smallint("singleton_key").notNull().default(1),
   name: text("name").notNull(),
+  contactName: text("contact_name"),
+  contactEmail: text("contact_email"),
+  reportFooter: text("report_footer"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
 });
