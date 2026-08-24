@@ -21,11 +21,15 @@ import {
 import {
   ASSET_KINDS,
   DISCLOSURE_STATES,
+  EXTERNAL_ID_STATES,
   PRIOR_ART_STATES,
+  REMEDIATION_STATES,
   VALIDATION_STATES,
   type AssetKind,
   type DisclosureState,
+  type ExternalIdState,
   type PriorArtState,
+  type RemediationState,
   type ValidationState,
 } from "@codevault/core";
 
@@ -212,6 +216,26 @@ export async function registerMetricsRoutes(app: AppInstance): Promise<void> {
         GROUP BY f.disclosure_state
       `);
 
+      const remediationRows = await app.db.execute<{
+        state: string | null;
+        count: number;
+      }>(sql`
+        SELECT f.remediation_state AS state, count(*)::int AS count
+        FROM findings f
+        WHERE f.case_id IN ${scope}
+        GROUP BY f.remediation_state
+      `);
+
+      const externalIdRows = await app.db.execute<{
+        state: string | null;
+        count: number;
+      }>(sql`
+        SELECT f.external_id_state AS state, count(*)::int AS count
+        FROM findings f
+        WHERE f.case_id IN ${scope}
+        GROUP BY f.external_id_state
+      `);
+
       const priorArtRows = await app.db.execute<{
         state: string | null;
         count: number;
@@ -367,6 +391,7 @@ export async function registerMetricsRoutes(app: AppInstance): Promise<void> {
         confirmed: number;
         published: number;
         criticals_unfixed: number;
+        awaiting_review: number;
       }>(sql`
         SELECT
           count(*)::int AS findings,
@@ -375,7 +400,10 @@ export async function registerMetricsRoutes(app: AppInstance): Promise<void> {
           count(*) FILTER (
             WHERE f.severity = 'CRITICAL'
               AND f.remediation_state NOT IN ('FIXED', 'FIX_VERIFIED', 'NOT_APPLICABLE')
-          )::int AS criticals_unfixed
+          )::int AS criticals_unfixed,
+          count(*) FILTER (
+            WHERE f.validation_state = 'REPRODUCED'
+          )::int AS awaiting_review
         FROM findings f
         WHERE f.case_id IN ${scope}
       `);
@@ -385,11 +413,86 @@ export async function registerMetricsRoutes(app: AppInstance): Promise<void> {
         WHERE c.id IN ${scope} AND c.status = 'OPEN'
       `);
 
+      const overdueResponses = await app.db.execute<{ count: number }>(sql`
+        SELECT count(*)::int AS count
+        FROM embargoes e
+        JOIN cases c ON c.id = e.case_id
+        WHERE c.id IN ${scope}
+          AND c.status = 'OPEN'
+          AND e.expected_response_at IS NOT NULL
+          AND e.expected_response_at < now()
+      `);
+
+      const coverageRows = await app.db.execute<{
+        total: number;
+        scored: number;
+        weakness_classified: number;
+        asset_linked: number;
+        evidence_linked: number;
+        affected_range_recorded: number;
+        prior_art_checked: number;
+      }>(sql`
+        SELECT
+          count(*)::int AS total,
+          count(*) FILTER (WHERE EXISTS (
+            SELECT 1 FROM finding_scores fs
+            WHERE fs.finding_id = f.id AND fs.review_state = 'APPROVED'
+          ))::int AS scored,
+          count(*) FILTER (
+            WHERE jsonb_array_length(f.cwe_ids) > 0
+          )::int AS weakness_classified,
+          count(*) FILTER (WHERE EXISTS (
+            SELECT 1 FROM finding_assets fa WHERE fa.finding_id = f.id
+          ))::int AS asset_linked,
+          count(*) FILTER (WHERE EXISTS (
+            SELECT 1 FROM evidence ev WHERE ev.finding_id = f.id
+          ))::int AS evidence_linked,
+          count(*) FILTER (WHERE EXISTS (
+            SELECT 1 FROM affected_ranges ar WHERE ar.finding_id = f.id
+          ))::int AS affected_range_recorded,
+          count(*) FILTER (
+            WHERE f.prior_art_state <> 'UNCHECKED'
+          )::int AS prior_art_checked
+        FROM findings f
+        WHERE f.case_id IN ${scope}
+      `);
+
+      const ageRows = await app.db.execute<{
+        under_30_days: number;
+        from_30_to_89_days: number;
+        from_90_to_179_days: number;
+        at_least_180_days: number;
+      }>(sql`
+        SELECT
+          count(*) FILTER (
+            WHERE f.created_at > now() - interval '30 days'
+          )::int AS under_30_days,
+          count(*) FILTER (
+            WHERE f.created_at <= now() - interval '30 days'
+              AND f.created_at > now() - interval '90 days'
+          )::int AS from_30_to_89_days,
+          count(*) FILTER (
+            WHERE f.created_at <= now() - interval '90 days'
+              AND f.created_at > now() - interval '180 days'
+          )::int AS from_90_to_179_days,
+          count(*) FILTER (
+            WHERE f.created_at <= now() - interval '180 days'
+          )::int AS at_least_180_days
+        FROM findings f
+        WHERE f.case_id IN ${scope}
+          AND f.validation_state <> 'INVALID'
+          AND f.remediation_state NOT IN (
+            'FIXED', 'FIX_VERIFIED', 'NOT_APPLICABLE'
+          )
+      `);
+
       const acknowledgement = stages.find(
         (stage) => stage.stage === "CONTACT_TO_ACKNOWLEDGEMENT",
       );
 
       const totals = totalsRow.rows[0];
+      const coverage = coverageRows.rows[0];
+      const age = ageRows.rows[0];
 
       return {
         window,
@@ -400,6 +503,8 @@ export async function registerMetricsRoutes(app: AppInstance): Promise<void> {
           published: Number(totals?.published ?? 0),
           openCases: Number(openCases.rows[0]?.count ?? 0),
           criticalsUnfixed: Number(totals?.criticals_unfixed ?? 0),
+          awaitingReview: Number(totals?.awaiting_review ?? 0),
+          overdueVendorResponses: Number(overdueResponses.rows[0]?.count ?? 0),
           medianAcknowledgementDays:
             acknowledgement === undefined ||
             acknowledgement.sampleSize < MIN_HEADLINE_SAMPLE
@@ -411,14 +516,37 @@ export async function registerMetricsRoutes(app: AppInstance): Promise<void> {
           VALIDATION_STATES,
           validationRows.rows,
         ),
+        remediation: foldStates<RemediationState>(
+          REMEDIATION_STATES,
+          remediationRows.rows,
+        ),
         disclosure: foldStates<DisclosureState>(
           DISCLOSURE_STATES,
           disclosureRows.rows,
+        ),
+        externalId: foldStates<ExternalIdState>(
+          EXTERNAL_ID_STATES,
+          externalIdRows.rows,
         ),
         priorArt: foldStates<PriorArtState>(
           PRIOR_ART_STATES,
           priorArtRows.rows,
         ),
+        coverage: {
+          total: Number(coverage?.total ?? 0),
+          scored: Number(coverage?.scored ?? 0),
+          weaknessClassified: Number(coverage?.weakness_classified ?? 0),
+          assetLinked: Number(coverage?.asset_linked ?? 0),
+          evidenceLinked: Number(coverage?.evidence_linked ?? 0),
+          affectedRangeRecorded: Number(coverage?.affected_range_recorded ?? 0),
+          priorArtChecked: Number(coverage?.prior_art_checked ?? 0),
+        },
+        age: {
+          under30Days: Number(age?.under_30_days ?? 0),
+          from30To89Days: Number(age?.from_30_to_89_days ?? 0),
+          from90To179Days: Number(age?.from_90_to_179_days ?? 0),
+          atLeast180Days: Number(age?.at_least_180_days ?? 0),
+        },
         trend,
         stages,
         cwe,
