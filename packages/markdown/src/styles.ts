@@ -17,10 +17,10 @@ export const MARKDOWN_STYLESHEET = `
 
 .cv-callout {
   border: 1px solid var(--cvm-border);
-  border-left: 3px solid var(--cvm-callout-accent, var(--cvm-border-strong));
   background: var(--cvm-callout-surface, var(--cvm-surface));
   padding: var(--cvm-callout-padding);
   margin: 0 0 var(--cvm-block-gap) 0;
+  border-radius: var(--cvm-radius, 4px);
   break-inside: avoid;
 }
 
@@ -31,12 +31,24 @@ export const MARKDOWN_STYLESHEET = `
 /* The kind is stated in words. A reader printing in greyscale, or one who
    cannot distinguish the accent colours, still gets the severity. */
 .cv-callout-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   font-weight: 600;
   font-size: var(--cvm-label-size);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.055em;
   text-transform: uppercase;
   color: var(--cvm-callout-accent, var(--cvm-text-muted));
-  margin: 0 0 3px 0;
+  margin: 0 0 5px 0;
+}
+
+.cv-callout-label::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+  background: currentColor;
+  content: "";
+  flex: 0 0 auto;
 }
 
 .cv-callout-note { --cvm-callout-accent: var(--cvm-info); }
@@ -49,8 +61,13 @@ export const MARKDOWN_STYLESHEET = `
 
 .cv-diagram {
   margin: 0 0 var(--cvm-block-gap) 0;
+  padding: var(--cvm-diagram-padding, 0);
+  border: var(--cvm-diagram-border, 0);
+  border-radius: var(--cvm-radius, 4px);
+  background: var(--cvm-diagram-surface, transparent);
   text-align: center;
   break-inside: avoid;
+  overflow-x: auto;
 }
 
 .cv-diagram svg {
@@ -80,23 +97,26 @@ ul:has(> li > input[type="checkbox"]) {
 }
 
 li > input[type="checkbox"] {
-  margin-right: 6px;
-  vertical-align: middle;
+  width: 1em;
+  height: 1em;
+  margin: 0 0.5em 0 0;
+  accent-color: var(--cvm-accent);
+  vertical-align: -0.1em;
 }
 
 /* --- Footnotes --------------------------------------------------------- */
 
 .cv-footnotes {
   border-top: 1px solid var(--cvm-border);
-  margin-top: var(--cvm-block-gap);
-  padding-top: 6px;
+  margin-top: calc(var(--cvm-block-gap) * 2);
+  padding-top: var(--cvm-block-gap);
   font-size: var(--cvm-label-size);
   color: var(--cvm-text-muted);
 }
 
 .cv-footnotes h2 {
   font-size: var(--cvm-label-size);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.055em;
   text-transform: uppercase;
 }
 
@@ -194,6 +214,7 @@ export const MARKDOWN_PRINT_THEME = `
   --cvm-info: #175cd3;
   --cvm-block-gap: 10px;
   --cvm-callout-padding: 8px 11px;
+  --cvm-radius: 4px;
   --cvm-label-size: 8.5pt;
   --cvm-tok-comment: #667085;
   --cvm-tok-keyword: #6941c6;
@@ -223,8 +244,12 @@ export const MARKDOWN_SCREEN_THEME = `
   --cvm-success: var(--cv-success);
   --cvm-info: var(--cv-accent);
   --cvm-block-gap: 0.75em;
-  --cvm-callout-padding: 7px 10px;
-  --cvm-label-size: 10.5px;
+  --cvm-callout-padding: 0.85em 1em;
+  --cvm-radius: var(--cv-radius-lg);
+  --cvm-diagram-border: 1px solid var(--cv-border);
+  --cvm-diagram-padding: 1.25em;
+  --cvm-diagram-surface: var(--cv-surface-raised);
+  --cvm-label-size: 0.78em;
   --cvm-tok-comment: var(--cv-text-muted);
   --cvm-tok-keyword: var(--cv-accent);
   --cvm-tok-string: var(--cv-success);

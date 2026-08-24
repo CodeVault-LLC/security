@@ -267,7 +267,7 @@ export function MarkdownField({
             className="h-full"
           />
         ) : (
-          <MarkdownPreview markdown={draft} className="p-3 text-[13px]" />
+          <MarkdownPreview markdown={draft} />
         )}
       </div>
     </div>

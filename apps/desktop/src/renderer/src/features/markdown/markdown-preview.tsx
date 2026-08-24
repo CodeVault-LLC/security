@@ -42,6 +42,8 @@ export interface RenderedMarkdownProps {
   /** Sanitised HTML, from this package's pipeline or the report endpoint. */
   html: string;
   className?: string | undefined;
+  /** Reading layout for reports, compact layout for dense activity feeds. */
+  variant?: "document" | "compact";
 }
 
 /**
@@ -54,6 +56,7 @@ export interface RenderedMarkdownProps {
 export function RenderedMarkdown({
   html,
   className,
+  variant = "document",
 }: RenderedMarkdownProps): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement>(null);
 
@@ -84,7 +87,7 @@ export function RenderedMarkdown({
       // HTML at the Markdown AST and allow-lists what remains. It is the same
       // renderer the exported PDF uses.
       dangerouslySetInnerHTML={{ __html: html }}
-      className={`cv-preview ${className ?? ""}`}
+      className={`cv-preview cv-preview--${variant} ${className ?? ""}`}
     />
   );
 }
@@ -92,6 +95,8 @@ export function RenderedMarkdown({
 export interface MarkdownPreviewProps {
   markdown: string;
   className?: string;
+  /** Reading layout for reports, compact layout for dense activity feeds. */
+  variant?: "document" | "compact";
   /** Shown when there is nothing written yet. */
   emptyLabel?: string;
   /** Milliseconds to wait after typing stops. */
@@ -107,6 +112,7 @@ export interface MarkdownPreviewProps {
 export function MarkdownPreview({
   markdown,
   className,
+  variant = "document",
   emptyLabel = "Nothing to preview yet.",
   debounceMs = 200,
 }: MarkdownPreviewProps): React.JSX.Element {
@@ -136,7 +142,9 @@ export function MarkdownPreview({
 
   if (markdown.trim().length === 0) {
     return (
-      <p className={`text-[12px] text-text-muted ${className ?? ""}`}>
+      <p
+        className={`cv-preview-state cv-preview-state--${variant} ${className ?? ""}`}
+      >
         {emptyLabel}
       </p>
     );
@@ -144,11 +152,16 @@ export function MarkdownPreview({
 
   if (html === null) {
     return (
-      <p className={`text-[12px] text-text-muted ${className ?? ""}`}>
+      <p
+        aria-live="polite"
+        className={`cv-preview-state cv-preview-state--${variant} ${className ?? ""}`}
+      >
         Rendering…
       </p>
     );
   }
 
-  return <RenderedMarkdown html={html} className={className} />;
+  return (
+    <RenderedMarkdown html={html} className={className} variant={variant} />
+  );
 }

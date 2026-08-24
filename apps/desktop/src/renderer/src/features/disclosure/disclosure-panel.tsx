@@ -261,6 +261,7 @@ export function DisclosurePanel({
                       <MarkdownPreview
                         markdown={event.detailMarkdown}
                         className="mt-0.5 text-text-muted"
+                        variant="compact"
                         debounceMs={0}
                       />
                     )}

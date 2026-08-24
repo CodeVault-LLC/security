@@ -787,17 +787,19 @@ function PreviewPane({
         <CardHeader>
           <CardTitle>Preview</CardTitle>
         </CardHeader>
-        <CardBody>
+        <CardBody className="p-0">
           {html === null ? (
-            <p className="text-[12px] text-text-muted">Rendering…</p>
+            <p
+              aria-live="polite"
+              className="cv-preview-state cv-preview-state--document"
+            >
+              Rendering…
+            </p>
           ) : (
             // Server-rendered, because only the server can resolve a directive
             // against the database and apply this audience's visibility rules.
             // Diagrams are drawn here, by the code the PDF worker also runs.
-            <RenderedMarkdown
-              html={extractBody(html)}
-              className="text-[13px]"
-            />
+            <RenderedMarkdown html={extractBody(html)} />
           )}
         </CardBody>
       </Card>

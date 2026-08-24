@@ -125,79 +125,320 @@ a {
   font-size: 12.5px;
 }
 
-/* Rendered report preview: matches the print stylesheet's structure so the
-   preview and the exported PDF do not surprise each other. */
-.cv-preview h1,
-.cv-preview h2,
-.cv-preview h3 {
-  font-weight: 600;
-  margin: 1.2em 0 0.4em;
-  line-height: 1.3;
+/*
+ * Rendered Markdown.
+ *
+ * The preview uses the same document structure as the exported report, but it
+ * is typeset for a backlit editor rather than a printed page. The compact
+ * modifier keeps short Markdown useful in dense timelines without shrinking
+ * the primary reading view back to UI-label sizes.
+ */
+.cv-preview {
+  min-width: 0;
+  color: var(--cv-text);
+  font-family: var(--font-sans);
+  font-size: 15.5px;
+  font-variant-numeric: proportional-nums;
+  line-height: 1.68;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
+.cv-preview--document {
+  width: min(100%, 78ch);
+  min-height: 100%;
+  margin-inline: auto;
+  padding: clamp(20px, 2.5vw, 38px) clamp(18px, 3vw, 46px);
+}
+
+.cv-preview--compact {
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.cv-preview-state {
+  min-height: 100%;
+  margin: 0;
+  color: var(--cv-text-muted);
+  font-size: 13px;
+}
+
+.cv-preview-state--document {
+  padding: clamp(20px, 2.5vw, 38px) clamp(18px, 3vw, 46px);
+}
+
+.cv-preview > :first-child {
+  margin-top: 0;
+}
+
+.cv-preview > :last-child {
+  margin-bottom: 0;
+}
+
+.cv-preview :is(h1, h2, h3, h4, h5, h6) {
+  scroll-margin-top: 24px;
+  color: var(--cv-text);
+  font-weight: 650;
+  letter-spacing: -0.018em;
+  line-height: 1.25;
+  text-wrap: balance;
 }
 
 .cv-preview h1 {
-  font-size: 18px;
+  margin: 1.9em 0 0.65em;
+  padding-bottom: 0.42em;
+  border-bottom: 1px solid var(--cv-border);
+  font-size: 1.85em;
 }
+
 .cv-preview h2 {
-  font-size: 15px;
+  margin: 1.75em 0 0.55em;
+  padding-bottom: 0.38em;
+  border-bottom: 1px solid var(--cv-border);
+  font-size: 1.48em;
 }
+
 .cv-preview h3 {
-  font-size: 13.5px;
+  margin: 1.55em 0 0.45em;
+  font-size: 1.22em;
 }
 
-.cv-preview p,
-.cv-preview ul,
-.cv-preview ol,
-.cv-preview table {
-  margin: 0 0 0.75em;
+.cv-preview h4 {
+  margin: 1.45em 0 0.4em;
+  font-size: 1.05em;
 }
 
-.cv-preview ul,
-.cv-preview ol {
-  padding-left: 1.3em;
+.cv-preview h5,
+.cv-preview h6 {
+  margin: 1.35em 0 0.35em;
+  font-size: 0.9em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.cv-preview code {
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  background: var(--cv-surface-raised);
-  border-radius: 3px;
-  padding: 0 3px;
-}
-
-.cv-preview pre {
-  background: var(--cv-surface-raised);
-  border: 1px solid var(--cv-border);
-  border-left: 3px solid var(--cv-border-strong);
-  padding: 8px 10px;
-  overflow-x: auto;
-  border-radius: var(--cv-radius);
-}
-
-.cv-preview pre code {
-  background: none;
+.cv-preview--compact :is(h1, h2, h3, h4, h5, h6) {
+  margin: 1em 0 0.35em;
   padding: 0;
+  border: 0;
+  font-size: 1em;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
-.cv-preview table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
+.cv-preview :is(p, ul, ol, table, pre, blockquote, hr, .cv-callout) {
+  margin: 0 0 1em;
 }
 
-.cv-preview th,
-.cv-preview td {
-  border: 1px solid var(--cv-border);
-  padding: 4px 6px;
-  text-align: left;
+.cv-preview :is(ul, ol) {
+  padding-left: 1.5em;
 }
 
-.cv-preview blockquote {
-  border-left: 3px solid var(--cv-border-strong);
-  padding-left: 10px;
+.cv-preview :is(ul, ol) :is(ul, ol) {
+  margin: 0.35em 0;
+}
+
+.cv-preview li {
+  padding-left: 0.12em;
+}
+
+.cv-preview li + li {
+  margin-top: 0.28em;
+}
+
+.cv-preview li::marker {
   color: var(--cv-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.cv-preview strong {
+  font-weight: 650;
+}
+
+.cv-preview del {
+  color: var(--cv-text-muted);
+  text-decoration-thickness: 1px;
 }
 
 .cv-preview a {
   color: var(--cv-accent);
+  font-weight: 500;
+  text-decoration-color: color-mix(in oklab, currentColor 55%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+
+.cv-preview a:hover {
+  color: var(--cv-accent-hover);
+  text-decoration-color: currentColor;
+}
+
+.cv-preview a:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--cv-focus);
+  outline-offset: 3px;
+}
+
+.cv-preview code {
+  border-radius: 3px;
+  background: var(--cv-surface-raised);
+  box-decoration-break: clone;
+  padding: 0.12em 0.36em;
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  font-variant-ligatures: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.cv-preview pre {
+  position: relative;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--cv-border);
+  border-radius: var(--cv-radius-lg);
+  background: var(--cv-surface-raised);
+  padding: 1em 1.1em;
+  line-height: 1.62;
+  scrollbar-color: var(--cv-border-strong) transparent;
+  tab-size: 2;
+}
+
+.cv-preview pre code {
+  border-radius: 0;
+  background: none;
+  padding: 0;
+  font-size: 0.86em;
+  white-space: pre;
+}
+
+.cv-preview blockquote:not(.cv-callout) {
+  border-left: 1px solid var(--cv-border-strong);
+  background: color-mix(in oklab, var(--cv-surface-raised) 70%, transparent);
+  padding: 0.7em 1em;
+  color: var(--cv-text-muted);
+}
+
+.cv-preview blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.cv-preview .cv-callout {
+  background: color-mix(
+    in oklab,
+    var(--cvm-callout-accent) 7%,
+    var(--cv-surface)
+  );
+}
+
+.cv-preview hr {
+  height: 1px;
+  border: 0;
+  background: var(--cv-border);
+}
+
+.cv-preview table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--cv-border);
+  border-radius: var(--cv-radius-lg);
+  border-spacing: 0;
+  border-collapse: separate;
+  font-size: 0.88em;
+  line-height: 1.45;
+  scrollbar-color: var(--cv-border-strong) transparent;
+}
+
+.cv-preview :is(th, td) {
+  min-width: 8rem;
+  border-right: 1px solid var(--cv-border);
+  border-bottom: 1px solid var(--cv-border);
+  padding: 0.65em 0.8em;
+  text-align: left;
+  vertical-align: top;
+}
+
+.cv-preview th {
+  background: var(--cv-surface-raised);
+  font-weight: 600;
+}
+
+.cv-preview :is(th, td):last-child {
+  border-right: 0;
+}
+
+.cv-preview tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.cv-preview tbody tr:hover td {
+  background: color-mix(in oklab, var(--cv-surface-hover) 55%, transparent);
+}
+
+.cv-preview :is(th, td)[align="center"] {
+  text-align: center;
+}
+
+.cv-preview :is(th, td)[align="right"] {
+  text-align: right;
+}
+
+.cv-preview sup,
+.cv-preview sub {
+  font-size: 0.72em;
+  line-height: 0;
+}
+
+.cv-preview math[display="block"] {
+  display: block;
+  max-width: 100%;
+  margin: 1.25em 0;
+  overflow-x: auto;
+  padding: 0.8em;
+  border-radius: var(--cv-radius-lg);
+  background: var(--cv-surface-raised);
+  text-align: center;
+}
+
+.cv-preview .cv-footnotes ol {
+  margin-bottom: 0;
+  padding-left: 1.35em;
+}
+
+.cv-preview .cv-footnote-backref {
+  margin-left: 0.2em;
+}
+
+.cv-preview .cv-diagram svg {
+  min-width: min(100%, 28rem);
+}
+
+.cv-preview :target {
+  border-radius: 2px;
+  outline: 2px solid color-mix(in oklab, var(--cv-focus) 65%, transparent);
+  outline-offset: 4px;
+}
+
+@media (max-width: 640px) {
+  .cv-preview--document {
+    font-size: 15px;
+  }
+
+  .cv-preview--document {
+    padding: 18px 16px 28px;
+  }
+
+  .cv-preview :is(th, td) {
+    min-width: 7rem;
+  }
+}
+
+@media (forced-colors: active) {
+  .cv-preview :is(pre, table, th, td, blockquote, .cv-callout) {
+    border-color: CanvasText;
+  }
+
+  .cv-preview a {
+    color: LinkText;
+  }
 }
