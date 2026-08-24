@@ -43,6 +43,13 @@ const BLOCKS: InsertOption[] = [
     snippet: BLOCK_SNIPPETS.table,
   },
   {
+    id: "chart",
+    label: "Data chart",
+    detail: "JSON values, rendered in preview and PDF",
+    group: "Blocks",
+    snippet: BLOCK_SNIPPETS.chart,
+  },
+  {
     id: "diagram",
     label: "Flowchart",
     detail: "Mermaid — attack path, data flow",

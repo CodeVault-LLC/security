@@ -147,6 +147,48 @@ describeIfBrowser("PDF rendering", () => {
     expect(collapsed).not.toContain("graph LR;");
   }, 180_000);
 
+  it("prints a structured data chart with its labels and values", async () => {
+    const section = await renderMarkdown(
+      [
+        "```chart",
+        JSON.stringify({
+          title: "Findings by severity",
+          unit: "findings",
+          data: [
+            { label: "Critical", value: 2 },
+            { label: "High", value: 5 },
+          ],
+        }),
+        "```",
+      ].join("\n"),
+    );
+
+    const withChart = buildReportHtml({
+      title: "Security review",
+      reference: "RPT-000044",
+      audience: "INTERNAL",
+      tlp: "TLP:AMBER",
+      caseReference: "CASE-2026-0007",
+      generatedAt: "2026-08-24",
+      organisation: "CodeVault Research",
+      authorName: "A. Researcher",
+      templateVersion: "1.0.0",
+      sections: [{ title: "Finding distribution", html: section }],
+    });
+
+    const result = await renderPdf({
+      html: withChart,
+      title: "Security review",
+    });
+    const text = (await extractPdfText(result.bytes)).replace(/\s+/g, " ");
+
+    expect(text).toContain("Findings by severity");
+    expect(text).toContain("Critical");
+    expect(text).toContain("2 findings");
+    expect(text).toContain("High");
+    expect(text).toContain("5 findings");
+  }, 180_000);
+
   it("refuses to load a remote resource while rendering", async () => {
     // A report that fetched a remote image would be a way to learn that an
     // embargoed document had been opened, and by whom.

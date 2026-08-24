@@ -212,3 +212,42 @@ describe("mermaid fences", () => {
     expect(html).not.toContain("cv-diagram");
   });
 });
+
+describe("data chart fences", () => {
+  it("renders structured values as a labelled chart", async () => {
+    const html = await renderMarkdown(
+      [
+        "```chart",
+        JSON.stringify({
+          title: "Findings by severity",
+          unit: "findings",
+          data: [
+            { label: "Critical", value: 2 },
+            { label: "High", value: 5 },
+          ],
+        }),
+        "```",
+      ].join("\n"),
+    );
+
+    expect(html).toContain('class="cv-data-chart"');
+    expect(html).toContain('class="cv-data-chart-title"');
+    expect(html).toContain("Findings by severity");
+    expect(html).toContain("Critical");
+    expect(html).toContain("2 findings");
+    expect(html).toContain("High");
+    expect(html).toContain("5 findings");
+    expect(html).toContain("--cv-data-ratio:100%");
+    expect(html).not.toContain("language-chart");
+  });
+
+  it("keeps invalid chart data visible with a useful error", async () => {
+    const html = await renderMarkdown(
+      "```chart\n{ this is not valid JSON }\n```",
+    );
+
+    expect(html).toContain('class="cv-data-chart-error"');
+    expect(html).toContain("Chart could not be rendered");
+    expect(html).toContain("this is not valid JSON");
+  });
+});

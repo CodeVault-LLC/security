@@ -5,6 +5,7 @@ import {
   Download,
   Eye,
   FileWarning,
+  Maximize2,
   MoreHorizontal,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
@@ -23,10 +24,10 @@ import {
   AiProposalPanel,
   ApprovalState,
   Button,
-  Card,
-  CardBody,
-  CardHeader,
-  CardTitle,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogTrigger,
   EmptyState,
   ErrorState,
   DropdownMenu,
@@ -456,6 +457,9 @@ export function ReportDetailRoute({
               key={`${activeSection.id}:${activeSection.revision}`}
               reportId={reportId}
               caseId={data.caseId}
+              reportTitle={data.title}
+              reportReference={data.ref}
+              audience={data.audience}
               section={activeSection}
               canEdit={canEdit}
               showPreview={showPreview}
@@ -568,6 +572,9 @@ function titleCase(value: string): string {
 interface SectionWorkspaceProps {
   reportId: string;
   caseId: string;
+  reportTitle: string;
+  reportReference: string;
+  audience: string;
   section: ReportSection;
   canEdit: boolean;
   showPreview: boolean;
@@ -593,6 +600,9 @@ interface SectionWorkspaceProps {
 function SectionWorkspace({
   reportId,
   caseId,
+  reportTitle,
+  reportReference,
+  audience,
   section,
   canEdit,
   showPreview,
@@ -732,6 +742,9 @@ function SectionWorkspace({
               html={previewHtml}
               lint={lint}
               sectionId={section.id}
+              reportTitle={reportTitle}
+              reportReference={reportReference}
+              audience={audience}
             />
           </div>
         ) : null}
@@ -754,49 +767,95 @@ function PreviewPane({
   html,
   lint,
   sectionId,
+  reportTitle,
+  reportReference,
+  audience,
 }: {
   html: string | null;
   lint: LintResult | null;
   sectionId: string;
+  reportTitle: string;
+  reportReference: string;
+  audience: string;
 }): React.JSX.Element {
   const sectionFindings =
     lint?.findings.filter((finding) => finding.sectionId === sectionId) ?? [];
+  const renderedBody = html === null ? null : extractBody(html);
 
   return (
-    <div className="space-y-3 p-3">
+    <div className="flex min-h-full w-full flex-col bg-background">
+      <div className="sticky top-0 z-10 flex min-h-11 items-center justify-between gap-3 border-b border-border bg-surface px-4 py-2">
+        <div className="min-w-0">
+          <p className="text-[12px] font-medium">Report preview</p>
+          <p className="truncate text-[10px] text-text-muted">
+            Saved report · {reportReference}
+          </p>
+        </div>
+
+        <Dialog>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="sm" disabled={renderedBody === null}>
+              <Maximize2 aria-hidden className="size-3.5" />
+              Full screen
+            </Button>
+          </DialogTrigger>
+          <DialogContent
+            title={`${reportTitle} preview`}
+            description={`${reportReference} · ${audience.toLowerCase()} report · saved content`}
+            width="max-w-none"
+            className="cv-report-preview-dialog"
+          >
+            <DialogBody className="cv-report-preview-dialog-body">
+              <div className="cv-report-preview-page">
+                {renderedBody === null ? null : (
+                  <RenderedMarkdown html={renderedBody} />
+                )}
+              </div>
+            </DialogBody>
+          </DialogContent>
+        </Dialog>
+      </div>
+
       {sectionFindings.length === 0 ? null : (
-        <Card className="border-warning/40">
-          <CardHeader>
-            <CardTitle>Lint · this section</CardTitle>
-          </CardHeader>
+        <section
+          aria-label="Issues in this section"
+          className="mx-4 mt-3 overflow-hidden rounded-(--cv-radius-lg) border border-warning/40 bg-warning/6"
+        >
+          <div className="flex items-center gap-2 border-b border-warning/25 px-3 py-2">
+            <AlertTriangle
+              aria-hidden
+              className="size-3.5 shrink-0 text-warning"
+            />
+            <p className="text-[11px] font-medium">
+              {sectionFindings.length} issue
+              {sectionFindings.length === 1 ? "" : "s"} in this section
+            </p>
+          </div>
           <ul className="divide-y divide-border">
             {sectionFindings.map((finding, index) => (
               <LintRow key={`${finding.ruleId}-${index}`} finding={finding} />
             ))}
           </ul>
-        </Card>
+        </section>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Preview</CardTitle>
-        </CardHeader>
-        <CardBody className="p-0">
-          {html === null ? (
+      <div className="flex flex-1 p-3 sm:p-4">
+        <div className="min-h-full w-full overflow-hidden rounded-(--cv-radius-lg) border border-border bg-surface">
+          {renderedBody === null ? (
             <p
               aria-live="polite"
               className="cv-preview-state cv-preview-state--document"
             >
-              Rendering…
+              Rendering saved report…
             </p>
           ) : (
             // Server-rendered, because only the server can resolve a directive
             // against the database and apply this audience's visibility rules.
             // Diagrams are drawn here, by the code the PDF worker also runs.
-            <RenderedMarkdown html={extractBody(html)} />
+            <RenderedMarkdown html={renderedBody} />
           )}
-        </CardBody>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }

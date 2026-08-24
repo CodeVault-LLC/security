@@ -19,6 +19,7 @@ import x86asm from "highlight.js/lib/languages/x86asm";
 import { common } from "lowlight";
 
 import { remarkCallouts } from "./callouts.js";
+import { rehypeChartFence } from "./chart-fence.js";
 import { rehypeDiagramFence } from "./diagram-fence.js";
 import { rehypeNamespaceIds } from "./ids.js";
 import { FOOTNOTE_ID_PREFIX, SANITIZE_SCHEMA } from "./sanitize.js";
@@ -70,6 +71,9 @@ const processor = unified()
   })
   .use(rehypeSlug)
   .use(rehypeNamespaceIds)
+  // Structured charts are rendered to ordinary HTML before highlighting and
+  // need no client-side runtime in either the preview or the PDF.
+  .use(rehypeChartFence)
   // Before the highlighter: a mermaid fence must be claimed as a diagram
   // rather than coloured as an unknown programming language.
   .use(rehypeDiagramFence)

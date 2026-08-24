@@ -92,6 +92,8 @@ export const SANITIZE_SCHEMA = {
     "sub",
     "span",
     "div",
+    "figure",
+    "figcaption",
     // Task lists render a disabled checkbox; it is never interactive.
     "input",
     // GFM footnotes are emitted as a labelled <section> at the end.
@@ -121,7 +123,10 @@ export const SANITIZE_SCHEMA = {
     ],
     code: [["className", /^language-./, "hljs"]],
     // Highlighting emits nothing but class names; the theme is ours.
-    span: [["className", /^cv-/, /^hljs-/, /^katex/]],
+    span: [
+      ["className", /^cv-/, /^hljs-/, /^katex/],
+      ["style", /^--cv-data-ratio:\d+(?:\.\d+)?%$/],
+    ],
     div: [["className", /^cv-/], ["dataCvDiagram"]],
     section: [["className", /^cv-/], ["dataFootnotes"]],
     li: [["id", SAFE_ID]],

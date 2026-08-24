@@ -413,6 +413,49 @@ a {
   min-width: min(100%, 28rem);
 }
 
+/*
+ * Focused report reading.
+ *
+ * The Radix dialog keeps keyboard focus and Escape behavior correct. These
+ * dimensions turn that existing overlay into a true edge-to-edge reading
+ * mode, with a restrained paper column that still works in both themes.
+ */
+.cv-report-preview-dialog {
+  width: 100vw !important;
+  max-width: none !important;
+  height: 100dvh;
+  max-height: none;
+  border: 0;
+  border-radius: 0;
+}
+
+.cv-report-preview-dialog-body {
+  height: calc(100dvh - 57px);
+  max-height: none;
+  padding: 0;
+  background: var(--cv-background);
+}
+
+.cv-report-preview-page {
+  width: min(calc(100% - 32px), 920px);
+  min-height: calc(100% - 32px);
+  margin: 16px auto;
+  overflow: hidden;
+  border: 1px solid var(--cv-border);
+  border-radius: var(--cv-radius-lg);
+  background: var(--cv-surface);
+}
+
+@media (max-width: 640px) {
+  .cv-report-preview-page {
+    width: 100%;
+    min-height: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+  }
+}
+
 .cv-preview :target {
   border-radius: 2px;
   outline: 2px solid color-mix(in oklab, var(--cv-focus) 65%, transparent);

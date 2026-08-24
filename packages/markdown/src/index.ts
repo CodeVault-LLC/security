@@ -10,6 +10,7 @@
  * the API server has no reason to carry a diagramming library.
  */
 export * from "./callouts.js";
+export * from "./chart-fence.js";
 export * from "./diagram-fence.js";
 export * from "./ids.js";
 export * from "./outline.js";

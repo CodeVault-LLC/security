@@ -162,6 +162,25 @@ describe("diagrams", () => {
   });
 });
 
+describe("data charts", () => {
+  it("keeps hostile labels as escaped text", async () => {
+    const html = await render(
+      [
+        "```chart",
+        JSON.stringify({
+          title: "Affected targets",
+          data: [{ label: '<img src=x onerror="alert(1)">', value: 1 }],
+        }),
+        "```",
+      ].join("\n"),
+    );
+
+    expect(html).toContain('class="cv-data-chart"');
+    expect(html).not.toContain("<img");
+    expect(html).toContain("&#x3C;img src=x onerror=");
+  });
+});
+
 describe("maths", () => {
   /**
    * KaTeX has had command-injection issues in the past; `\href` and friends

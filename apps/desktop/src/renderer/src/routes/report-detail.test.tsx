@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -8,6 +8,7 @@ import type {
   ReportDetail,
   ReportExport,
   ReportPreview,
+  ReportSection,
 } from "@codevault/contracts";
 
 import { queryKeys } from "../lib/api.js";
@@ -60,7 +61,7 @@ const lint: LintResult = {
   checkedAt: "2026-08-24T10:00:00.000Z",
 };
 const preview: ReportPreview = {
-  html: "<!doctype html><html><body>Report</body></html>",
+  html: "<!doctype html><html><body><main><section><p>Rendered report content.</p></section></main></body></html>",
   lint,
   tlp: "TLP:AMBER",
 };
@@ -79,14 +80,33 @@ const completedExport: ReportExport = {
   completedAt: "2026-08-24T10:02:00.000Z",
 };
 
-function renderReport(): void {
+const section: ReportSection = {
+  id: "018f2f56-7c9a-7abc-8def-0123456789b0",
+  reportId: REPORT_ID,
+  key: "summary",
+  title: "Summary",
+  position: 0,
+  required: true,
+  contentMarkdown: "# Summary\n\nRendered report content.",
+  reviewState: "APPROVED",
+  promptPurpose: "Explain the issue and its impact.",
+  approvedBy: null,
+  approvedAt: null,
+  approvedRevision: null,
+  lastEditedBy: actor,
+  sourceRefs: [],
+  updatedAt: "2026-08-24T10:00:00.000Z",
+  revision: 1,
+};
+
+function renderReport(detail: ReportDetail = report): void {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
       mutations: { retry: false },
     },
   });
-  client.setQueryData(queryKeys.report(REPORT_ID), report);
+  client.setQueryData(queryKeys.report(REPORT_ID), detail);
   client.setQueryData(queryKeys.reportLint(REPORT_ID), lint);
   client.setQueryData(queryKeys.reportPreview(REPORT_ID), preview);
   client.setQueryData(queryKeys.reportExports(REPORT_ID), {
@@ -133,5 +153,44 @@ describe("completed report exports", () => {
     expect(reportsBridge.downloadPdf).toHaveBeenCalledWith(ARTIFACT_ID);
     expect(apiBridge.request).not.toHaveBeenCalled();
     expect(appBridge.openExternal).not.toHaveBeenCalled();
+  });
+});
+
+describe("report preview", () => {
+  it("opens a focused full-screen reading view and closes with Escape", async () => {
+    const user = userEvent.setup();
+
+    useSession.getState().signIn(
+      {
+        ...actor,
+        role: "VIEWER",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        lastLoginAt: null,
+      },
+      null,
+    );
+
+    renderReport({
+      ...report,
+      sectionCount: 1,
+      approvedSectionCount: 1,
+      sections: [section],
+    });
+
+    const trigger = screen.getByRole("button", { name: "Full screen" });
+
+    await user.click(trigger);
+
+    const dialog = screen.getByRole("dialog", {
+      name: "Completed security report preview",
+    });
+
+    expect(dialog).toBeTruthy();
+    expect(within(dialog).getByText("Rendered report content.")).toBeTruthy();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 });
