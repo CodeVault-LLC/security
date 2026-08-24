@@ -30,11 +30,6 @@ import {
 } from "@codevault/core";
 import { allocateReference, schema } from "@codevault/db";
 import { Type } from "@sinclair/typebox";
-import {
-  externalIdUrl,
-  isValidExternalId,
-  type ExternalIdScheme,
-} from "@codevault/standards";
 
 import { assertRevision } from "../../http/concurrency.js";
 import { actingUser, principalOf, requireAuthor } from "../../http/guards.js";
@@ -45,6 +40,7 @@ import {
 } from "../../services/case-access.js";
 import { approveScore, normaliseScoreSubmission } from "./scoring.js";
 import { loadFindingDetail, readableCaseIdsSubquery } from "./queries.js";
+import { prepareExternalIdentifier } from "./external-identifiers.js";
 
 /**
  * Finding routes.
@@ -680,53 +676,65 @@ export async function registerFindingRoutes(app: AppInstance): Promise<void> {
 
       await requireCaseWrite(app.db, user, existing.caseId);
 
-      const { scheme, value } = request.body;
-      const knownScheme = scheme as ExternalIdScheme;
+      const identifier = prepareExternalIdentifier(
+        request.body.scheme,
+        request.body.value,
+      );
 
-      if (!isValidExternalId(knownScheme, value)) {
+      if (identifier === null) {
         throw validationError(
-          `"${value}" is not a valid ${scheme} identifier.`,
+          `"${request.body.value}" is not a valid ${request.body.scheme} identifier.`,
         );
       }
 
-      await app.db
-        .insert(schema.findingIdentifiers)
-        .values({
-          findingId: existing.id,
-          scheme,
-          value,
-          url: externalIdUrl(knownScheme, value),
-          createdBy: user.id,
-        })
-        .onConflictDoNothing();
+      await app.db.transaction(async (tx) => {
+        const [inserted] = await tx
+          .insert(schema.findingIdentifiers)
+          .values({
+            findingId: existing.id,
+            ...identifier,
+            createdBy: user.id,
+          })
+          .onConflictDoNothing()
+          .returning({ id: schema.findingIdentifiers.id });
 
-      // Recording a CVE is a state change in its own right: it moves the
-      // finding's external-identifier state without touching the others.
-      if (
-        knownScheme === "CVE" &&
-        existing.externalIdState !== "CVE_PUBLISHED"
-      ) {
-        await app.db
-          .update(schema.findings)
-          .set({ externalIdState: "CVE_RESERVED", updatedAt: sql`now()` })
-          .where(eq(schema.findings.id, existing.id));
-      }
+        // Retried requests are idempotent and do not create duplicate audit
+        // events for the unique identifier that already exists.
+        if (inserted === undefined) {
+          return;
+        }
 
-      await app.audit.write(
-        app.db,
-        {
-          actorId: user.id,
-          sessionId: principal.session.id,
-          requestId: request.requestId,
-        },
-        {
-          action: "finding.identifier_added",
-          entityType: "finding",
-          entityId: existing.id,
-          caseId: existing.caseId,
-          after: { scheme, value },
-        },
-      );
+        // Recording a CVE is a state change in its own right: it moves the
+        // finding's external-identifier state without touching the others.
+        if (
+          identifier.scheme === "CVE" &&
+          existing.externalIdState !== "CVE_PUBLISHED"
+        ) {
+          await tx
+            .update(schema.findings)
+            .set({ externalIdState: "CVE_RESERVED", updatedAt: sql`now()` })
+            .where(eq(schema.findings.id, existing.id));
+        }
+
+        await app.audit.write(
+          tx,
+          {
+            actorId: user.id,
+            sessionId: principal.session.id,
+            requestId: request.requestId,
+          },
+          {
+            action: "finding.identifier_added",
+            entityType: "finding",
+            entityId: existing.id,
+            caseId: existing.caseId,
+            after: {
+              scheme: identifier.scheme,
+              value: identifier.value,
+            },
+          },
+        );
+      });
 
       return loadFindingDetail(app.db, existing.id);
     },

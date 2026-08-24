@@ -76,8 +76,34 @@ export function isTlpLabel(value: string): value is TlpLabel {
   return (TLP_LABELS as readonly string[]).includes(value);
 }
 
+/**
+ * Parse TLP 2.0 labels from imports and user input.
+ *
+ * FIRST renamed TLP:WHITE to TLP:CLEAR in 2.0. Accepting the old spelling at
+ * the boundary keeps imported reports readable without preserving a retired
+ * label in canonical data.
+ */
+export function parseTlpLabel(value: string): TlpLabel | null {
+  const upper = value.trim().toUpperCase();
+  const prefixed = upper.startsWith("TLP:") ? upper : `TLP:${upper}`;
+  const canonical = prefixed === "TLP:WHITE" ? "TLP:CLEAR" : prefixed;
+
+  return isTlpLabel(canonical) ? canonical : null;
+}
+
+export function tlpRank(label: TlpLabel): number {
+  return TLP_RANK[label];
+}
+
 export function isMoreRestrictive(left: TlpLabel, right: TlpLabel): boolean {
   return TLP_RANK[left] > TLP_RANK[right];
+}
+
+export function isAtLeastAsRestrictive(
+  left: TlpLabel,
+  right: TlpLabel,
+): boolean {
+  return TLP_RANK[left] >= TLP_RANK[right];
 }
 
 /**

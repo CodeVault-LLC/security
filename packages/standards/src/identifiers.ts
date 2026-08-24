@@ -27,25 +27,40 @@ const PATTERNS: Partial<Record<ExternalIdScheme, RegExp>> = {
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARACTERS = /[\x00-\x1f\x7f]/;
 
-export function isValidExternalId(
-  scheme: ExternalIdScheme,
-  value: string,
-): boolean {
-  const pattern = PATTERNS[scheme];
-  const trimmed = value.trim();
+export function isExternalIdScheme(value: string): value is ExternalIdScheme {
+  return (EXTERNAL_ID_SCHEMES as readonly string[]).includes(value);
+}
 
-  if (trimmed.length === 0) {
-    return false;
+/** Canonical storage form for a valid external identifier. */
+export function normalizeExternalId(
+  scheme: string,
+  value: string,
+): string | null {
+  if (!isExternalIdScheme(scheme)) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  const pattern = PATTERNS[scheme];
+
+  if (
+    trimmed.length === 0 ||
+    trimmed.length > 128 ||
+    CONTROL_CHARACTERS.test(trimmed)
+  ) {
+    return null;
   }
 
   if (pattern === undefined) {
-    // Vendor references and custom identifiers have no universal shape; the
-    // only rules are that they are non-empty, reasonably short, and free of
-    // control characters that could corrupt a header, log line or PDF field.
-    return trimmed.length <= 128 && !CONTROL_CHARACTERS.test(trimmed);
+    return trimmed;
   }
 
-  return pattern.test(trimmed.toUpperCase());
+  const canonical = trimmed.toUpperCase();
+  return pattern.test(canonical) ? canonical : null;
+}
+
+export function isValidExternalId(scheme: string, value: string): boolean {
+  return normalizeExternalId(scheme, value) !== null;
 }
 
 /**
@@ -58,18 +73,22 @@ export function externalIdUrl(
   scheme: ExternalIdScheme,
   value: string,
 ): string | null {
-  const trimmed = value.trim();
+  const canonical = normalizeExternalId(scheme, value);
+
+  if (canonical === null) {
+    return null;
+  }
 
   if (scheme === "CVE") {
-    return `https://www.cve.org/CVERecord?id=${encodeURIComponent(trimmed.toUpperCase())}`;
+    return `https://www.cve.org/CVERecord?id=${encodeURIComponent(canonical)}`;
   }
 
   if (scheme === "GHSA") {
-    return `https://github.com/advisories/${encodeURIComponent(trimmed.toUpperCase())}`;
+    return `https://github.com/advisories/${encodeURIComponent(canonical)}`;
   }
 
   if (scheme === "OSV") {
-    return `https://osv.dev/vulnerability/${encodeURIComponent(trimmed.toUpperCase())}`;
+    return `https://osv.dev/vulnerability/${encodeURIComponent(canonical)}`;
   }
 
   return null;

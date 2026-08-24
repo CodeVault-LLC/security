@@ -17,6 +17,10 @@ export const SEVERITY_RATINGS = [
 export type SeverityRating = (typeof SEVERITY_RATINGS)[number];
 
 export function severityFromScore(score: number): SeverityRating {
+  if (!Number.isFinite(score) || score < 0 || score > 10) {
+    throw new RangeError("A CVSS score must be a finite number from 0 to 10.");
+  }
+
   if (score <= 0) {
     return "NONE";
   }
@@ -39,4 +43,22 @@ export function severityFromScore(score: number): SeverityRating {
 /** Sort weight, highest severity first, for list ordering. */
 export function severityRank(rating: SeverityRating): number {
   return SEVERITY_RATINGS.indexOf(rating);
+}
+
+export function isSeverityRating(value: unknown): value is SeverityRating {
+  return (
+    typeof value === "string" &&
+    (SEVERITY_RATINGS as readonly string[]).includes(value)
+  );
+}
+
+/** Highest rating in a collection, or NONE when the collection is empty. */
+export function highestSeverity(
+  ratings: readonly SeverityRating[],
+): SeverityRating {
+  return ratings.reduce<SeverityRating>(
+    (highest, rating) =>
+      severityRank(rating) > severityRank(highest) ? rating : highest,
+    "NONE",
+  );
 }

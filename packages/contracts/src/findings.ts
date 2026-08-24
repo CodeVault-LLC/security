@@ -10,6 +10,7 @@ import {
   ContentVisibilitySchema,
   DisclosureStateSchema,
   ExternalIdStateSchema,
+  ExternalIdSchemeSchema,
   HumanReference,
   Markdown,
   PaginationQuery,
@@ -249,8 +250,8 @@ export const AddFindingScoreRequest = Type.Object({
 export type AddFindingScoreRequest = Static<typeof AddFindingScoreRequest>;
 
 export const AddFindingIdentifierRequest = Type.Object({
-  scheme: Type.String({ maxLength: 40 }),
-  value: Type.String({ minLength: 1, maxLength: 200 }),
+  scheme: ExternalIdSchemeSchema,
+  value: Type.String({ minLength: 1, maxLength: 128 }),
 });
 
 export type AddFindingIdentifierRequest = Static<

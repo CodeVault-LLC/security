@@ -6,7 +6,11 @@ import {
   type TUnion,
 } from "@sinclair/typebox";
 
-import { SEVERITY_RATINGS, TLP_LABELS } from "@codevault/standards";
+import {
+  EXTERNAL_ID_SCHEMES,
+  SEVERITY_RATINGS,
+  TLP_LABELS,
+} from "@codevault/standards";
 
 import {
   AFFECTED_RANGE_KINDS,
@@ -133,6 +137,8 @@ export const MessageClassificationSchema = enumOf(MESSAGE_CLASSIFICATIONS);
 export const TlpLabelSchema = enumOf(TLP_LABELS);
 
 export const SeveritySchema = enumOf(SEVERITY_RATINGS);
+
+export const ExternalIdSchemeSchema = enumOf(EXTERNAL_ID_SCHEMES);
 
 /**
  * Error envelope.

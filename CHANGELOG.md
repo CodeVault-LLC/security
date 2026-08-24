@@ -8,6 +8,10 @@ with the prerelease sequence defined in [`ROADMAP.md`](ROADMAP.md).
 
 ### Added
 
+- Added a CWE 4.20 catalogue refresh with complete 2025 Top 25 coverage, rank
+  metadata, canonical lookup, and bounded category queries.
+- Added direct tests and reusable guards for CWE IDs, external identifiers,
+  severity ratings, and TLP labels.
 - Added reviewed folder intake for Markdown, JSON, CSV, captures, images, and
   attachments with mapping errors, duplicate warnings, original-file
   preservation, cancellation, and resumable upload state.
@@ -22,6 +26,20 @@ with the prerelease sequence defined in [`ROADMAP.md`](ROADMAP.md).
 
 - Added `0018_case_archive_imports.sql` for expiring non-canonical archive
   import sessions and staged artifacts.
+
+### Security
+
+- Finding identifier requests now accept only supported schemes and canonical
+  values. Invalid identifiers do not receive authority links.
+- Identifier insertion, CVE state updates, and audit records now commit in one
+  transaction. Retried inserts do not create duplicate audit events.
+- Severity classification now rejects non-finite values and scores outside the
+  CVSS range.
+
+### Changed
+
+- Bootstrap integration tests now apply every production migration. New schema
+  migrations cannot leave the fixture behind.
 
 ### Known gaps
 
