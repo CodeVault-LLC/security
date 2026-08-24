@@ -95,6 +95,8 @@ export const queryKeys = {
       ? (["assets"] as const)
       : (["assets", filters] as const),
   asset: (id: string) => ["asset", id] as const,
+  assetRegistry: (query: string, source: string) =>
+    ["asset-registry", query, source] as const,
   vendors: (filters?: Record<string, unknown>) =>
     filters === undefined
       ? (["vendors"] as const)

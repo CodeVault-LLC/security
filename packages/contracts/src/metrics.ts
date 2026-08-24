@@ -4,8 +4,10 @@ import {
   AssetKindSchema,
   DisclosureStateSchema,
   enumOf,
+  ExternalIdStateSchema,
   HumanReference,
   PriorArtStateSchema,
+  RemediationStateSchema,
   Timestamp,
   Uuid,
   ValidationStateSchema,
@@ -88,6 +90,16 @@ export const PriorArtCount = Type.Object({
   count: Type.Integer({ minimum: 0 }),
 });
 
+export const RemediationCount = Type.Object({
+  state: RemediationStateSchema,
+  count: Type.Integer({ minimum: 0 }),
+});
+
+export const ExternalIdCount = Type.Object({
+  state: ExternalIdStateSchema,
+  count: Type.Integer({ minimum: 0 }),
+});
+
 /**
  * One bucket of the intake trend.
  *
@@ -166,6 +178,8 @@ export const MetricTotals = Type.Object({
   published: Type.Integer({ minimum: 0 }),
   openCases: Type.Integer({ minimum: 0 }),
   criticalsUnfixed: Type.Integer({ minimum: 0 }),
+  awaitingReview: Type.Integer({ minimum: 0 }),
+  overdueVendorResponses: Type.Integer({ minimum: 0 }),
   medianAcknowledgementDays: Type.Union([
     Type.Number({ minimum: 0 }),
     Type.Null(),
@@ -174,14 +188,41 @@ export const MetricTotals = Type.Object({
 
 export type MetricTotals = Static<typeof MetricTotals>;
 
+/** Counts of findings that carry the records needed for later research work. */
+export const FindingCoverage = Type.Object({
+  total: Type.Integer({ minimum: 0 }),
+  scored: Type.Integer({ minimum: 0 }),
+  weaknessClassified: Type.Integer({ minimum: 0 }),
+  assetLinked: Type.Integer({ minimum: 0 }),
+  evidenceLinked: Type.Integer({ minimum: 0 }),
+  affectedRangeRecorded: Type.Integer({ minimum: 0 }),
+  priorArtChecked: Type.Integer({ minimum: 0 }),
+});
+
+export type FindingCoverage = Static<typeof FindingCoverage>;
+
+/** Age of unresolved, non-invalid findings, measured from creation time. */
+export const FindingAge = Type.Object({
+  under30Days: Type.Integer({ minimum: 0 }),
+  from30To89Days: Type.Integer({ minimum: 0 }),
+  from90To179Days: Type.Integer({ minimum: 0 }),
+  atLeast180Days: Type.Integer({ minimum: 0 }),
+});
+
+export type FindingAge = Static<typeof FindingAge>;
+
 export const MetricsResponse = Type.Object({
   window: MetricWindowSchema,
   bucket: MetricBucketSchema,
   totals: MetricTotals,
   severity: SeverityTotals,
   validation: Type.Array(ValidationCount),
+  remediation: Type.Array(RemediationCount),
   disclosure: Type.Array(DisclosureCount),
+  externalId: Type.Array(ExternalIdCount),
   priorArt: Type.Array(PriorArtCount),
+  coverage: FindingCoverage,
+  age: FindingAge,
   trend: Type.Array(TrendPoint),
   stages: Type.Array(StageDuration),
   cwe: Type.Array(CweCount),

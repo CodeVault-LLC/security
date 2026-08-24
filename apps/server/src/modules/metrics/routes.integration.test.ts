@@ -181,8 +181,12 @@ describeIntegration("metrics", () => {
     it("shows restricted distributions and trends to every cleared member", async () => {
       const { member, owner: ownerView } = await bothViews();
       expect(member.validation).toEqual(ownerView.validation);
+      expect(member.remediation).toEqual(ownerView.remediation);
       expect(member.disclosure).toEqual(ownerView.disclosure);
+      expect(member.externalId).toEqual(ownerView.externalId);
       expect(member.priorArt).toEqual(ownerView.priorArt);
+      expect(member.coverage).toEqual(ownerView.coverage);
+      expect(member.age).toEqual(ownerView.age);
       expect(member.trend).toEqual(ownerView.trend);
     });
 
@@ -217,7 +221,9 @@ describeIntegration("metrics", () => {
       // An absent bar and a bar of zero mean different things. Every state is
       // present so a reader can tell "none in this state" from "not measured".
       expect(metrics.validation).toHaveLength(6);
+      expect(metrics.remediation).toHaveLength(8);
       expect(metrics.disclosure).toHaveLength(7);
+      expect(metrics.externalId).toHaveLength(5);
       expect(metrics.priorArt).toHaveLength(6);
     });
 
@@ -257,6 +263,12 @@ describeIntegration("metrics", () => {
       );
       expect(narrow.disclosure.map((entry) => entry.state)).toEqual(
         before.disclosure.map((entry) => entry.state),
+      );
+      expect(narrow.remediation.map((entry) => entry.state)).toEqual(
+        before.remediation.map((entry) => entry.state),
+      );
+      expect(narrow.externalId.map((entry) => entry.state)).toEqual(
+        before.externalId.map((entry) => entry.state),
       );
     });
   });
@@ -454,6 +466,8 @@ describeIntegration("metrics", () => {
     expect(Array.isArray(metrics.trend)).toBe(true);
     expect(Array.isArray(metrics.cwe)).toBe(true);
     expect(Array.isArray(metrics.topAssets)).toBe(true);
+    expect(metrics.coverage.total).toBeGreaterThanOrEqual(0);
+    expect(metrics.age.under30Days).toBeGreaterThanOrEqual(0);
     expect(metrics.stages).toHaveLength(3);
   });
 });

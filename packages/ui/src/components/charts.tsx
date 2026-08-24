@@ -1,4 +1,8 @@
-import type { ReactNode } from "react";
+import { defineChart, lineY } from "@tanstack/charts";
+import { Chart } from "@tanstack/charts/react";
+import { scaleLinear } from "@tanstack/charts/scales/linear";
+import { tooltip } from "@tanstack/charts/tooltip";
+import { useMemo, type ReactNode } from "react";
 
 import { cn } from "../lib/cn.js";
 
@@ -65,20 +69,6 @@ export function formatCompact(value: number): string {
 
 export function formatCount(value: number): string {
   return value.toLocaleString("en-GB");
-}
-
-/** Rounds up to a 1, 2 or 5 times a power of ten, for axis ticks that read cleanly. */
-function niceCeiling(value: number): number {
-  if (value <= 0) {
-    return 1;
-  }
-
-  const magnitude = 10 ** Math.floor(Math.log10(value));
-  const normalised = value / magnitude;
-  const step =
-    normalised <= 1 ? 1 : normalised <= 2 ? 2 : normalised <= 5 ? 5 : 10;
-
-  return step * magnitude;
 }
 
 const percentage = (value: number, total: number): number =>
@@ -164,8 +154,6 @@ export interface StatTileProps {
   value: number | string;
   /** Signed change against a named period, e.g. `{ value: 4, period: "30d" }`. */
   delta?: { value: number; period: string; upIsGood?: boolean };
-  /** A short series drawn behind the value. Twelve points is the usual length. */
-  trend?: readonly number[];
   /** Replaces the value when there is nothing to show, e.g. too small a sample. */
   hint?: string;
   className?: string;
@@ -182,7 +170,6 @@ export function StatTile({
   label,
   value,
   delta,
-  trend,
   hint,
   className,
 }: StatTileProps): React.JSX.Element {
@@ -201,13 +188,7 @@ export function StatTile({
         {label}
       </span>
 
-      <span className="flex items-end gap-2">
-        <span className="text-[20px] font-semibold leading-6">{display}</span>
-
-        {trend === undefined || trend.length < 2 ? null : (
-          <Sparkline points={trend} />
-        )}
-      </span>
+      <span className="text-[20px] font-semibold leading-6">{display}</span>
 
       {delta === undefined ? (
         hint === undefined ? null : (
@@ -225,42 +206,6 @@ export function StatTile({
         </span>
       )}
     </div>
-  );
-}
-
-/** The twelve-point trace inside a stat tile. Decorative; the value carries the fact. */
-function Sparkline({
-  points,
-}: {
-  points: readonly number[];
-}): React.JSX.Element {
-  const max = Math.max(...points, 1);
-  const step = 60 / Math.max(points.length - 1, 1);
-  const path = points
-    .map((point, index) => {
-      const x = index * step;
-      const y = 18 - (point / max) * 16;
-
-      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 60 20"
-      className="h-4 w-[60px] shrink-0 overflow-visible"
-    >
-      <path
-        d={path}
-        fill="none"
-        stroke="var(--cv-text-muted)"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        vectorEffect="non-scaling-stroke"
-      />
-    </svg>
   );
 }
 
@@ -394,25 +339,12 @@ export interface TrendChartProps {
 }
 
 /**
- * Plot geometry.
- *
- * A unit box, stretched to whatever the container is. Nothing inside the SVG is
- * text, so `preserveAspectRatio="none"` is safe here: only the paths stretch,
- * and their strokes are pinned by `non-scaling-stroke`. The axis labels live in
- * HTML beside the plot, which is what stops them from stretching with it.
- */
-const PLOT = 100;
-
-/** Where the gridlines and their labels sit, as a fraction of the scale. */
-const GRID_FRACTIONS = [1, 0.5, 0] as const;
-
-/**
  * Change over time.
  *
- * The plot has a fixed height and a fluid width. An SVG sized only by its
- * `viewBox` grows in both directions at once, so the same chart that looks
- * right in a third-width card becomes several hundred pixels tall in a
- * full-width one, with a band of dead space above it.
+ * TanStack Charts owns scale calculation, responsive measurement, axes,
+ * keyboard focus, and tooltip positioning. The CodeVault interface stays
+ * unchanged so every existing metrics caller and accessible value table keeps
+ * working while the plotting implementation can evolve in one module.
  */
 export function TrendChart({
   series,
@@ -421,14 +353,41 @@ export function TrendChart({
   className,
 }: TrendChartProps): React.JSX.Element {
   const plotted = series.filter((entry) => entry.points.length > 0);
-  const highest = Math.max(1, ...plotted.flatMap((entry) => [...entry.points]));
-  const ceiling = niceCeiling(highest);
+  const definition = useMemo(() => {
+    const marks = plotted.map((entry) =>
+      lineY(
+        buckets.map((bucket, index) => ({
+          bucket,
+          index,
+          value: entry.points[index] ?? 0,
+        })),
+        {
+          id: entry.label,
+          x: "index",
+          y: "value",
+          stroke: paint(entry.color),
+          strokeWidth: 2,
+          points: true,
+        },
+      ),
+    );
 
-  const count = Math.max(buckets.length, 1);
-  const step = count > 1 ? PLOT / (count - 1) : 0;
-
-  const xFor = (index: number): number => index * step;
-  const yFor = (value: number): number => PLOT - (value / ceiling) * PLOT;
+    return defineChart({
+      marks,
+      x: { scale: scaleLinear, axis: false },
+      y: {
+        scale: scaleLinear,
+        nice: true,
+        grid: true,
+        axis: {
+          ticks: { count: 3, format: (value) => formatCompact(value) },
+        },
+      },
+      clip: true,
+      tooltip,
+      svgAnimation: false,
+    });
+  }, [buckets, plotted]);
 
   const table = (
     <ChartTable
@@ -452,73 +411,16 @@ export function TrendChart({
 
   return (
     <div className={cn("min-w-0", className)}>
-      <div className="flex gap-1.5">
-        {/* Axis labels as HTML, so they keep their size and their baseline
-            whatever the plot is stretched to. */}
-        <div className="flex h-32 w-7 shrink-0 flex-col justify-between text-right text-[10px] tabular-nums leading-none text-text-muted">
-          {GRID_FRACTIONS.map((fraction) => (
-            <span key={fraction}>
-              {formatCompact(Math.round(ceiling * fraction))}
-            </span>
-          ))}
-        </div>
+      <Chart
+        definition={definition}
+        height={144}
+        initialWidth={640}
+        ariaLabel={caption}
+        ariaDescription="Use the arrow keys to inspect each period. Exact values also appear in the data table."
+        className="text-text-muted [&_text]:font-mono [&_text]:text-[10px] [&_text]:tabular-nums"
+      />
 
-        <svg
-          viewBox={`0 0 ${PLOT} ${PLOT}`}
-          preserveAspectRatio="none"
-          className="h-32 min-w-0 flex-1"
-          role="img"
-          aria-label={caption}
-        >
-          {/* Hairline, solid, one step off the surface. Dashed gridlines read as
-              a threshold or a projection when they are only a grid. */}
-          {GRID_FRACTIONS.map((fraction) => (
-            <line
-              key={fraction}
-              x1={0}
-              x2={PLOT}
-              y1={PLOT * (1 - fraction)}
-              y2={PLOT * (1 - fraction)}
-              stroke="var(--cv-border)"
-              strokeWidth={1}
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-
-          {plotted.map((entry) => {
-            const line = entry.points
-              .map(
-                (value, index) =>
-                  `${index === 0 ? "M" : "L"}${xFor(index).toFixed(2)},${yFor(value).toFixed(2)}`,
-              )
-              .join(" ");
-
-            const lastIndex = entry.points.length - 1;
-            const area = `${line} L${xFor(lastIndex).toFixed(2)},${PLOT} L0,${PLOT} Z`;
-
-            return (
-              <g key={entry.key}>
-                {/* A wash at 10%, never a saturated block. Only for a single
-                    series: two overlapping fills turn the lower one to mud. */}
-                {plotted.length === 1 ? (
-                  <path d={area} fill={paint(entry.color)} opacity={0.1} />
-                ) : null}
-                <path
-                  d={line}
-                  fill="none"
-                  stroke={paint(entry.color)}
-                  strokeWidth={2}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  vectorEffect="non-scaling-stroke"
-                />
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-
-      <div className="mt-1 flex justify-between pl-[34px] text-[10px] text-text-muted">
+      <div className="mt-1 flex justify-between pl-9 text-[10px] text-text-muted">
         <span>{buckets[0]}</span>
         <span>{buckets[buckets.length - 1]}</span>
       </div>
@@ -526,7 +428,7 @@ export function TrendChart({
       {/* A legend for two or more series, always. One series needs none — the
           card's title already says what is plotted. */}
       {plotted.length < 2 ? null : (
-        <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 pl-[34px]">
+        <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-1 pl-9">
           {plotted.map((entry) => (
             <li
               key={entry.key}

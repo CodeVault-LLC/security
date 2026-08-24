@@ -15,6 +15,7 @@ export * from "./media.js";
 export * from "./organization.js";
 export * from "./prior-art.js";
 export * from "./reports.js";
+export * from "./registries.js";
 export * from "./search.js";
 export * from "./submissions.js";
 export * from "./vendors.js";

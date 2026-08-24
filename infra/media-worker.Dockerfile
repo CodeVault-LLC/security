@@ -9,9 +9,11 @@ COPY apps/server/package.json apps/server/
 COPY apps/worker/package.json apps/worker/
 COPY apps/desktop/package.json apps/desktop/
 COPY packages/ai/package.json packages/ai/
+COPY packages/cli/package.json packages/cli/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/core/package.json packages/core/
 COPY packages/db/package.json packages/db/
+COPY packages/exchange/package.json packages/exchange/
 COPY packages/markdown/package.json packages/markdown/
 COPY packages/mcp/package.json packages/mcp/
 COPY packages/reporting/package.json packages/reporting/

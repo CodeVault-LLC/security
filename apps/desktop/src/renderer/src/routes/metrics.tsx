@@ -12,6 +12,7 @@ import {
   CardHeader,
   CardTitle,
   Funnel,
+  Meter,
   Mono,
   severityChartSegments,
   StackedBar,
@@ -111,14 +112,23 @@ export function MetricsRoute(): React.JSX.Element {
         <QueryBoundary query={metrics} loadingLabel="Loading metrics…">
           {(data) => (
             <>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
                 <StatTile label="Findings" value={data.totals.findings} />
+                <StatTile label="Open cases" value={data.totals.openCases} />
                 <StatTile label="Confirmed" value={data.totals.confirmed} />
-                <StatTile label="Published" value={data.totals.published} />
+                <StatTile
+                  label="Awaiting review"
+                  value={data.totals.awaitingReview}
+                />
                 <StatTile
                   label="Criticals unfixed"
                   value={data.totals.criticalsUnfixed}
                 />
+                <StatTile
+                  label="Overdue replies"
+                  value={data.totals.overdueVendorResponses}
+                />
+                <StatTile label="Published" value={data.totals.published} />
                 <StatTile
                   label="Median ack"
                   value={
@@ -183,6 +193,31 @@ export function MetricsRoute(): React.JSX.Element {
 
                 <Card>
                   <CardHeader>
+                    <CardTitle>Remediation</CardTitle>
+                    <span className="text-[11px] text-text-muted">
+                      current total
+                    </span>
+                  </CardHeader>
+                  <CardBody>
+                    <BarList
+                      caption="Findings by remediation state"
+                      items={data.remediation.map((entry) => ({
+                        key: entry.state,
+                        label: humanise(entry.state),
+                        value: entry.count,
+                        color:
+                          entry.state === "FIX_VERIFIED"
+                            ? "--cv-success"
+                            : entry.state === "REGRESSED"
+                              ? "--cv-danger"
+                              : "--cv-warning",
+                      }))}
+                    />
+                  </CardBody>
+                </Card>
+
+                <Card>
+                  <CardHeader>
                     <CardTitle>Validation</CardTitle>
                     <span className="text-[11px] text-text-muted">
                       current total
@@ -196,6 +231,26 @@ export function MetricsRoute(): React.JSX.Element {
                         label: humanise(entry.state),
                         value: entry.count,
                         color: VALIDATION_COLORS[entry.state] ?? "--cv-accent",
+                      }))}
+                    />
+                  </CardBody>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>External identifiers</CardTitle>
+                    <span className="text-[11px] text-text-muted">
+                      current total
+                    </span>
+                  </CardHeader>
+                  <CardBody>
+                    <BarList
+                      caption="Findings by external identifier state"
+                      items={data.externalId.map((entry) => ({
+                        key: entry.state,
+                        label: humanise(entry.state),
+                        value: entry.count,
+                        color: "--cv-info",
                       }))}
                     />
                   </CardBody>
@@ -276,6 +331,83 @@ export function MetricsRoute(): React.JSX.Element {
                         value: entry.count,
                         color: priorArtColor(entry.state),
                       }))}
+                    />
+                  </CardBody>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Research coverage</CardTitle>
+                    <span className="text-[11px] text-text-muted">
+                      of {data.coverage.total} findings
+                    </span>
+                  </CardHeader>
+                  <CardBody className="space-y-2">
+                    <Meter
+                      label="Approved score"
+                      value={data.coverage.scored}
+                      total={data.coverage.total}
+                    />
+                    <Meter
+                      label="Weakness classified"
+                      value={data.coverage.weaknessClassified}
+                      total={data.coverage.total}
+                    />
+                    <Meter
+                      label="Asset linked"
+                      value={data.coverage.assetLinked}
+                      total={data.coverage.total}
+                    />
+                    <Meter
+                      label="Evidence linked"
+                      value={data.coverage.evidenceLinked}
+                      total={data.coverage.total}
+                    />
+                    <Meter
+                      label="Affected range recorded"
+                      value={data.coverage.affectedRangeRecorded}
+                      total={data.coverage.total}
+                    />
+                    <Meter
+                      label="Prior art checked"
+                      value={data.coverage.priorArtChecked}
+                      total={data.coverage.total}
+                    />
+                  </CardBody>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Unresolved finding age</CardTitle>
+                    <span className="text-[11px] text-text-muted">
+                      excludes invalid and resolved
+                    </span>
+                  </CardHeader>
+                  <CardBody>
+                    <BarList
+                      caption="Unresolved findings by age"
+                      items={[
+                        {
+                          key: "under-30",
+                          label: "Under 30 days",
+                          value: data.age.under30Days,
+                        },
+                        {
+                          key: "30-89",
+                          label: "30 to 89 days",
+                          value: data.age.from30To89Days,
+                        },
+                        {
+                          key: "90-179",
+                          label: "90 to 179 days",
+                          value: data.age.from90To179Days,
+                        },
+                        {
+                          key: "180-plus",
+                          label: "180 days or more",
+                          value: data.age.atLeast180Days,
+                        },
+                      ].filter((entry) => entry.value > 0)}
                     />
                   </CardBody>
                 </Card>
