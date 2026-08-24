@@ -23,14 +23,16 @@ export function VendorPicker({
   value,
   onValueChange,
   onCreateVendor,
+  suggestedName,
   disabled = false,
 }: {
   value: string | null;
   onValueChange: (vendorId: string | null) => void;
   onCreateVendor?: () => void;
+  suggestedName?: string | null;
   disabled?: boolean;
 }): React.JSX.Element {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(suggestedName ?? "");
   const vendors = useApiQuery<PaginatedVendors>(
     queryKeys.vendors(),
     "/v1/vendors?limit=200",
@@ -45,6 +47,16 @@ export function VendorPicker({
         vendor.ref.toLocaleLowerCase("en-US").includes(needle),
     );
   }, [query, vendors.data?.items]);
+  const suggestedMatch = useMemo(() => {
+    const needle = suggestedName?.trim().toLocaleLowerCase("en-US");
+    if (needle === undefined || needle.length === 0) return null;
+
+    return (
+      (vendors.data?.items ?? []).find(
+        (vendor) => vendor.name.trim().toLocaleLowerCase("en-US") === needle,
+      ) ?? null
+    );
+  }, [suggestedName, vendors.data?.items]);
 
   return (
     <div className="space-y-1">
@@ -84,6 +96,25 @@ export function VendorPicker({
       {vendors.error === null ? null : (
         <p className="text-[11px] text-danger">{vendors.error.message}</p>
       )}
+      {suggestedName === undefined || suggestedName === null ? null : (
+        <div className="flex min-h-9 items-center justify-between gap-2 text-[11px] text-text-muted">
+          <span>
+            {suggestedMatch === null
+              ? `Registry vendor "${suggestedName}" is not in the directory yet.`
+              : `Directory match: ${suggestedMatch.name}.`}
+          </span>
+          {suggestedMatch === null || value === suggestedMatch.id ? null : (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => onValueChange(suggestedMatch.id)}
+            >
+              Use {suggestedMatch.name}
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -92,14 +123,20 @@ export function VendorDialog({
   open,
   onOpenChange,
   onCreated,
+  initialName = "",
+  initialWebsiteUrl = "",
+  initialSourceUrl = "",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated?: (vendor: VendorDetail) => void;
+  initialName?: string;
+  initialWebsiteUrl?: string;
+  initialSourceUrl?: string;
 }): React.JSX.Element {
-  const [name, setName] = useState("");
-  const [websiteUrl, setWebsiteUrl] = useState("");
-  const [sourceUrl, setSourceUrl] = useState("");
+  const [name, setName] = useState(initialName);
+  const [websiteUrl, setWebsiteUrl] = useState(initialWebsiteUrl);
+  const [sourceUrl, setSourceUrl] = useState(initialSourceUrl);
   const [error, setError] = useState<string | null>(null);
   const create = useApiMutation<VendorDetail>(
     () => ({

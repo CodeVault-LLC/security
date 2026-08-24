@@ -116,4 +116,26 @@ describe("vendor trust UI", () => {
     );
     expect(onValueChange).toHaveBeenCalledWith(VENDOR_ID);
   });
+
+  it("matches an exact registry vendor suggestion to the directory", async () => {
+    const user = userEvent.setup();
+    const onValueChange = vi.fn();
+    renderWithApi(
+      <VendorPicker
+        value={null}
+        onValueChange={onValueChange}
+        suggestedName="  example psirt "
+      />,
+      async () => ({
+        ok: true,
+        data: { items: [VENDOR], nextCursor: null },
+      }),
+    );
+
+    expect(
+      await screen.findByText("Directory match: Example PSIRT."),
+    ).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Use Example PSIRT" }));
+    expect(onValueChange).toHaveBeenCalledWith(VENDOR_ID);
+  });
 });

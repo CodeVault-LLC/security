@@ -1,11 +1,12 @@
 import { Link, useSearch } from "@tanstack/react-router";
-import { FilePlus2, ListFilter, Pencil, Plus, X } from "lucide-react";
+import { FilePlus2, ListFilter, Pencil, Plus, Search, X } from "lucide-react";
 import { useState } from "react";
 
 import type {
   AssetDetail,
   AssetDetailMetricsResponse,
   AssetMetricsResponse,
+  AssetRegistryResult,
   AssetSummary,
 } from "@codevault/contracts";
 import {
@@ -44,6 +45,10 @@ import {
 } from "@codevault/ui";
 
 import { PageHeader } from "../components/app-shell.js";
+import {
+  RegistrySearchDialog,
+  registryResultToAssetDraft,
+} from "../features/assets/registry-search-dialog.js";
 import { CreateFindingDialog } from "../features/findings/create-finding-dialog.js";
 import {
   VendorDialog,
@@ -1134,6 +1139,13 @@ function CreateAssetDialog({
     initialVendorId ?? null,
   );
   const [vendorDialogOpen, setVendorDialogOpen] = useState(false);
+  const [registryOpen, setRegistryOpen] = useState(false);
+  const [registryResult, setRegistryResult] =
+    useState<AssetRegistryResult | null>(null);
+  const [registryMetadata, setRegistryMetadata] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const [version, setVersion] = useState("");
   const [scheme, setScheme] = useState<string>("PURL");
   const [identifier, setIdentifier] = useState("");
@@ -1154,6 +1166,7 @@ function CreateAssetDialog({
           ? {}
           : { identifier: { scheme, value: identifier.trim() } }),
         ...(notes.trim().length === 0 ? {} : { notes: notes.trim() }),
+        ...(registryMetadata === null ? {} : { metadata: registryMetadata }),
       },
     }),
     () => [queryKeys.assets()],
@@ -1168,7 +1181,18 @@ function CreateAssetDialog({
         >
           <DialogBody className="space-y-3">
             <div>
-              <Label htmlFor="asset-name">Name</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label htmlFor="asset-name">Name</Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setRegistryOpen(true)}
+                >
+                  <Search aria-hidden className="size-3.5" />
+                  Search registries
+                </Button>
+              </div>
               <Input
                 id="asset-name"
                 value={name}
@@ -1177,6 +1201,12 @@ function CreateAssetDialog({
                 autoFocus
                 className="mt-1"
               />
+              {registryResult === null ? null : (
+                <p className="mt-1 text-[11px] text-text-muted" role="status">
+                  Prefilled from {registryResult.sourceLabel}. Review every
+                  field before creating the asset.
+                </p>
+              )}
             </div>
 
             <div>
@@ -1194,8 +1224,10 @@ function CreateAssetDialog({
               <div>
                 <Label>Vendor (optional)</Label>
                 <VendorPicker
+                  key={registryResult?.externalId ?? "manual"}
                   value={vendorId}
                   onValueChange={setVendorId}
+                  suggestedName={registryResult?.vendorName ?? null}
                   onCreateVendor={() => {
                     onOpenChange(false);
                     setVendorDialogOpen(true);
@@ -1287,6 +1319,9 @@ function CreateAssetDialog({
                     setVersion("");
                     setIdentifier("");
                     setNotes("");
+                    setRegistryResult(null);
+                    setRegistryMetadata(null);
+                    setShowAdvanced(false);
                   },
                   onError: (mutationError) => setError(mutationError.message),
                 })
@@ -1297,7 +1332,25 @@ function CreateAssetDialog({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <RegistrySearchDialog
+        open={registryOpen}
+        onOpenChange={setRegistryOpen}
+        onSelect={(result) => {
+          const draft = registryResultToAssetDraft(result);
+          setName(draft.name);
+          setKind("SOFTWARE_COMPONENT");
+          setVersion(draft.version);
+          setScheme("PURL");
+          setIdentifier(draft.identifier);
+          setNotes(draft.notes);
+          setRegistryResult(result);
+          setRegistryMetadata(draft.metadata);
+          setShowAdvanced(true);
+          setError(null);
+        }}
+      />
       <VendorDialog
+        key={registryResult?.externalId ?? "manual"}
         open={vendorDialogOpen}
         onOpenChange={(next) => {
           setVendorDialogOpen(next);
@@ -1305,9 +1358,13 @@ function CreateAssetDialog({
         }}
         onCreated={(created) => {
           setVendorId(created.id);
+          setRegistryResult((current) =>
+            current === null ? null : { ...current, vendorName: null },
+          );
           setVendorDialogOpen(false);
           onOpenChange(true);
         }}
+        initialName={registryResult?.vendorName ?? ""}
       />
     </>
   );
