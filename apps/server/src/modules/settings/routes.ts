@@ -1,8 +1,18 @@
 import type { AppInstance } from "../../http/app-instance.js";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 
-import { ErrorResponse, OkResponse } from "@codevault/contracts";
-import { DomainError, validationError } from "@codevault/core";
+import {
+  CreateMcpAccessTokenRequest,
+  CreateMcpAccessTokenResponse,
+  ErrorResponse,
+  McpAccessTokenList,
+  OkResponse,
+} from "@codevault/contracts";
+import {
+  DomainError,
+  permissionDenied,
+  validationError,
+} from "@codevault/core";
 import { schema } from "@codevault/db";
 import { Type } from "@sinclair/typebox";
 
@@ -15,7 +25,16 @@ import {
   reserveLoginAttempt,
   clearFailedAttempts,
 } from "../../auth/login-throttle.js";
-import { principalOf, requireRecentMfa } from "../../http/guards.js";
+import {
+  principalOf,
+  requireInteractiveSession,
+  requireRecentMfa,
+} from "../../http/guards.js";
+import {
+  createMcpAccess,
+  revokeAllMcpAccessForUser,
+  revokeMcpAccess,
+} from "../../auth/mcp-access.js";
 
 const Profile = Type.Object({
   displayName: Type.String({ minLength: 2, maxLength: 120 }),
@@ -51,6 +70,117 @@ const Sessions = Type.Object({
 const Id = Type.Object({ id: Type.String({ format: "uuid" }) });
 
 export async function registerSettingsRoutes(app: AppInstance): Promise<void> {
+  app.get(
+    "/v1/settings/mcp-access",
+    { schema: { response: { 200: McpAccessTokenList } } },
+    async (request) => {
+      const principal = requireInteractiveSession(request);
+      const rows = await app.db
+        .select({
+          id: schema.mcpAccessTokens.id,
+          name: schema.mcpAccessTokens.name,
+          createdAt: schema.mcpAccessTokens.createdAt,
+          lastUsedAt: schema.mcpAccessTokens.lastUsedAt,
+        })
+        .from(schema.mcpAccessTokens)
+        .where(
+          and(
+            eq(schema.mcpAccessTokens.userId, principal.user.id),
+            isNull(schema.mcpAccessTokens.revokedAt),
+          ),
+        )
+        .orderBy(sql`${schema.mcpAccessTokens.createdAt} DESC`);
+      return { items: rows };
+    },
+  );
+
+  app.post(
+    "/v1/settings/mcp-access",
+    {
+      schema: {
+        body: CreateMcpAccessTokenRequest,
+        response: {
+          200: CreateMcpAccessTokenResponse,
+          403: ErrorResponse,
+        },
+      },
+      config: { rateLimit: { max: 10, timeWindow: "1 hour" } },
+    },
+    async (request) => {
+      const principal = requireInteractiveSession(request);
+      requireRecentMfa(request);
+      if (!principal.organization.policy.mcpEnabled) {
+        throw permissionDenied("MCP access is disabled by your organization.");
+      }
+      return app.db.transaction(async (tx) => {
+        const created = await createMcpAccess(
+          tx,
+          principal.user.id,
+          request.body.name,
+        );
+        await app.audit.write(
+          tx,
+          {
+            organizationId: principal.organization.id,
+            actorId: principal.user.id,
+            sessionId: principal.session.id,
+            requestId: request.requestId,
+          },
+          {
+            action: "auth.mcp_access_created",
+            entityType: "mcp_access",
+            entityId: created.access.id,
+            after: { name: created.access.name },
+          },
+        );
+        return created;
+      });
+    },
+  );
+
+  app.delete(
+    "/v1/settings/mcp-access/:id",
+    { schema: { params: Id, response: { 200: OkResponse } } },
+    async (request) => {
+      const principal = requireInteractiveSession(request);
+      await app.db.transaction(async (tx) => {
+        const [access] = await tx
+          .select({
+            id: schema.mcpAccessTokens.id,
+            name: schema.mcpAccessTokens.name,
+          })
+          .from(schema.mcpAccessTokens)
+          .where(
+            and(
+              eq(schema.mcpAccessTokens.id, request.params.id),
+              eq(schema.mcpAccessTokens.userId, principal.user.id),
+              isNull(schema.mcpAccessTokens.revokedAt),
+            ),
+          )
+          .limit(1);
+        await revokeMcpAccess(tx, principal.user.id, request.params.id);
+        if (access !== undefined) {
+          await app.audit.write(
+            tx,
+            {
+              organizationId: principal.organization.id,
+              actorId: principal.user.id,
+              sessionId: principal.session.id,
+              requestId: request.requestId,
+            },
+            {
+              action: "auth.mcp_access_revoked",
+              entityType: "mcp_access",
+              entityId: access.id,
+              before: { name: access.name },
+            },
+          );
+        }
+      });
+      return { ok: true as const };
+    },
+  );
+
   app.patch(
     "/v1/settings/profile",
     { schema: { body: Profile, response: { 200: Profile } } },
@@ -169,6 +299,7 @@ export async function registerSettingsRoutes(app: AppInstance): Promise<void> {
               isNull(schema.sessions.revokedAt),
             ),
           );
+        await revokeAllMcpAccessForUser(tx, principal.user.id);
       });
       return { ok: true as const };
     },

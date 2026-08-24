@@ -1089,7 +1089,7 @@ export function PersonalSecurityRoute(): React.JSX.Element {
               id="password-consequence"
               className="text-[11px] text-text-muted"
             >
-              Signs out other devices.
+              Signs out other devices and revokes MCP connections.
             </p>
           </div>
           {changePassword.isSuccess ? (
@@ -1098,7 +1098,7 @@ export function PersonalSecurityRoute(): React.JSX.Element {
               className="flex items-center gap-1.5 text-[12px] text-success"
             >
               <Check aria-hidden className="size-3.5" />
-              Password changed. Other sessions were signed out.
+              Password changed. Other sessions and MCP connections were revoked.
             </p>
           ) : null}
           {changePassword.error ? (

@@ -35,6 +35,7 @@ export const organizationSecurityPolicies = pgTable(
       .notNull()
       .default(12),
     recentMfaMinutes: integer("recent_mfa_minutes").notNull().default(10),
+    mcpEnabled: boolean("mcp_enabled").notNull().default(true),
     // The SQL migration owns this FK to avoid an auth <-> organization cycle.
     updatedBy: uuid("updated_by"),
     updatedAt: updatedAt(),

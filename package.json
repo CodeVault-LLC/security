@@ -37,6 +37,7 @@
     "admin:create": "bun run scripts/bootstrap-admin.ts",
     "mfa:rotate-key": "bun run scripts/rotate-mfa-key.ts",
     "mcp:login": "bun run --cwd packages/mcp login",
+    "mcp:setup": "bun run --cwd packages/mcp setup",
     "mcp:start": "bun run --cwd packages/mcp start",
     "mcp:inventory": "bun run --cwd packages/mcp inventory",
     "mcp:inventory:check": "bun run --cwd packages/mcp inventory:check",

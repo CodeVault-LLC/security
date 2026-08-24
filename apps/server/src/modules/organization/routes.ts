@@ -16,6 +16,7 @@ import { schema } from "@codevault/db";
 import { Type } from "@sinclair/typebox";
 
 import { revokeAllSessionsForUser } from "../../auth/session.js";
+import { revokeAllMcpAccessForUser } from "../../auth/mcp-access.js";
 import {
   principalOf,
   requireOrganizationAdminWithRecentMfa,
@@ -203,8 +204,10 @@ export async function registerOrganizationRoutes(
         return updated;
       });
       if (!row) throw notFound("User");
-      if (request.body.disabled === true || request.body.role !== undefined)
+      if (request.body.disabled === true || request.body.role !== undefined) {
         await revokeAllSessionsForUser(app.db, row.id);
+        await revokeAllMcpAccessForUser(app.db, row.id);
+      }
       return row;
     },
   );
@@ -284,6 +287,7 @@ export async function registerOrganizationRoutes(
         sessionIdleMinutes: policy!.sessionIdleMinutes,
         sessionAbsoluteHours: policy!.sessionAbsoluteHours,
         recentMfaMinutes: policy!.recentMfaMinutes,
+        mcpEnabled: policy!.mcpEnabled,
         updatedAt: policy!.updatedAt,
       };
     },
@@ -324,6 +328,7 @@ export async function registerOrganizationRoutes(
         sessionIdleMinutes: policy!.sessionIdleMinutes,
         sessionAbsoluteHours: policy!.sessionAbsoluteHours,
         recentMfaMinutes: policy!.recentMfaMinutes,
+        mcpEnabled: policy!.mcpEnabled,
         updatedAt: policy!.updatedAt,
       };
     },

@@ -15,6 +15,10 @@ import { hashToken } from "./tokens.js";
  */
 
 export interface AuthenticatedPrincipal {
+  authentication: {
+    kind: "SESSION" | "MCP";
+    id: string;
+  };
   user: {
     id: string;
     email: string;
@@ -41,6 +45,7 @@ export interface AuthenticatedPrincipal {
       sessionAbsoluteHours: number;
       recentMfaMinutes: number;
       mfaRequired: true;
+      mcpEnabled: boolean;
     };
   };
 }
@@ -125,6 +130,7 @@ export async function resolveSession(
         schema.organizationSecurityPolicies.sessionAbsoluteHours,
       recentMfaMinutes: schema.organizationSecurityPolicies.recentMfaMinutes,
       mfaRequired: schema.organizationSecurityPolicies.mfaRequired,
+      mcpEnabled: schema.organizationSecurityPolicies.mcpEnabled,
     })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
@@ -176,6 +182,7 @@ export async function resolveSession(
   }
 
   return {
+    authentication: { kind: "SESSION", id: row.sessionId },
     user: {
       id: row.userId,
       email: row.email,
@@ -202,6 +209,7 @@ export async function resolveSession(
         sessionAbsoluteHours: row.sessionAbsoluteHours,
         recentMfaMinutes: row.recentMfaMinutes,
         mfaRequired: row.mfaRequired as true,
+        mcpEnabled: row.mcpEnabled,
       },
     },
   };

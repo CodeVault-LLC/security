@@ -78,8 +78,18 @@ an embargoed case is not left in a file anyone can read.
 
 Certificate errors are refused outright.
 
+MCP uses separate user-specific grants. The server stores only each grant's
+SHA-256 digest. The local MCP process stores the raw grant and server URL in a
+mode `0600` file. MCP grants have no idle timeout, so users can configure an AI
+client once. Users can revoke each grant. Disabling the user or the
+organization-wide MCP policy blocks the next request. An MCP grant never counts
+as recent MFA and cannot create another grant. A password or role change revokes
+all MCP grants for that user.
+
 *Enforced by* `apps/server/src/auth/`, `apps/desktop/src/main/session-store.ts`.
-*Tested by* `apps/server/src/auth.integration.test.ts`.
+*Tested by* `apps/server/src/auth.integration.test.ts`,
+`apps/server/src/organization.integration.test.ts`, and
+`packages/mcp/src/config.test.ts`.
 
 Password verification does not create a session. It creates a five-minute,
 hashed-at-rest challenge that must be completed with a replay-protected TOTP

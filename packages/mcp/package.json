@@ -5,11 +5,13 @@
   "type": "module",
   "bin": {
     "codevault-mcp": "./src/index.ts",
-    "codevault-mcp-login": "./src/login.ts"
+    "codevault-mcp-login": "./src/login.ts",
+    "codevault-mcp-setup": "./src/setup.ts"
   },
   "scripts": {
     "start": "bun src/index.ts",
     "login": "bun src/login.ts",
+    "setup": "bun src/setup.ts",
     "inventory": "bun src/generate-inventory.ts",
     "inventory:check": "bun src/generate-inventory.ts --check",
     "build": "tsc --noEmit",

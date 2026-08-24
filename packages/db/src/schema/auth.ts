@@ -115,6 +115,27 @@ export const sessions = pgTable(
   ],
 );
 
+/** Long-lived, user-specific grants used only by MCP clients. */
+export const mcpAccessTokens = pgTable(
+  "mcp_access_tokens",
+  {
+    id: primaryId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    /** SHA-256 of the prefixed raw token. The raw value is returned once. */
+    tokenHash: text("token_hash").notNull(),
+    name: text("name").notNull(),
+    lastUsedAt: timestampColumn("last_used_at"),
+    revokedAt: timestampColumn("revoked_at"),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("mcp_access_tokens_token_hash_key").on(table.tokenHash),
+    index("mcp_access_tokens_user_id_idx").on(table.userId, table.createdAt),
+  ],
+);
+
 export const totpCredentials = pgTable("totp_credentials", {
   id: primaryId(),
   userId: uuid("user_id")
@@ -326,6 +347,7 @@ export type UserRow = typeof users.$inferSelect;
 export type NewUserRow = typeof users.$inferInsert;
 export type InviteRow = typeof invites.$inferSelect;
 export type SessionRow = typeof sessions.$inferSelect;
+export type McpAccessTokenRow = typeof mcpAccessTokens.$inferSelect;
 export type OrganizationMembershipRow =
   typeof organizationMemberships.$inferSelect;
 export type TotpCredentialRow = typeof totpCredentials.$inferSelect;

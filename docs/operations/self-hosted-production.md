@@ -65,6 +65,17 @@ docker compose --env-file /etc/codevault/production.env \
 
 Place a maintained reverse proxy on the host or a trusted adjacent ingress. Proxy HTTPS to `127.0.0.1:${CODEVAULT_PORT:-4310}`. Require TLS 1.2 or later, automate certificate renewal, set request-body and timeout limits that accommodate the configured upload size, and preserve the client IP only through a trusted proxy configuration.
 
+After a researcher signs in to the desktop app, they can connect installed AI
+clients once:
+
+```bash
+bun run mcp:setup -- --server https://security.example.com
+```
+
+The setup command stores a user-specific, revocable credential. Normal session
+timeouts do not interrupt MCP work. To block MCP for the organization, turn off
+**Allow user-specific MCP connections** under **Organization security**.
+
 Do not publish PostgreSQL port 5432 or MinIO port 9000. Restrict host firewall access to the management plane and HTTPS. Limit outbound traffic where practical, while allowing the configured AI, vulnerability-intelligence, Gmail, and update services that the deployment actually uses.
 
 ## Create the first administrator

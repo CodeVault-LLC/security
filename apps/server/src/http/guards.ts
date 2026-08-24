@@ -41,6 +41,16 @@ export function actingUser(request: FastifyRequest): ActingUser {
   };
 }
 
+export function requireInteractiveSession(
+  request: FastifyRequest,
+): AuthenticatedPrincipal {
+  const principal = principalOf(request);
+  if (principal.authentication.kind !== "SESSION") {
+    throw permissionDenied("This action requires an interactive session.");
+  }
+  return principal;
+}
+
 export function requireOrganizationMember(request: FastifyRequest): ActingUser {
   return actingUser(request);
 }

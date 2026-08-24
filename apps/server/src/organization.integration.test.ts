@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import type { CreateMcpAccessTokenResponse } from "@codevault/contracts";
 import { schema } from "@codevault/db";
 
 import { hashToken } from "./auth/tokens.js";
@@ -121,6 +122,117 @@ describeIntegration("organization and personal settings APIs", () => {
       totp: { status: "ACTIVE" },
       recoveryCodes: { remaining: member.recoveryCodes.length },
     });
+  });
+
+  it("issues one user-specific MCP grant and applies organization policy on every request", async () => {
+    const created = await harness.app.inject({
+      method: "POST",
+      url: "/v1/settings/mcp-access",
+      headers: member.headers,
+      payload: { name: "Research workstation" },
+    });
+    expect(created.statusCode).toBe(200);
+    const access = created.json<CreateMcpAccessTokenResponse>();
+    expect(access.token).toMatch(/^cv_mcp_/u);
+
+    const mcpHeaders = { authorization: `Bearer ${access.token}` };
+    expect(
+      (
+        await harness.app.inject({
+          method: "GET",
+          url: "/v1/auth/me",
+          headers: mcpHeaders,
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const cannotMintAnother = await harness.app.inject({
+      method: "POST",
+      url: "/v1/settings/mcp-access",
+      headers: mcpHeaders,
+      payload: { name: "Nested connection" },
+    });
+    expect(cannotMintAnother.statusCode).toBe(403);
+    expect(
+      cannotMintAnother.json<{ error: { category: string } }>().error.category,
+    ).toBe("PERMISSION_DENIED");
+
+    await harness.dbHandle.db
+      .update(schema.organizationSecurityPolicies)
+      .set({ mcpEnabled: false })
+      .where(
+        eq(
+          schema.organizationSecurityPolicies.organizationId,
+          member.organizationId,
+        ),
+      );
+    const blocked = await harness.app.inject({
+      method: "GET",
+      url: "/v1/auth/me",
+      headers: mcpHeaders,
+    });
+    expect(blocked.statusCode).toBe(401);
+    expect(
+      blocked.json<{ error: { message: string } }>().error.message,
+    ).toContain("MCP access is disabled");
+
+    await harness.dbHandle.db
+      .update(schema.organizationSecurityPolicies)
+      .set({ mcpEnabled: true })
+      .where(
+        eq(
+          schema.organizationSecurityPolicies.organizationId,
+          member.organizationId,
+        ),
+      );
+    const revoked = await harness.app.inject({
+      method: "DELETE",
+      url: `/v1/settings/mcp-access/${access.access.id}`,
+      headers: member.headers,
+    });
+    expect(revoked.statusCode).toBe(200);
+    expect(
+      (
+        await harness.app.inject({
+          method: "GET",
+          url: "/v1/auth/me",
+          headers: mcpHeaders,
+        })
+      ).statusCode,
+    ).toBe(401);
+  });
+
+  it("revokes a user's MCP grants when their password changes", async () => {
+    const user = await harness.createUser({ role: "MEMBER" });
+    const created = await harness.app.inject({
+      method: "POST",
+      url: "/v1/settings/mcp-access",
+      headers: user.headers,
+      payload: { name: "Password rotation test" },
+    });
+    expect(created.statusCode).toBe(200);
+    const access = created.json<CreateMcpAccessTokenResponse>();
+
+    const changed = await harness.app.inject({
+      method: "POST",
+      url: "/v1/settings/password",
+      remoteAddress: "192.0.2.50",
+      headers: user.headers,
+      payload: {
+        currentPassword: user.password,
+        newPassword: "new-correct-horse-battery-staple",
+      },
+    });
+    expect(changed.statusCode).toBe(200);
+    expect(
+      (
+        await harness.app.inject({
+          method: "GET",
+          url: "/v1/auth/me",
+          headers: { authorization: `Bearer ${access.token}` },
+        })
+      ).statusCode,
+    ).toBe(401);
   });
 
   it("rate limits repeated password reauthentication guesses", async () => {

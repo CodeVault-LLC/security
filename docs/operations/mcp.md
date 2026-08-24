@@ -11,60 +11,44 @@ The [generated tool inventory](mcp-tool-inventory.md) lists every discovered
 tool, its effect annotation, and its registered purpose. Run
 `bun run mcp:inventory:check` to confirm that the file matches the server.
 
-## Sign in from the terminal
+## Set up installed AI clients once
 
 From the CodeVault Security repository, run:
 
 ```bash
-bun run mcp:login
+bun run mcp:setup
 ```
 
-Enter your email, password, and TOTP code. The command stores the session token
-in `~/.codevault-security/mcp-token` with mode `0600`. It does not store your
-password or TOTP code.
+The command detects Codex CLI and Claude Code. It asks for your CodeVault email,
+password, and TOTP code once. It then creates a user-specific MCP connection and
+adds CodeVault to each installed client at user scope.
+
+The command stores the server URL and MCP credential in
+`~/.codevault-security/mcp.json` with mode `0600`. It does not store your
+password or TOTP code. The MCP credential has no idle timeout. It remains valid
+until you revoke it, an administrator disables your account, or an administrator
+blocks MCP for the organization. Changing your password also revokes every MCP
+credential on your account.
 
 For a remote server, pass its HTTPS URL:
 
 ```bash
-bun run mcp:login -- --server https://security.example.com
+bun run mcp:setup -- --server https://security.example.com
 ```
 
-The session follows the organization's normal idle and absolute expiry rules.
-Run `bun run mcp:login` again after the session expires.
+To configure only one installed client, pass either `--client codex` or
+`--client claude`.
 
-## Add CodeVault to Codex CLI
+After setup, start the AI client in any repository and ask it to check your
+CodeVault identity. There is no separate login or registration step.
 
-Run this command from the CodeVault Security repository:
+You can run `bun run mcp:setup` again. If the saved connection still works, the
+command reuses it without asking you to sign in. This makes it safe to repair or
+add an AI client later.
 
-```bash
-codex mcp add codevault \
-  --env CODEVAULT_URL=http://127.0.0.1:4310 \
-  --env CODEVAULT_TOKEN_FILE="$HOME/.codevault-security/mcp-token" \
-  -- bun run --cwd "$PWD/packages/mcp" start
-```
-
-Replace `CODEVAULT_URL` with the HTTPS URL that you used for terminal login
-when CodeVault runs on another machine.
-
-Run `codex mcp get codevault` to inspect the saved configuration. Start Codex
-in any repository and ask it to check your CodeVault identity.
-
-## Add CodeVault to Claude Code
-
-Run this command from the CodeVault Security repository:
-
-```bash
-claude mcp add codevault --scope user \
-  --env CODEVAULT_URL=http://127.0.0.1:4310 \
-  --env CODEVAULT_TOKEN_FILE="$HOME/.codevault-security/mcp-token" \
-  -- bun run --cwd "$PWD/packages/mcp" start
-```
-
-Replace `CODEVAULT_URL` with the same HTTPS URL that you used for terminal
-login when CodeVault runs on another machine.
-
-Start Claude Code in any repository. Run `/mcp` and confirm that `codevault`
-is connected.
+Administrators control MCP under **Organization security**. Turning off
+**Allow user-specific MCP connections** blocks all MCP credentials on their
+next request. Interactive desktop sessions keep working.
 
 ## Import repository findings
 
@@ -109,28 +93,25 @@ process. It computes the SHA-256 digest locally, uploads the bytes directly to
 the presigned object-storage URL without sending the CodeVault bearer token to
 storage, completes the upload, and creates or updates the evidence attachment.
 
-## Use another token file
+## Use another configuration file
 
-To keep the token elsewhere, pass the same path to the login command and the
-MCP registration command:
-
-```bash
-bun run mcp:login -- --token-file /secure/path/codevault-token
-
-codex mcp add codevault \
-  --env CODEVAULT_URL=http://127.0.0.1:4310 \
-  --env CODEVAULT_TOKEN_FILE=/secure/path/codevault-token \
-  -- bun run --cwd "$PWD/packages/mcp" start
-```
-
-For Claude Code, use:
+To keep the configuration elsewhere, pass its path to setup:
 
 ```bash
-claude mcp add codevault --scope user \
-  --env CODEVAULT_URL=http://127.0.0.1:4310 \
-  --env CODEVAULT_TOKEN_FILE=/secure/path/codevault-token \
-  -- bun run --cwd "$PWD/packages/mcp" start
+bun run mcp:setup -- --config /secure/path/codevault-mcp.json
 ```
 
-On macOS and Linux, the MCP server refuses a token file that group members or
-other users can read or write.
+The setup command records this path in each AI client's saved configuration.
+
+For an automated installation, you can still provide the values through the
+environment:
+
+```bash
+CODEVAULT_URL=https://security.example.com \
+CODEVAULT_TOKEN=cv_mcp_replace_me \
+bun run mcp:start
+```
+
+On macOS and Linux, the MCP server refuses a configuration or legacy token file
+that other users can read or write. Existing `CODEVAULT_TOKEN_FILE`
+installations continue to work during migration.

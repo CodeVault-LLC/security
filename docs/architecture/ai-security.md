@@ -8,7 +8,9 @@ Authenticated MCP clients are different. MCP tools make direct API calls as the
 signed-in user, and some tools approve scores or reports immediately. The
 [generated MCP inventory](../operations/mcp-tool-inventory.md) records those
 effects. MCP still uses server permissions, validation, revision checks, and
-audit attribution, but it does not pass through the proposal gates below.
+audit attribution, but it does not pass through the proposal gates below. Each
+MCP credential belongs to one user and remains revocable. The organization can
+block all MCP access without disabling interactive AI actions.
 
 ## The rule
 

@@ -618,6 +618,7 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
       sessionIdleMinutes: number;
       sessionAbsoluteHours: number;
       recentMfaMinutes: number;
+      mcpEnabled: boolean;
     }>
   >({});
   const values = {
@@ -628,6 +629,7 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
       draft.sessionAbsoluteHours ?? policy.data?.sessionAbsoluteHours ?? 12,
     recentMfaMinutes:
       draft.recentMfaMinutes ?? policy.data?.recentMfaMinutes ?? 10,
+    mcpEnabled: draft.mcpEnabled ?? policy.data?.mcpEnabled ?? true,
   };
   const update = useApiMutation<OrganizationSecurityPolicy>(
     () => ({
@@ -672,6 +674,14 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
                 {policy.data?.recentMfaMinutes ?? "—"} minutes
               </strong>
             </div>
+            <div>
+              <span className="text-text-muted">MCP connections</span>
+              <strong
+                className={`block ${policy.data?.mcpEnabled === false ? "text-warning" : "text-success"}`}
+              >
+                {policy.data?.mcpEnabled === false ? "Blocked" : "Allowed"}
+              </strong>
+            </div>
             <p className="col-span-2 mt-2 text-text-muted">
               All members may inspect these rules. Only a recently verified
               administrator can modify them.
@@ -702,6 +712,26 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
                     />
                   </div>
                 ))}
+                <label className="col-span-2 flex items-start gap-2 text-[12px]">
+                  <input
+                    type="checkbox"
+                    checked={values.mcpEnabled}
+                    onChange={(event) =>
+                      setDraft((current) => ({
+                        ...current,
+                        mcpEnabled: event.target.checked,
+                      }))
+                    }
+                    className="mt-0.5 size-4 shrink-0 accent-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+                  />
+                  <span>
+                    Allow user-specific MCP connections
+                    <span className="block text-[11px] text-text-muted">
+                      Turning this off blocks every existing MCP connection on
+                      its next request. Interactive sessions keep working.
+                    </span>
+                  </span>
+                </label>
                 <div className="col-span-2">
                   <Button
                     variant="primary"

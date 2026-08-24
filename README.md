@@ -121,7 +121,8 @@ non-interactive development script. It does not delete object-store files.
 without starting the app.
 
 To use CodeVault from Codex CLI, Claude Code, or another terminal MCP client,
-sign in with `bun run mcp:login` and register the local stdio server. See
+run `bun run mcp:setup` once. The command signs you in, creates a revocable MCP
+connection, and configures each installed AI client. See
 [`docs/operations/mcp.md`](docs/operations/mcp.md).
 
 If the desktop client reports "Electron uninstall", the binary download did not

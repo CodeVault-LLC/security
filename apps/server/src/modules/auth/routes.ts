@@ -3,6 +3,7 @@ import type { AppInstance } from "../../http/app-instance.js";
 import { MeResponse, OkResponse } from "@codevault/contracts";
 
 import { revokeSession } from "../../auth/session.js";
+import { revokeMcpAccess } from "../../auth/mcp-access.js";
 import { principalOf } from "../../http/guards.js";
 import { registerLoginRoutes } from "./login-routes.js";
 import { registerMigratedEnrollmentRoutes } from "./migrated-enrollment-routes.js";
@@ -20,7 +21,15 @@ export async function registerAuthRoutes(app: AppInstance): Promise<void> {
     { schema: { response: { 200: OkResponse } } },
     async (request) => {
       const principal = principalOf(request);
-      await revokeSession(app.db, principal.session.id);
+      if (principal.authentication.kind === "MCP") {
+        await revokeMcpAccess(
+          app.db,
+          principal.user.id,
+          principal.authentication.id,
+        );
+      } else {
+        await revokeSession(app.db, principal.authentication.id);
+      }
       await app.audit.write(
         app.db,
         {

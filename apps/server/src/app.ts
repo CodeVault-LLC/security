@@ -9,6 +9,11 @@ import { eq } from "drizzle-orm";
 
 import { bearerTokenFrom } from "./auth/tokens.js";
 import { resolveSession, touchSession } from "./auth/session.js";
+import {
+  isMcpAccessToken,
+  resolveMcpAccess,
+  touchMcpAccess,
+} from "./auth/mcp-access.js";
 import type { ServerConfig } from "./config.js";
 import { registerErrorHandler } from "./http/errors.js";
 import { registerRoutes } from "./routes.js";
@@ -214,13 +219,19 @@ export async function buildApp(
       });
     }
 
-    const principal = await resolveSession(app.db, token);
+    const principal = isMcpAccessToken(token)
+      ? await resolveMcpAccess(app.db, token)
+      : await resolveSession(app.db, token);
 
     if (principal === null) {
       return reply.status(401).send({
         error: {
-          category: "SESSION_EXPIRED",
-          message: "Your session has expired. Sign in again.",
+          category: isMcpAccessToken(token)
+            ? "PERMISSION_DENIED"
+            : "SESSION_EXPIRED",
+          message: isMcpAccessToken(token)
+            ? "MCP access is disabled or this connection was revoked."
+            : "Your session has expired. Sign in again.",
           requestId: request.requestId,
         },
       });
@@ -235,7 +246,11 @@ export async function buildApp(
     const principal = request.principal;
 
     if (principal !== null) {
-      await touchSession(app.db, principal.session.id).catch(() => undefined);
+      const touch =
+        principal.authentication.kind === "MCP"
+          ? touchMcpAccess(app.db, principal.authentication.id)
+          : touchSession(app.db, principal.authentication.id);
+      await touch.catch(() => undefined);
     }
   });
 
