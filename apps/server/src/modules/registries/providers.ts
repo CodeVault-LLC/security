@@ -2,6 +2,7 @@ import type {
   AssetRegistryResult,
   AssetRegistrySource,
 } from "@codevault/contracts";
+import { decodeHTMLStrict } from "entities";
 
 import type { AssetRegistryProvider, RegistryHttpClient } from "./provider.js";
 
@@ -33,17 +34,9 @@ function plainText(value: unknown): string | null {
   const raw = text(value);
   if (raw === null) return null;
 
-  const stripped = raw
+  const stripped = decodeHTMLStrict(raw)
     .replace(/<[^>]*>/gu, " ")
-    .replace(/&nbsp;/giu, " ")
-    .replace(/&amp;/giu, "&")
-    .replace(/&lt;/giu, "<")
-    .replace(/&gt;/giu, ">")
-    .replace(/&quot;/giu, '"')
-    .replace(/&#(?:x([0-9a-f]+)|(\d+));/giu, (_match, hex, decimal) => {
-      const point = Number.parseInt(hex ?? decimal, hex ? 16 : 10);
-      return Number.isSafeInteger(point) ? String.fromCodePoint(point) : "";
-    })
+    .replace(/\u00a0/gu, " ")
     .replace(/\s+/gu, " ")
     .trim();
 

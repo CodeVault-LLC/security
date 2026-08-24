@@ -63,7 +63,7 @@ class FixtureClient implements RegistryHttpClient {
       return [{ name: "safe_gem", version: "4.2.0", authors: "Acme" }];
     }
 
-    if (url.hostname.includes("nuget.org")) {
+    if (url.hostname === "azuresearch-usnc.nuget.org") {
       return {
         data: [{ id: "Safe.Package", version: "5.0.0", authors: ["Acme"] }],
       };
@@ -121,5 +121,30 @@ describe("default asset registry providers", () => {
     expect(seen).toHaveLength(8);
     expect(seen.every((url) => !url.pathname.includes("router"))).toBe(true);
     expect(seen.every((url) => url.search.includes("router"))).toBe(true);
+  });
+
+  it("decodes registry entities once before removing markup", async () => {
+    const client: RegistryHttpClient = {
+      async getJson() {
+        return {
+          plugins: [
+            {
+              slug: "encoded-plugin",
+              name: "Encoded &amp;lt;tag&amp;gt;",
+              short_description:
+                "&#60;strong&#62;Safe&#60;/strong&#62; &amp; sound",
+            },
+          ],
+        };
+      },
+    };
+
+    const wordpressPlugins = createDefaultRegistryProviders(client)[0];
+    const [result] = await wordpressPlugins!.search("encoded", 1);
+
+    expect(result).toMatchObject({
+      name: "Encoded &lt;tag&gt;",
+      description: "Safe & sound",
+    });
   });
 });

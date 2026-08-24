@@ -15,6 +15,18 @@ describe("SafeRegistryHttpClient", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("rejects hosts that only contain an allowed registry hostname", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+
+    await expect(
+      new SafeRegistryHttpClient().getJson(
+        new URL("https://azuresearch-usnc.nuget.org.attacker.example/query"),
+      ),
+    ).rejects.toThrow("not allowed");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("accepts bounded JSON responses", async () => {
     vi.stubGlobal(
       "fetch",
