@@ -18,7 +18,7 @@ export interface IntelligenceRefreshJobData {
   cveIds: string[];
 }
 
-interface EpssRecord {
+export interface EpssRecord {
   cve: string;
   epss: number;
   percentile: number;
@@ -43,45 +43,92 @@ export async function refreshIntelligence(
   const kev = await fetchKevMembership(context, data.cveIds);
   const retrievedAt = new Date().toISOString();
 
-  for (const cveId of data.cveIds) {
-    const score = epss.get(cveId);
-
-    if (score !== undefined) {
-      await upsertIntelligenceScore(context, {
-        findingId: data.findingId,
-        scheme: "EPSS",
-        score: score.epss,
-        sourceName: `FIRST EPSS (model date ${score.date})`,
-        metrics: { percentile: score.percentile, modelDate: score.date },
-        retrievedAt,
-      });
-    }
-
-    if (kev.has(cveId)) {
-      await upsertIntelligenceScore(context, {
-        findingId: data.findingId,
-        scheme: "KEV",
-        // KEV is a membership fact, not a magnitude; 1 records "listed".
-        score: 1,
-        sourceName: "CISA Known Exploited Vulnerabilities catalog",
-        metrics: { listed: true, cveId },
-        retrievedAt,
-      });
-    }
+  for (const score of buildIntelligenceScores(
+    data.findingId,
+    data.cveIds,
+    epss,
+    kev,
+    retrievedAt,
+  )) {
+    await upsertIntelligenceScore(context, score);
   }
 
   context.log(
-    `intelligence refreshed for ${data.findingId}: ${epss.size} EPSS, ${kev.size} KEV`,
+    `intelligence refreshed for ${data.findingId}: ${epss.size} EPSS, ${kev === null ? "unavailable" : kev.size} KEV`,
   );
 }
 
-interface IntelligenceScore {
+export interface IntelligenceScore {
   findingId: string;
   scheme: string;
   score: number;
   sourceName: string;
   metrics: Record<string, unknown>;
   retrievedAt: string;
+}
+
+/**
+ * Collapses CVE-level intelligence into one current record per scheme.
+ *
+ * A finding can carry several CVEs, but its score list presents each scheme as
+ * one signal. EPSS uses the highest current probability and records the CVE
+ * that produced it. KEV records whether any attached CVE is listed, including
+ * an explicit false value that supersedes a stale positive result.
+ */
+export function buildIntelligenceScores(
+  findingId: string,
+  cveIds: readonly string[],
+  epss: ReadonlyMap<string, EpssRecord>,
+  kev: ReadonlySet<string> | null,
+  retrievedAt: string,
+): IntelligenceScore[] {
+  const evaluatedCveIds = [
+    ...new Set(cveIds.map((id) => id.trim().toUpperCase())),
+  ].filter((id) => id.length > 0);
+  const scores: IntelligenceScore[] = [];
+  const highestEpss = evaluatedCveIds
+    .map((id) => epss.get(id))
+    .filter((record): record is EpssRecord => record !== undefined)
+    .sort(
+      (left, right) =>
+        right.epss - left.epss || right.percentile - left.percentile,
+    )[0];
+
+  if (highestEpss !== undefined) {
+    scores.push({
+      findingId,
+      scheme: "EPSS",
+      score: highestEpss.epss,
+      sourceName: `FIRST EPSS (model date ${highestEpss.date})`,
+      metrics: {
+        cveId: highestEpss.cve.toUpperCase(),
+        percentile: highestEpss.percentile,
+        modelDate: highestEpss.date,
+        evaluatedCveIds,
+      },
+      retrievedAt,
+    });
+  }
+
+  if (evaluatedCveIds.length > 0 && kev !== null) {
+    const listedCveIds = evaluatedCveIds.filter((id) => kev.has(id));
+
+    scores.push({
+      findingId,
+      scheme: "KEV",
+      // KEV is a membership fact, not a magnitude.
+      score: listedCveIds.length > 0 ? 1 : 0,
+      sourceName: "CISA Known Exploited Vulnerabilities catalog",
+      metrics: {
+        listed: listedCveIds.length > 0,
+        listedCveIds,
+        evaluatedCveIds,
+      },
+      retrievedAt,
+    });
+  }
+
+  return scores;
 }
 
 /**
@@ -194,7 +241,7 @@ async function fetchEpss(
 async function fetchKevMembership(
   context: WorkerContext,
   cveIds: readonly string[],
-): Promise<Set<string>> {
+): Promise<Set<string> | null> {
   const wanted = new Set(cveIds.map((id) => id.toUpperCase()));
   const listed = new Set<string>();
 
@@ -226,6 +273,7 @@ async function fetchKevMembership(
     context.log(
       `KEV refresh failed: ${error instanceof Error ? error.message : String(error)}`,
     );
+    return null;
   }
 
   return listed;
