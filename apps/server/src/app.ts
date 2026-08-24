@@ -19,6 +19,9 @@ import { loadCaseAccess } from "./services/case-access.js";
 import { createObjectStorage, type ObjectStorage } from "./services/storage.js";
 import { MailProviderRegistry } from "./modules/mail/provider-registry.js";
 import { createGmailProvider } from "./modules/mail/gmail-provider.js";
+import { SafeRegistryHttpClient } from "./modules/registries/http-client.js";
+import { createDefaultRegistryProviders } from "./modules/registries/providers.js";
+import { AssetRegistry } from "./modules/registries/registry.js";
 import { canReadCase } from "@codevault/core";
 
 import "./plugins/types.js";
@@ -40,6 +43,7 @@ export interface BuildAppOptions {
   jobs?: JobQueue;
   audit?: AuditWriter;
   mailProviders?: MailProviderRegistry;
+  assetRegistry?: AssetRegistry;
 }
 
 /** Routes reachable without a session. Everything else requires one. */
@@ -113,6 +117,13 @@ export async function buildApp(
     mailProviders.register(createGmailProvider(config.gmail));
   }
   app.decorate("mailProviders", mailProviders);
+  app.decorate(
+    "assetRegistry",
+    options.assetRegistry ??
+      new AssetRegistry(
+        createDefaultRegistryProviders(new SafeRegistryHttpClient()),
+      ),
+  );
 
   // Event delivery is filtered by the same case rules as the REST API, so a
   // subscriber is never told that a restricted case changed.
