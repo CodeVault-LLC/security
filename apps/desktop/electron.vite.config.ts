@@ -23,6 +23,7 @@ export default defineConfig({
         exclude: [
           "@codevault/contracts",
           "@codevault/core",
+          "@codevault/exchange",
           "@codevault/standards",
         ],
       }),
