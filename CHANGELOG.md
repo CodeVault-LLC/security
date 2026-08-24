@@ -36,6 +36,11 @@ with the prerelease sequence defined in [`ROADMAP.md`](ROADMAP.md).
 - Severity classification now rejects non-finite values and scores outside the
   CVSS range.
 
+### Changed
+
+- Bootstrap integration tests now apply every production migration. New schema
+  migrations cannot leave the fixture behind.
+
 ### Known gaps
 
 - `.cvcase` version 1 does not move submissions, correspondence, disclosure

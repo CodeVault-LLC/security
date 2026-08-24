@@ -1,11 +1,9 @@
 import { randomBytes } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 
 import pg from "pg";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createDatabase } from "@codevault/db";
+import { createDatabase, runMigrations } from "@codevault/db";
 
 import { parseMfaKeyring } from "../apps/server/src/auth/secret-keyring.js";
 import {
@@ -32,23 +30,7 @@ async function temporaryDatabase(): Promise<{ url: string; pool: pg.Pool }> {
   const url = new URL(connectionString!);
   url.pathname = `/${name}`;
   const pool = new pg.Pool({ connectionString: url.toString() });
-  for (const migration of [
-    "0001_initial_schema.sql",
-    "0002_ai_run_profiles.sql",
-    "0003_ai_intake.sql",
-    "0004_organization_security_mfa.sql",
-    "0005_serialize_final_admin_check.sql",
-    "0007_migrated_mfa_enrollment.sql",
-    "0008_login_attempt_stages.sql",
-    "0017_organization_report_branding.sql",
-  ]) {
-    await pool.query(
-      await readFile(
-        join(import.meta.dirname, "../packages/db/drizzle", migration),
-        "utf8",
-      ),
-    );
-  }
+  await runMigrations(url.toString());
   return { url: url.toString(), pool };
 }
 

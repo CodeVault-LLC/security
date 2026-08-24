@@ -1,6 +1,6 @@
 # Security data and validation improvements completed on 2026-08-24
 
-This change set contains 50 reviewed improvements. The count treats each CWE
+This change set contains 51 reviewed improvements. The count treats each CWE
 rank or catalogue entry as one data improvement. It groups the code needed to
 deliver one validation behavior under that behavior.
 
@@ -69,6 +69,7 @@ which MITRE updated on December 15, 2025.
 48. Rejected non-finite and out-of-range CVSS scores before severity classification.
 49. Added canonical TLP parsing, including conversion of the retired `TLP:WHITE` label to `TLP:CLEAR`.
 50. Hardened finding identifiers from API contract to database commit. The server now rejects unknown schemes, canonicalizes authority IDs, creates links only for valid IDs, commits identifier and audit changes atomically, and treats retried inserts as idempotent.
+51. Replaced the bootstrap integration fixture's hand-picked migration list with the production migration runner so schema tests cannot omit later migrations.
 
 ## Verification
 
