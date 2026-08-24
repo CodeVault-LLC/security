@@ -73,13 +73,15 @@ being structural.
 
 ## Scores are records, not columns
 
-One `finding_scores` table serves CVSS 4.0, CVSS 3.1, EPSS, KEV, SSVC and
-anything added later:
+One `finding_scores` table serves CVSS 4.0, CVSS 3.1, MITRE CWSS 1.0, OWASP
+Risk Rating, SSVC, EPSS, KEV, EVSS and anything added later:
 
-- **Calculable schemes** carry a vector. CodeVault computes the number itself,
-  which is why a client — human or model — cannot supply a score.
+- **Calculable schemes** carry a vector. CodeVault computes the numeric score
+  or categorical decision itself, which is why a client — human or model —
+  cannot supply the result.
 - **Intelligence schemes** carry a retrieved value with a named source and a
-  retrieval timestamp. EPSS at 0.43 is a fact about a date.
+  retrieval timestamp. EPSS at 0.43 is a fact about a date; proprietary EVSS
+  is retained only as a sourced Edgescan value because its formula is not open.
 
 They are never multiplied together. A blended "CodeVault risk number" would
 discard the one thing that makes these signals useful: that they measure

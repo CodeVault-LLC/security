@@ -1,13 +1,22 @@
 import { Check } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 
 import type { FindingDetail } from "@codevault/contracts";
 import {
+  buildCwss10Vector,
+  buildOwaspRiskVector,
+  buildSsvcCoordinatorPublishVector,
+  calculateCwss10,
   calculateCvss31,
   calculateCvss40,
+  calculateOwaspRisk,
+  calculateSsvcCoordinatorPublish,
+  CWSS10_METRICS,
   CVSS31_METRICS,
   CVSS40_METRICS,
+  OWASP_RISK_METRICS,
   searchCwe,
+  SSVC_COORDINATOR_PUBLISH_METRICS,
   type SeverityRating,
 } from "@codevault/standards";
 import {
@@ -35,14 +44,18 @@ import { Avatar } from "../../components/avatar.js";
  * same fields, so the human always sees the metrics before the score exists.
  */
 
-type Scheme = "CVSS40" | "CVSS31";
+type CalculatedScheme = "CVSS40" | "CVSS31" | "CWSS10" | "OWASP_RR" | "SSVC";
+type Scheme = CalculatedScheme | "EVSS";
 
 const SCHEME_METRICS = {
   CVSS40: CVSS40_METRICS.filter((metric) => metric.group === "Base"),
   CVSS31: CVSS31_METRICS.filter((metric) => metric.group === "Base"),
+  CWSS10: CWSS10_METRICS,
+  OWASP_RR: OWASP_RISK_METRICS,
+  SSVC: SSVC_COORDINATOR_PUBLISH_METRICS,
 };
 
-const DEFAULTS: Record<Scheme, Record<string, string>> = {
+const DEFAULTS: Record<CalculatedScheme, Record<string, string>> = {
   CVSS40: {
     AV: "N",
     AC: "L",
@@ -66,7 +79,52 @@ const DEFAULTS: Record<Scheme, Record<string, string>> = {
     I: "N",
     A: "N",
   },
+  CWSS10: Object.fromEntries(
+    CWSS10_METRICS.map((metric) => [metric.code, "D"]),
+  ),
+  OWASP_RR: Object.fromEntries(
+    OWASP_RISK_METRICS.map((metric) => [
+      metric.code,
+      metric.optional === true ? "X" : (metric.values[0]?.code ?? ""),
+    ]),
+  ),
+  SSVC: { SI: "C", E: "N", VA: "P" },
 };
+
+const SCHEME_OPTIONS = [
+  { value: "CVSS40", label: "CVSS 4.0" },
+  { value: "CVSS31", label: "CVSS 3.1" },
+  { value: "CWSS10", label: "MITRE CWSS 1.0" },
+  { value: "OWASP_RR", label: "OWASP Risk Rating" },
+  { value: "SSVC", label: "SSVC Coordinator Publish" },
+  { value: "EVSS", label: "Edgescan EVSS" },
+] as const;
+
+function recordedScoreLabel(score: FindingDetail["scores"][number]): string {
+  if (score.scheme === "CWSS10" && score.score !== null) {
+    return `${score.score.toFixed(1)} / 100`;
+  }
+
+  if (score.scheme === "EVSS" && score.score !== null) {
+    return `${score.score.toFixed(1)} / 10`;
+  }
+
+  if (score.scheme === "EPSS" && score.score !== null) {
+    return `${(score.score * 100).toFixed(1)}%`;
+  }
+
+  const decision = score.metrics.decision;
+  if (typeof decision === "string") {
+    return decision.replaceAll("_", " ").toLowerCase();
+  }
+
+  const rating = score.metrics.rating;
+  if (typeof rating === "string") {
+    return rating.toLowerCase();
+  }
+
+  return score.score === null ? "—" : String(score.score);
+}
 
 export interface ScoringPanelProps {
   finding: FindingDetail;
@@ -81,18 +139,83 @@ export function ScoringPanel({
   const [metrics, setMetrics] = useState<Record<string, string>>(
     () => DEFAULTS.CVSS40,
   );
+  const [externalScore, setExternalScore] = useState("");
+  const [externalSource, setExternalSource] = useState("Edgescan");
   const [cweQuery, setCweQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const proposed = useMemo(() => {
-    const parts = Object.entries(metrics)
-      .filter(([, value]) => value.length > 0)
-      .map(([code, value]) => `${code}:${value}`)
-      .join("/");
-    const vector =
-      scheme === "CVSS40" ? `CVSS:4.0/${parts}` : `CVSS:3.1/${parts}`;
-
     try {
+      if (scheme === "EVSS") {
+        const score = Number(externalScore);
+
+        if (
+          externalScore.trim().length === 0 ||
+          !Number.isFinite(score) ||
+          score < 0 ||
+          score > 10
+        ) {
+          throw new Error(
+            "EVSS must be a sourced Edgescan value from 0 to 10.",
+          );
+        }
+
+        if (externalSource.trim().length === 0) {
+          throw new Error(
+            "Name the Edgescan report or integration that supplied this score.",
+          );
+        }
+
+        return {
+          vector: null,
+          score,
+          severity: null,
+          label: `${score.toFixed(1)} / 10`,
+          error: null as string | null,
+        };
+      }
+
+      if (scheme === "CWSS10") {
+        const result = calculateCwss10(buildCwss10Vector(metrics));
+        return {
+          vector: result.vector,
+          score: result.score,
+          severity: null,
+          label: `${result.score.toFixed(1)} / 100`,
+          error: null as string | null,
+        };
+      }
+
+      if (scheme === "OWASP_RR") {
+        const result = calculateOwaspRisk(buildOwaspRiskVector(metrics));
+        return {
+          vector: result.vector,
+          score: null,
+          severity: null,
+          label: `${result.rating} · ${result.impactBasis.toLowerCase()} impact`,
+          error: null as string | null,
+        };
+      }
+
+      if (scheme === "SSVC") {
+        const result = calculateSsvcCoordinatorPublish(
+          buildSsvcCoordinatorPublishVector(metrics),
+        );
+        return {
+          vector: result.vector,
+          score: null,
+          severity: null,
+          label: result.decision.replaceAll("_", " "),
+          error: null as string | null,
+        };
+      }
+
+      const parts = Object.entries(metrics)
+        .filter(([, value]) => value.length > 0)
+        .map(([code, value]) => `${code}:${value}`)
+        .join("/");
+      const vector =
+        scheme === "CVSS40" ? `CVSS:4.0/${parts}` : `CVSS:3.1/${parts}`;
       const result =
         scheme === "CVSS40" ? calculateCvss40(vector) : calculateCvss31(vector);
 
@@ -100,26 +223,36 @@ export function ScoringPanel({
         vector: result.vector,
         score: result.score,
         severity: result.severity as SeverityRating,
+        label: null,
         error: null as string | null,
       };
     } catch (calculationError: unknown) {
       return {
-        vector,
+        vector: null,
         score: null,
         severity: null,
+        label: null,
         error:
           calculationError instanceof Error
             ? calculationError.message
             : "That combination of metrics is not valid.",
       };
     }
-  }, [metrics, scheme]);
+  }, [externalScore, externalSource, metrics, scheme]);
 
   const submit = useApiMutation<FindingDetail, { approve: boolean }>(
     ({ approve }) => ({
       path: `/v1/findings/${finding.id}/scores`,
       method: "POST",
-      body: { scheme, vector: proposed.vector, approve },
+      body:
+        scheme === "EVSS"
+          ? {
+              scheme,
+              score: proposed.score,
+              sourceName: externalSource.trim(),
+              approve,
+            }
+          : { scheme, vector: proposed.vector, approve },
     }),
     () => [
       queryKeys.finding(finding.id),
@@ -154,7 +287,7 @@ export function ScoringPanel({
     <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
       <Card>
         <CardHeader>
-          <CardTitle>Build a vector</CardTitle>
+          <CardTitle>Build an assessment</CardTitle>
           <Select
             aria-label="Scoring scheme"
             value={scheme}
@@ -162,63 +295,116 @@ export function ScoringPanel({
               const next = value as Scheme;
 
               setScheme(next);
-              setMetrics(DEFAULTS[next]);
+              if (next !== "EVSS") {
+                setMetrics(DEFAULTS[next]);
+              }
             }}
-            className="w-36"
-            options={[
-              { value: "CVSS40", label: "CVSS 4.0" },
-              { value: "CVSS31", label: "CVSS 3.1" },
-            ]}
+            className="w-40 sm:w-52"
+            options={[...SCHEME_OPTIONS]}
           />
         </CardHeader>
 
         <CardBody className="space-y-2">
-          {SCHEME_METRICS[scheme].map((metric) => (
-            <div
-              key={metric.code}
-              className="grid grid-cols-[130px_1fr] items-center gap-2"
-            >
-              <label
-                className="text-[12px] text-text-muted"
-                title={metric.name}
-                htmlFor={`metric-${metric.code}`}
-              >
-                <Mono>{metric.code}</Mono> {metric.name}
-              </label>
-              <Select
-                aria-label={metric.name}
-                value={metrics[metric.code]}
-                onValueChange={(value) =>
-                  setMetrics((current) => ({
-                    ...current,
-                    [metric.code]: value,
-                  }))
-                }
-                disabled={!canEdit}
-                options={metric.values
-                  .filter((value) => value.code !== "X")
-                  .map((value) => ({
-                    value: value.code,
-                    label: `${value.code} · ${value.label}`,
-                    description: value.description,
-                  }))}
-              />
+          {scheme === "EVSS" ? (
+            <div className="space-y-3">
+              <div>
+                <label
+                  className="mb-1 block text-[12px] text-text-muted"
+                  htmlFor="evss-score"
+                >
+                  EVSS score (0–10)
+                </label>
+                <Input
+                  id="evss-score"
+                  type="number"
+                  min="0"
+                  max="10"
+                  step="0.1"
+                  value={externalScore}
+                  onChange={(event) => setExternalScore(event.target.value)}
+                  disabled={!canEdit}
+                />
+              </div>
+              <div>
+                <label
+                  className="mb-1 block text-[12px] text-text-muted"
+                  htmlFor="evss-source"
+                >
+                  Edgescan source
+                </label>
+                <Input
+                  id="evss-source"
+                  value={externalSource}
+                  onChange={(event) => setExternalSource(event.target.value)}
+                  placeholder="Edgescan report or integration"
+                  disabled={!canEdit}
+                />
+              </div>
+              <p className="text-[11px] text-text-muted">
+                EVSS is proprietary, so CodeVault records the supplied value and
+                provenance; it does not recreate Edgescan’s formula.
+              </p>
             </div>
-          ))}
+          ) : (
+            SCHEME_METRICS[scheme].map((metric, index, allMetrics) => (
+              <Fragment key={metric.code}>
+                {index === 0 ||
+                allMetrics[index - 1]?.group !== metric.group ? (
+                  <p className="pt-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                    {metric.group}
+                  </p>
+                ) : null}
+                <div className="grid grid-cols-1 gap-1 sm:grid-cols-[150px_1fr] sm:items-center sm:gap-2">
+                  <label
+                    className="text-[12px] text-text-muted"
+                    title={metric.name}
+                    htmlFor={`metric-${metric.code}`}
+                  >
+                    <Mono>{metric.code}</Mono> {metric.name}
+                  </label>
+                  <Select
+                    aria-label={metric.name}
+                    value={metrics[metric.code]}
+                    onValueChange={(value) =>
+                      setMetrics((current) => ({
+                        ...current,
+                        [metric.code]: value,
+                      }))
+                    }
+                    disabled={!canEdit}
+                    options={metric.values.map((value) => ({
+                      value: value.code,
+                      label: `${value.code} · ${value.label}`,
+                      description: value.description,
+                    }))}
+                  />
+                </div>
+              </Fragment>
+            ))
+          )}
 
           <div className="mt-3 rounded-(--cv-radius) border border-border bg-surface-raised p-2">
             <div className="flex items-center gap-2">
-              <SeverityBadge
-                severity={proposed.severity}
-                score={proposed.score}
-              />
-              <Mono className="min-w-0 flex-1 truncate text-text-muted">
-                {proposed.vector}
-              </Mono>
+              {proposed.severity === null ? (
+                <span className="font-mono text-[12px] font-semibold">
+                  {proposed.label ?? "Unscored"}
+                </span>
+              ) : (
+                <SeverityBadge
+                  severity={proposed.severity}
+                  score={proposed.score}
+                />
+              )}
+              {proposed.vector === null ? null : (
+                <Mono className="min-w-0 flex-1 truncate text-text-muted">
+                  {proposed.vector}
+                </Mono>
+              )}
             </div>
             <p className="mt-1 text-[11px] text-text-muted">
-              Shown as a preview. The stored score is computed by the server
-              from this vector, so the number can never be entered by hand.
+              {scheme === "EVSS"
+                ? "Shown as a preview. The server validates the value and retains its source."
+                : "Shown as a preview. The server recomputes the result from the vector before storing it."}
             </p>
             {proposed.error === null ? null : (
               <p className="mt-1 text-[11px] text-danger">{proposed.error}</p>
@@ -256,7 +442,7 @@ export function ScoringPanel({
                 }
               >
                 <Check aria-hidden className="size-3" />
-                Approve vector
+                Approve assessment
               </Button>
             </div>
           ) : null}
@@ -280,7 +466,9 @@ export function ScoringPanel({
                   <div className="flex items-center gap-2">
                     <Mono className="w-16 shrink-0">{score.scheme}</Mono>
                     {score.severity === null ? (
-                      <span className="font-mono">{score.score ?? "—"}</span>
+                      <span className="font-mono">
+                        {recordedScoreLabel(score)}
+                      </span>
                     ) : (
                       <SeverityBadge
                         severity={score.severity}

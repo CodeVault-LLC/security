@@ -8,6 +8,7 @@ const authBridge = vi.hoisted(() => ({
   preflight: vi.fn(),
   loginStart: vi.fn(),
   loginComplete: vi.fn(),
+  loginSecurityKey: vi.fn(),
 }));
 
 const appBridge = vi.hoisted(() => ({ version: vi.fn() }));
@@ -25,6 +26,7 @@ function resetBridge(): void {
       apiVersion: "v1",
       serverVersion: "0.1.0-alpha.7",
       compatible: true,
+      compatibilityMessage: null,
     },
   });
   authBridge.loginStart.mockReset();
@@ -102,6 +104,7 @@ describe("LoginScreen session persistence", () => {
       ok: true,
       data: {
         challenge: "MFA_REQUIRED",
+        methods: ["TOTP"],
         expiresAt: "2030-01-01T00:00:00.000Z",
       },
     });
@@ -117,7 +120,7 @@ describe("LoginScreen session persistence", () => {
     await user.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(authBridge.loginStart).toHaveBeenCalledWith(
-      "http://127.0.0.1:4310",
+      "http://localhost:4310",
       "researcher@example.test",
       "long-test-password",
       true,

@@ -94,4 +94,63 @@ describeIntegration("case archive transfer", () => {
         .items.map((item) => item.title),
     ).toContain("Archive round-trip finding");
   });
+
+  it("accepts CodeVault UUIDv7 artifact IDs during import preparation", async () => {
+    const exported = await harness.app.inject({
+      method: "GET",
+      url: `/v1/cases/${source.id}/archive-snapshot`,
+      headers: owner.headers,
+    });
+    expect(exported.statusCode).toBe(200);
+    const snapshot = exported.json<CaseArchiveSnapshot>();
+    const artifactId = "018f47d2-7d20-7a31-8fb8-9d5f3d680002";
+    const sha256 = "0".repeat(64);
+    const artifact = {
+      id: artifactId,
+      filename: "uuidv7.txt",
+      mimeType: "text/plain",
+      sizeBytes: 0,
+      sha256,
+      artifactKind: "OTHER",
+      visibility: "INTERNAL",
+    };
+    const preparedResponse = await harness.app.inject({
+      method: "POST",
+      url: "/v1/case-archives/imports",
+      headers: owner.headers,
+      payload: {
+        manifest: {
+          ...snapshot.manifest,
+          recordCounts: {
+            ...(snapshot.manifest["recordCounts"] as Record<string, number>),
+            artifacts: 1,
+          },
+          artifacts: [
+            {
+              sourceId: artifactId,
+              archivePath: `artifacts/${artifactId}/blob`,
+              filename: artifact.filename,
+              mimeType: artifact.mimeType,
+              sizeBytes: artifact.sizeBytes,
+              sha256,
+              artifactKind: artifact.artifactKind,
+              visibility: artifact.visibility,
+              capturedAt: null,
+              metadata: {},
+            },
+          ],
+        },
+        records: {
+          ...snapshot.records,
+          artifacts: [artifact],
+        },
+      },
+    });
+
+    expect(preparedResponse.statusCode).toBe(200);
+    const prepared = preparedResponse.json<PrepareCaseArchiveImportResult>();
+    expect(prepared.uploads.map((upload) => upload.sourceId)).toEqual([
+      artifactId,
+    ]);
+  });
 });

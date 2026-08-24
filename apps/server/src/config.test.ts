@@ -99,3 +99,40 @@ describe("Gmail configuration", () => {
     ).toThrow("known development credential");
   });
 });
+
+describe("WebAuthn configuration", () => {
+  test("uses the loopback server origin for local development", () => {
+    expect(loadConfig(base).auth.webauthn).toEqual({
+      rpName: "CodeVault Security",
+      rpId: "localhost",
+      origin: "http://localhost:4310",
+      timeoutMs: 120_000,
+    });
+  });
+
+  test("accepts an HTTPS RP origin and matching domain", () => {
+    const config = loadConfig({
+      ...base,
+      WEBAUTHN_RP_ID: "security.example",
+      WEBAUTHN_ORIGIN: "https://vault.security.example",
+    });
+    expect(config.auth.webauthn.origin).toBe("https://vault.security.example");
+  });
+
+  test("rejects insecure and cross-domain RP origins", () => {
+    expect(() =>
+      loadConfig({
+        ...base,
+        WEBAUTHN_RP_ID: "security.example",
+        WEBAUTHN_ORIGIN: "http://security.example",
+      }),
+    ).toThrow("HTTPS");
+    expect(() =>
+      loadConfig({
+        ...base,
+        WEBAUTHN_RP_ID: "security.example",
+        WEBAUTHN_ORIGIN: "https://attacker.example",
+      }),
+    ).toThrow("WEBAUTHN_RP_ID");
+  });
+});

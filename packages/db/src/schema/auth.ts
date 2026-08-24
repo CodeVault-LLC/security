@@ -106,7 +106,10 @@ export const sessions = pgTable(
     lastSeenAt: timestampColumn("last_seen_at"),
     remembered: boolean("remembered").notNull().default(false),
     mfaVerifiedAt: timestampColumn("mfa_verified_at").notNull(),
-    mfaMethod: text("mfa_method").$type<"TOTP">().notNull().default("TOTP"),
+    mfaMethod: text("mfa_method")
+      .$type<"TOTP" | "WEBAUTHN">()
+      .notNull()
+      .default("TOTP"),
     createdAt: createdAt(),
   },
   (table) => [
@@ -151,6 +154,41 @@ export const totpCredentials = pgTable("totp_credentials", {
   replacedAt: timestampColumn("replaced_at"),
 });
 
+export type WebAuthnTransport =
+  "ble" | "cable" | "hybrid" | "internal" | "nfc" | "smart-card" | "usb";
+
+/** Public-key credentials; private key material remains on the authenticator. */
+export const webauthnCredentials = pgTable(
+  "webauthn_credentials",
+  {
+    id: primaryId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    credentialId: text("credential_id").notNull(),
+    publicKey: text("public_key").notNull(),
+    counter: bigint("counter", { mode: "number" }).notNull().default(0),
+    transports: jsonb("transports")
+      .$type<WebAuthnTransport[]>()
+      .notNull()
+      .default([]),
+    deviceType: text("device_type")
+      .$type<"singleDevice" | "multiDevice">()
+      .notNull(),
+    backedUp: boolean("backed_up").notNull(),
+    name: text("name").notNull(),
+    lastUsedAt: timestampColumn("last_used_at"),
+    revokedAt: timestampColumn("revoked_at"),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("webauthn_credentials_credential_id_key").on(
+      table.credentialId,
+    ),
+    index("webauthn_credentials_user_idx").on(table.userId, table.createdAt),
+  ],
+);
+
 export const mfaRecoveryCodes = pgTable(
   "mfa_recovery_codes",
   {
@@ -193,6 +231,37 @@ export const mfaChallenges = pgTable(
   (table) => [
     uniqueIndex("mfa_challenges_token_hash_key").on(table.tokenHash),
     index("mfa_challenges_user_idx").on(table.userId, table.createdAt),
+  ],
+);
+
+export const webauthnCeremonies = pgTable(
+  "webauthn_ceremonies",
+  {
+    id: primaryId(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    purpose: text("purpose").$type<"LOGIN" | "REGISTRATION">().notNull(),
+    tokenHash: text("token_hash").notNull(),
+    challenge: text("challenge").notNull(),
+    sourceKey: text("source_key").notNull(),
+    mfaChallengeId: uuid("mfa_challenge_id").references(
+      () => mfaChallenges.id,
+      {
+        onDelete: "cascade",
+      },
+    ),
+    sessionId: uuid("session_id").references(() => sessions.id, {
+      onDelete: "cascade",
+    }),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    expiresAt: timestampColumn("expires_at").notNull(),
+    consumedAt: timestampColumn("consumed_at"),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("webauthn_ceremonies_token_hash_key").on(table.tokenHash),
+    index("webauthn_ceremonies_user_idx").on(table.userId, table.createdAt),
   ],
 );
 
@@ -351,3 +420,4 @@ export type McpAccessTokenRow = typeof mcpAccessTokens.$inferSelect;
 export type OrganizationMembershipRow =
   typeof organizationMemberships.$inferSelect;
 export type TotpCredentialRow = typeof totpCredentials.$inferSelect;
+export type WebAuthnCredentialRow = typeof webauthnCredentials.$inferSelect;

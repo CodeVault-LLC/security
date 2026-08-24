@@ -8,6 +8,8 @@ export function MfaChallenge(props: {
   busy: boolean;
   error: string | null;
   onSubmit(totp: string): Promise<void>;
+  securityKeyAvailable?: boolean;
+  onSecurityKey?(): Promise<void>;
   onBack(): void;
 }): React.JSX.Element {
   const [totp, setTotp] = useState("");
@@ -50,6 +52,25 @@ export function MfaChallenge(props: {
         >
           {props.busy ? "Verifying…" : "Sign in securely"}
         </Button>
+        {props.securityKeyAvailable ? (
+          <>
+            <div className="my-3 flex items-center gap-3 text-[11px] text-text-muted">
+              <span className="h-px flex-1 bg-border" />
+              or
+              <span className="h-px flex-1 bg-border" />
+            </div>
+            <Button
+              type="button"
+              variant="secondary"
+              size="lg"
+              className="w-full"
+              disabled={props.busy}
+              onClick={() => void props.onSecurityKey?.()}
+            >
+              {props.busy ? "Waiting for security key…" : "Use a security key"}
+            </Button>
+          </>
+        ) : null}
         <button
           type="button"
           className="mt-3 w-full text-[12px] text-text-muted hover:text-text"

@@ -1,6 +1,14 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { mkdtemp, open, readFile, rm, stat, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  mkdtemp,
+  open,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
@@ -9,9 +17,12 @@ import { app, dialog, ipcMain, shell, type BrowserWindow } from "electron";
 import type {
   AiContextPreview,
   AiRunWithProposals,
+  ArtifactDownload,
   InviteInspection,
   LoginStartResponse,
   LoginResponse,
+  WebAuthnCeremonyOptions,
+  WebAuthnCredentialSummary,
   PreparedAiRun,
   RecoveryCodeBundle,
   TotpEnrollmentResponse,
@@ -47,6 +58,7 @@ import {
   type LocalUploadSelection,
 } from "./file-uploads.js";
 import { loadAvatarDataUrl, selectAndUploadAvatar } from "./avatar-uploads.js";
+import { downloadFile, downloadVerifiedFile } from "./artifact-download.js";
 import { buildAndSealManualPackage } from "./submissions/manual-package.js";
 import { buildAndSealEmailPackage } from "./submissions/package-builder.js";
 import type { SigningKeyStore } from "./crypto/signing-key-store.js";
@@ -62,6 +74,7 @@ import {
 } from "./security.js";
 import type { SessionStore } from "./session-store.js";
 import { UploadSelectionStore } from "./upload-selections.js";
+import { runWebAuthnCeremony } from "./webauthn.js";
 
 /**
  * IPC handlers.
@@ -230,6 +243,7 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
         status: "ok";
         apiVersion: string;
         serverVersion: string;
+        webauthnOrigin?: string;
       }>("/health", {
         serverUrl: payload,
         anonymous: true,
@@ -238,7 +252,18 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
         ok: true as const,
         data: {
           ...health,
-          compatible: health.apiVersion === "v1",
+          compatible:
+            health.apiVersion === "v1" &&
+            typeof health.webauthnOrigin === "string" &&
+            normalizeServerUrl(payload) === health.webauthnOrigin,
+          compatibilityMessage:
+            health.apiVersion !== "v1"
+              ? `This desktop requires API v1. The server provides ${health.apiVersion}.`
+              : typeof health.webauthnOrigin !== "string"
+                ? "This server does not advertise WebAuthn security-key support."
+                : normalizeServerUrl(payload) !== health.webauthnOrigin
+                  ? `Use the server's configured WebAuthn origin: ${health.webauthnOrigin}`
+                  : null,
         },
       };
     } catch (error: unknown) {
@@ -284,7 +309,11 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       };
       return {
         ok: true as const,
-        data: { challenge: response.challenge, expiresAt: response.expiresAt },
+        data: {
+          challenge: response.challenge,
+          methods: response.methods,
+          expiresAt: response.expiresAt,
+        },
       };
     } catch (error: unknown) {
       pendingLogin = null;
@@ -339,6 +368,113 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
               : null,
       };
       return { ok: true as const, data: result };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.authLoginSecurityKey, async () => {
+    if (pendingLogin === null) {
+      return failure(new Error("missing login challenge"));
+    }
+    const parent = dependencies.window();
+    if (parent === null)
+      return failure(new Error("missing application window"));
+    try {
+      const started = await apiClient.request<WebAuthnCeremonyOptions>(
+        "/v1/auth/webauthn/login/options",
+        {
+          method: "POST",
+          body: { challengeToken: pendingLogin.challengeToken },
+          serverUrl: pendingLogin.serverUrl,
+          anonymous: true,
+        },
+      );
+      const assertion = await runWebAuthnCeremony(
+        parent,
+        pendingLogin.serverUrl,
+        "authenticate",
+        started.options,
+      );
+      const response = await apiClient.request<LoginResponse>(
+        "/v1/auth/webauthn/login/complete",
+        {
+          method: "POST",
+          body: {
+            ceremonyToken: started.ceremonyToken,
+            response: assertion,
+            rememberMe: pendingLogin.rememberMe,
+          },
+          serverUrl: pendingLogin.serverUrl,
+          anonymous: true,
+        },
+      );
+      const { serverUrl, rememberMe } = pendingLogin;
+      pendingLogin = null;
+      uploadSelections.clear();
+      const status = await sessionStore.save(
+        {
+          token: response.token,
+          serverUrl,
+          expiresAt: response.expiresAt,
+          userId: response.user.id,
+        },
+        rememberMe,
+      );
+      return {
+        ok: true as const,
+        data: {
+          user: response.user,
+          persistent: rememberMe && status.persistent,
+          storageWarning:
+            !rememberMe || status.persistent
+              ? null
+              : "reason" in status
+                ? status.reason
+                : null,
+        },
+      };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.authRegisterSecurityKey, async (payload) => {
+    if (
+      typeof payload !== "string" ||
+      payload.trim().length === 0 ||
+      payload.length > 120
+    ) {
+      return failure(new Error("invalid security-key name"));
+    }
+    const parent = dependencies.window();
+    const serverUrl = apiClient.serverUrl();
+    if (parent === null || serverUrl === null) {
+      return failure(new Error("missing authenticated server"));
+    }
+    try {
+      const started = await apiClient.request<WebAuthnCeremonyOptions>(
+        "/v1/settings/security-keys/options",
+        { method: "POST", body: { name: payload.trim() } },
+      );
+      const credential = await runWebAuthnCeremony(
+        parent,
+        serverUrl,
+        "register",
+        started.options,
+      );
+      const registered = await apiClient.request<WebAuthnCredentialSummary>(
+        "/v1/settings/security-keys/complete",
+        {
+          method: "POST",
+          body: {
+            ceremonyToken: started.ceremonyToken,
+            name: payload.trim(),
+            response: credential,
+          },
+        },
+      );
+      return { ok: true as const, data: registered };
     } catch (error: unknown) {
       return failure(error);
     }
@@ -856,6 +992,55 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       return failure(error);
     } finally {
       await rm(temporaryDirectory, { recursive: true, force: true });
+    }
+  });
+
+  handle(IPC_CHANNELS.reportsDownloadPdf, async (payload) => {
+    if (typeof payload !== "string" || !/^[0-9a-f-]{36}$/iu.test(payload)) {
+      return failure(new Error("invalid report download request"));
+    }
+
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+
+    try {
+      const artifact = await apiClient.request<ArtifactDownload>(
+        `/v1/artifacts/${payload}`,
+      );
+      const filename = safePdfFilename(artifact.filename);
+      const destination = await dialog.showSaveDialog(window, {
+        title: "Save report PDF",
+        defaultPath: filename,
+        filters: [{ name: "PDF document", extensions: ["pdf"] }],
+        properties: ["createDirectory", "showOverwriteConfirmation"],
+      });
+
+      if (destination.canceled || destination.filePath === undefined) {
+        return { ok: true as const, data: { saved: false, sha256: null } };
+      }
+
+      const temporaryDirectory = await mkdtemp(
+        join(tmpdir(), "codevault-report-download-"),
+      );
+      const temporaryPath = join(temporaryDirectory, filename);
+
+      try {
+        await downloadVerifiedFile(
+          artifact.url,
+          temporaryPath,
+          artifact.sha256,
+        );
+        await copyFile(temporaryPath, destination.filePath);
+
+        return {
+          ok: true as const,
+          data: { saved: true, sha256: artifact.sha256 },
+        };
+      } finally {
+        await rm(temporaryDirectory, { recursive: true, force: true });
+      }
+    } catch (error: unknown) {
+      return failure(error);
     }
   });
 
@@ -1476,27 +1661,13 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
   });
 }
 
-async function downloadFile(url: string, destination: string): Promise<void> {
-  const response = await fetch(url);
-  if (!response.ok || response.body === null) {
-    throw new Error(
-      `Object storage rejected the download (${response.status}).`,
-    );
-  }
-  const handle = await open(destination, "wx", 0o600);
-  const reader = response.body.getReader();
-  try {
-    let position = 0;
-    while (true) {
-      const next = await reader.read();
-      if (next.done) break;
-      await handle.write(next.value, 0, next.value.byteLength, position);
-      position += next.value.byteLength;
-    }
-  } finally {
-    reader.releaseLock();
-    await handle.close();
-  }
+function safePdfFilename(filename: string): string {
+  const leaf = filename.replaceAll("\\", "/").split("/").at(-1) ?? "";
+  const safe = leaf.replace(/\p{Cc}/gu, "_").trim();
+
+  return safe.toLowerCase().endsWith(".pdf") && safe.length > 4
+    ? safe
+    : "report.pdf";
 }
 
 function desktopArchiveManifest(value: unknown): CvcaseManifest {

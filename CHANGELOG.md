@@ -8,6 +8,8 @@ with the prerelease sequence defined in [`ROADMAP.md`](ROADMAP.md).
 
 ### Added
 
+- Added YubiKey and FIDO2 security-key enrollment, WebAuthn sign-in, key
+  inventory and revocation, and an isolated server-origin desktop ceremony.
 - Added a CWE 4.20 catalogue refresh with complete 2025 Top 25 coverage, rank
   metadata, canonical lookup, and bounded category queries.
 - Added direct tests and reusable guards for CWE IDs, external identifiers,
@@ -24,6 +26,8 @@ with the prerelease sequence defined in [`ROADMAP.md`](ROADMAP.md).
 
 ### Migrations
 
+- Added `0020_webauthn.sql` for public-key credentials, one-time ceremonies,
+  and WebAuthn-authenticated sessions.
 - Added `0018_case_archive_imports.sql` for expiring non-canonical archive
   import sessions and staged artifacts.
 

@@ -4,13 +4,18 @@ import { validationError } from "@codevault/core";
 import type { Database } from "@codevault/db";
 import { schema } from "@codevault/db";
 import {
+  calculateCwss10,
   calculateCvss31,
   calculateCvss40,
+  calculateOwaspRisk,
+  calculateSsvcCoordinatorPublish,
+  Cwss10VectorError,
   Cvss31VectorError,
   CvssVectorError,
   isCalculableScheme,
   isIntelligenceScheme,
-  severityFromScore,
+  OwaspRiskVectorError,
+  SsvcVectorError,
   type ScoreScheme,
   type SeverityRating,
 } from "@codevault/standards";
@@ -26,8 +31,8 @@ import {
 
 export interface ComputedScore {
   vector: string;
-  score: number;
-  severity: SeverityRating;
+  score: number | null;
+  severity: SeverityRating | null;
   metrics: Record<string, unknown>;
 }
 
@@ -35,9 +40,12 @@ export function isKnownScheme(scheme: string): scheme is ScoreScheme {
   return (
     scheme === "CVSS40" ||
     scheme === "CVSS31" ||
+    scheme === "CWSS10" ||
+    scheme === "OWASP_RR" ||
     scheme === "EPSS" ||
     scheme === "KEV" ||
     scheme === "SSVC" ||
+    scheme === "EVSS" ||
     scheme === "CUSTOM"
   );
 }
@@ -80,10 +88,61 @@ export function computeScore(
         },
       };
     }
+
+    if (scheme === "CWSS10") {
+      const result = calculateCwss10(vector);
+
+      return {
+        vector: result.vector,
+        score: result.score,
+        severity: null,
+        metrics: {
+          ...result.metrics,
+          weights: result.weights,
+          baseFindingScore: result.baseFindingScore,
+          attackSurfaceScore: result.attackSurfaceScore,
+          environmentalScore: result.environmentalScore,
+          scale: 100,
+        },
+      };
+    }
+
+    if (scheme === "OWASP_RR") {
+      const result = calculateOwaspRisk(vector);
+
+      return {
+        vector: result.vector,
+        score: null,
+        severity: null,
+        metrics: {
+          ...result.metrics,
+          rating: result.rating,
+          likelihood: result.likelihood,
+          technicalImpact: result.technicalImpact,
+          businessImpact: result.businessImpact,
+          selectedImpact: result.selectedImpact,
+          impactBasis: result.impactBasis,
+        },
+      };
+    }
+
+    if (scheme === "SSVC") {
+      const result = calculateSsvcCoordinatorPublish(vector);
+
+      return {
+        vector: result.vector,
+        score: null,
+        severity: null,
+        metrics: { ...result.metrics, decision: result.decision },
+      };
+    }
   } catch (error: unknown) {
     if (
       error instanceof CvssVectorError ||
-      error instanceof Cvss31VectorError
+      error instanceof Cvss31VectorError ||
+      error instanceof Cwss10VectorError ||
+      error instanceof OwaspRiskVectorError ||
+      error instanceof SsvcVectorError
     ) {
       throw validationError(error.message, {
         ...(error.metric === undefined ? {} : { metric: error.metric }),
@@ -152,26 +211,46 @@ export function normaliseScoreSubmission(
   }
 
   if (isIntelligenceScheme(scheme)) {
+    const sourceName = submission.sourceName?.trim();
+
     if (submission.score === undefined && scheme === "EPSS") {
       throw validationError("EPSS requires a probability value.");
     }
 
-    if (submission.sourceName === undefined) {
+    if (submission.score === undefined && scheme === "EVSS") {
+      throw validationError("EVSS requires a score from Edgescan.");
+    }
+
+    if (sourceName === undefined || sourceName.length === 0) {
       throw validationError(
         `${scheme} is retrieved intelligence and must name its source.`,
       );
+    }
+
+    if (
+      submission.score !== undefined &&
+      (!Number.isFinite(submission.score) ||
+        submission.score < 0 ||
+        (scheme === "EPSS" && submission.score > 1) ||
+        (scheme === "KEV" &&
+          submission.score !== 0 &&
+          submission.score !== 1) ||
+        (scheme === "EVSS" && submission.score > 10))
+    ) {
+      const range =
+        scheme === "EPSS" ? "0 to 1" : scheme === "KEV" ? "0 or 1" : "0 to 10";
+      throw validationError(`${scheme} values must be ${range}.`);
     }
 
     return {
       scheme,
       vector: null,
       score: submission.score ?? null,
-      // EPSS is a probability and KEV is a boolean fact; neither maps onto a
-      // CVSS severity band, and pretending otherwise would invite exactly the
-      // blended risk number CodeVault refuses to invent.
+      // These values use different meanings and scales. None maps onto a CVSS
+      // severity band or contributes to the finding's headline CVSS score.
       severity: null,
       metrics: submission.metrics ?? {},
-      sourceName: submission.sourceName,
+      sourceName,
     };
   }
 
@@ -179,10 +258,8 @@ export function normaliseScoreSubmission(
     scheme,
     vector: submission.vector ?? null,
     score: submission.score ?? null,
-    severity:
-      submission.score === undefined
-        ? null
-        : severityFromScore(submission.score),
+    // A custom numeric value has no authority to use CVSS qualitative bands.
+    severity: null,
     metrics: submission.metrics ?? {},
     sourceName: submission.sourceName ?? null,
   };

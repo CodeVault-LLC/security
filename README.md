@@ -136,6 +136,14 @@ organization, membership, credential, and audit record commit atomically.
 Everyone else arrives through an expiring, single-use invitation and must
 enroll MFA before receiving a session.
 
+After signing in, a user can register one or more YubiKeys or other FIDO2
+security keys under **Settings → Security**. Configure `WEBAUTHN_RP_ID` and
+`WEBAUTHN_ORIGIN` to the deployment's public HTTPS hostname before enrollment;
+these values are cryptographically bound to every credential. The desktop runs
+the WebAuthn prompt in a token-free, ephemeral window at that origin. TOTP and
+recovery codes remain available during the transition. See
+[`docs/architecture/yubikey-authentication.md`](docs/architecture/yubikey-authentication.md).
+
 Rotate encrypted TOTP credentials after adding a new first entry to
 `MFA_ENCRYPTION_KEYS` with `bun run mfa:rotate-key`. Use `--dry-run` first; the
 command reports counts and never prints decrypted secrets.

@@ -17,11 +17,14 @@ export function LoginScreen(): React.JSX.Element {
   const [serverUrl, setServerUrl] = useState(
     () =>
       window.localStorage.getItem(DEFAULT_SERVER_KEY) ??
-      "http://127.0.0.1:4310",
+      "http://localhost:4310",
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
+  const [mfaMethods, setMfaMethods] = useState<Array<"TOTP" | "WEBAUTHN">>([
+    "TOTP",
+  ]);
   const [mode, setMode] = useState<
     "LOGIN" | "MFA" | "INVITATION" | "ENROLLMENT"
   >("LOGIN");
@@ -62,7 +65,9 @@ export function LoginScreen(): React.JSX.Element {
           } else if (!outcome.data.compatible) {
             setPreflight({
               state: "INCOMPATIBLE",
-              message: `This desktop requires API v1. The server provides ${outcome.data.apiVersion}.`,
+              message:
+                outcome.data.compatibilityMessage ??
+                "This desktop and server are not compatible.",
             });
           } else {
             setPreflight({
@@ -122,6 +127,24 @@ export function LoginScreen(): React.JSX.Element {
             setBusy(false);
           }
         }}
+        securityKeyAvailable={mfaMethods.includes("WEBAUTHN")}
+        onSecurityKey={async () => {
+          setBusy(true);
+          setError(null);
+          try {
+            const outcome = await bridge().auth.loginSecurityKey();
+            if (!outcome.ok) {
+              setError(outcome.message);
+              return;
+            }
+            window.localStorage.setItem(DEFAULT_SERVER_KEY, normalizedServer);
+            signIn(outcome.data.user, outcome.data.storageWarning);
+          } catch {
+            setError("The security-key ceremony could not be completed.");
+          } finally {
+            setBusy(false);
+          }
+        }}
       />
     );
   }
@@ -164,6 +187,7 @@ export function LoginScreen(): React.JSX.Element {
         return;
       }
       setPassword("");
+      setMfaMethods(outcome.data.methods);
       setMode("MFA");
     } catch {
       setError("The CodeVault Security server could not be reached.");

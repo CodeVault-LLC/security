@@ -68,6 +68,15 @@ const api: CodeVaultDesktopApi = {
       ipcRenderer.invoke(IPC_CHANNELS.authLoginComplete, {
         totp,
       }) as ReturnType<CodeVaultDesktopApi["auth"]["loginComplete"]>,
+    loginSecurityKey: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.authLoginSecurityKey) as ReturnType<
+        CodeVaultDesktopApi["auth"]["loginSecurityKey"]
+      >,
+    registerSecurityKey: (name) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.authRegisterSecurityKey,
+        name,
+      ) as ReturnType<CodeVaultDesktopApi["auth"]["registerSecurityKey"]>,
     enrollmentStart: () =>
       ipcRenderer.invoke(IPC_CHANNELS.authEnrollmentStart) as ReturnType<
         CodeVaultDesktopApi["auth"]["enrollmentStart"]
@@ -149,6 +158,14 @@ const api: CodeVaultDesktopApi = {
       ipcRenderer.invoke(IPC_CHANNELS.caseArchivesImport) as ReturnType<
         CodeVaultDesktopApi["caseArchives"]["importCase"]
       >,
+  },
+
+  reports: {
+    downloadPdf: (artifactId) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.reportsDownloadPdf,
+        artifactId,
+      ) as ReturnType<CodeVaultDesktopApi["reports"]["downloadPdf"]>,
   },
 
   avatars: {

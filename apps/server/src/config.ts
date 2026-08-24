@@ -36,6 +36,12 @@ export interface ServerConfig {
     loginAttemptWindowMinutes: number;
     minPasswordLength: number;
     mfaKeyring: SecretKeyring;
+    webauthn: {
+      rpName: string;
+      rpId: string;
+      origin: string;
+      timeoutMs: number;
+    };
   };
   storage: {
     endpoint: string;
@@ -196,6 +202,30 @@ export function loadConfig(
     throw error;
   }
   assertProductionSecretPosture(env);
+  const serverPort = integer(env, "SERVER_PORT", 4310);
+  const webauthnRpId = optional(env, "WEBAUTHN_RP_ID") ?? "localhost";
+  const webauthnOrigin =
+    optional(env, "WEBAUTHN_ORIGIN") ?? `http://localhost:${serverPort}`;
+  const parsedWebauthnOrigin = new URL(webauthnOrigin);
+  const webauthnLoopback = ["localhost", "127.0.0.1", "[::1]"].includes(
+    parsedWebauthnOrigin.hostname,
+  );
+  if (parsedWebauthnOrigin.origin !== webauthnOrigin.replace(/\/$/u, "")) {
+    throw new ConfigError("WEBAUTHN_ORIGIN must be an origin without a path.");
+  }
+  if (parsedWebauthnOrigin.protocol !== "https:" && !webauthnLoopback) {
+    throw new ConfigError(
+      "WEBAUTHN_ORIGIN must use HTTPS except for an exact loopback origin.",
+    );
+  }
+  if (
+    parsedWebauthnOrigin.hostname !== webauthnRpId &&
+    !parsedWebauthnOrigin.hostname.endsWith(`.${webauthnRpId}`)
+  ) {
+    throw new ConfigError(
+      "WEBAUTHN_RP_ID must equal or be a registrable suffix of WEBAUTHN_ORIGIN.",
+    );
+  }
   const maxUploadBytes = integer(env, "MAX_UPLOAD_BYTES", 10 * GIBIBYTE);
   const gmailEnabled = boolean(env, "GMAIL_ENABLED", false);
   let gmail: ServerConfig["gmail"] = { enabled: false };
@@ -284,7 +314,7 @@ export function loadConfig(
     },
     server: {
       host: optional(env, "SERVER_HOST") ?? "127.0.0.1",
-      port: integer(env, "SERVER_PORT", 4310),
+      port: serverPort,
       corsOrigins: list(env, "SERVER_CORS_ORIGINS"),
       logLevel: optional(env, "LOG_LEVEL") ?? "info",
     },
@@ -300,6 +330,12 @@ export function loadConfig(
       // Long enough to matter, short enough that a passphrase is practical.
       minPasswordLength: 12,
       mfaKeyring: parseMfaKeyring(required(env, "MFA_ENCRYPTION_KEYS")),
+      webauthn: {
+        rpName: optional(env, "WEBAUTHN_RP_NAME") ?? "CodeVault Security",
+        rpId: webauthnRpId,
+        origin: parsedWebauthnOrigin.origin,
+        timeoutMs: integer(env, "WEBAUTHN_TIMEOUT_MS", 120_000),
+      },
     },
     storage: {
       endpoint: required(env, "S3_ENDPOINT"),

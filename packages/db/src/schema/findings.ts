@@ -199,10 +199,10 @@ export const findingIdentifiers = pgTable(
 /**
  * Score records.
  *
- * One table serves CVSS 4.0, CVSS 3.1, EPSS, KEV and anything added later:
- * calculable schemes carry a vector CodeVault scores itself, and intelligence
- * schemes carry a retrieved value with its source and timestamp. The two are
- * never multiplied together into a house risk number.
+ * One table serves CVSS, CWSS, OWASP Risk Rating, SSVC, EPSS, KEV, EVSS and
+ * anything added later: calculable schemes carry a vector CodeVault evaluates
+ * itself, and sourced schemes carry a retrieved value with provenance. Unlike
+ * scales are never multiplied together into a house risk number.
  */
 export const findingScores = pgTable(
   "finding_scores",

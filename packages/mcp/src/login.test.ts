@@ -20,6 +20,7 @@ describe("terminal MCP login", () => {
         jsonResponse({
           challengeToken: "c".repeat(64),
           challenge: "MFA_REQUIRED",
+          methods: ["TOTP"],
           expiresAt: "2026-08-19T10:00:00.000Z",
         }),
       )

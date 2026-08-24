@@ -1,5 +1,5 @@
 import type { AppInstance } from "../../http/app-instance.js";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import {
   ErrorResponse,
@@ -71,6 +71,7 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
           passwordHash: schema.users.passwordHash,
           disabled: schema.users.disabled,
           credentialId: schema.totpCredentials.id,
+          webauthnCredentialId: schema.webauthnCredentials.id,
         })
         .from(schema.users)
         .innerJoin(
@@ -80,6 +81,13 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
         .leftJoin(
           schema.totpCredentials,
           eq(schema.totpCredentials.userId, schema.users.id),
+        )
+        .leftJoin(
+          schema.webauthnCredentials,
+          and(
+            eq(schema.webauthnCredentials.userId, schema.users.id),
+            isNull(schema.webauthnCredentials.revokedAt),
+          ),
         )
         .where(sql`lower(${schema.users.email}) = ${email}`)
         .limit(1);
@@ -116,6 +124,9 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
           user.credentialId === null
             ? ("ENROLLMENT_REQUIRED" as const)
             : ("MFA_REQUIRED" as const),
+        methods: (user.webauthnCredentialId === null
+          ? (["TOTP"] as const)
+          : (["TOTP", "WEBAUTHN"] as const)) as ("TOTP" | "WEBAUTHN")[],
         expiresAt,
       };
     },

@@ -12,6 +12,7 @@ import type {
   SubmissionDelivery,
   ImportCaseArchiveResult,
   IntakeDraft,
+  WebAuthnCredentialSummary,
 } from "@codevault/contracts";
 
 /**
@@ -34,6 +35,7 @@ export interface AuthResult {
 
 export interface LoginChallengeResult {
   challenge: "MFA_REQUIRED" | "ENROLLMENT_REQUIRED";
+  methods: Array<"TOTP" | "WEBAUTHN">;
   expiresAt: string;
 }
 
@@ -42,6 +44,7 @@ export interface ServerPreflight {
   apiVersion: string;
   serverVersion: string;
   compatible: boolean;
+  compatibilityMessage: string | null;
 }
 
 export interface EnrollmentSetup {
@@ -158,6 +161,11 @@ export interface CaseArchiveExportResult {
   sha256: string | null;
 }
 
+export interface ReportPdfDownloadResult {
+  saved: boolean;
+  sha256: string | null;
+}
+
 export interface SigningKeySummary {
   fingerprint: string;
   userIds: string[];
@@ -200,6 +208,10 @@ export interface CodeVaultDesktopApi {
       rememberMe: boolean,
     ): Promise<ApiOutcome<LoginChallengeResult>>;
     loginComplete(totp: string): Promise<ApiOutcome<AuthResult>>;
+    loginSecurityKey(): Promise<ApiOutcome<AuthResult>>;
+    registerSecurityKey(
+      name: string,
+    ): Promise<ApiOutcome<WebAuthnCredentialSummary>>;
     enrollmentStart(): Promise<ApiOutcome<EnrollmentSetup>>;
     enrollmentConfirm(totp: string): Promise<ApiOutcome<RecoveryCodeBundle>>;
     logout(): Promise<void>;
@@ -255,6 +267,13 @@ export interface CodeVaultDesktopApi {
   caseArchives: {
     exportCase(caseId: string): Promise<ApiOutcome<CaseArchiveExportResult>>;
     importCase(): Promise<ApiOutcome<ImportCaseArchiveResult | null>>;
+  };
+
+  reports: {
+    /** Downloads and verifies a completed PDF export through a native picker. */
+    downloadPdf(
+      artifactId: string,
+    ): Promise<ApiOutcome<ReportPdfDownloadResult>>;
   };
 
   avatars: {
@@ -325,6 +344,8 @@ export const IPC_CHANNELS = {
   authLoginStart: "auth:login-start",
   authPreflight: "auth:preflight",
   authLoginComplete: "auth:login-complete",
+  authLoginSecurityKey: "auth:login-security-key",
+  authRegisterSecurityKey: "auth:register-security-key",
   authEnrollmentStart: "auth:enrollment-start",
   authEnrollmentConfirm: "auth:enrollment-confirm",
   authLogout: "auth:logout",
@@ -342,6 +363,7 @@ export const IPC_CHANNELS = {
   intakeSelectFolder: "intake:select-folder",
   caseArchivesExport: "case-archives:export",
   caseArchivesImport: "case-archives:import",
+  reportsDownloadPdf: "reports:download-pdf",
   avatarsSelectAndUpload: "avatars:select-and-upload",
   avatarsLoad: "avatars:load",
   avatarsLoadUser: "avatars:load-user",

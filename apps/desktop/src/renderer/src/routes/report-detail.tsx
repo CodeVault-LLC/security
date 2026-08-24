@@ -514,15 +514,9 @@ function ReportExportStrip({
 
   const download = (artifactId: string): void => {
     void bridge()
-      .api.request<{ url: string }>(`/v1/artifacts/${artifactId}`)
+      .reports.downloadPdf(artifactId)
       .then((outcome) => {
-        if (outcome.ok) {
-          void bridge().app.openExternal(outcome.data.url);
-
-          return;
-        }
-
-        onError(outcome.message);
+        if (!outcome.ok) onError(outcome.message);
       });
   };
 

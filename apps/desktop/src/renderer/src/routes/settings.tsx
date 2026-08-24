@@ -17,6 +17,7 @@ import type {
   GmailAuthorization,
   MailboxConnection,
   OrganizationUser,
+  WebAuthnCredentialSummary,
 } from "@codevault/contracts";
 import { Button, cn, Input, Label } from "@codevault/ui";
 
@@ -979,6 +980,24 @@ export function PersonalSecurityRoute(): React.JSX.Element {
     ["settings", "sessions"],
     "/v1/settings/sessions",
   );
+  const securityKeys = useApiQuery<{ items: WebAuthnCredentialSummary[] }>(
+    ["settings", "security-keys"],
+    "/v1/settings/security-keys",
+  );
+  const [securityKeyName, setSecurityKeyName] = useState("YubiKey");
+  const [securityKeyBusy, setSecurityKeyBusy] = useState(false);
+  const [securityKeyError, setSecurityKeyError] = useState<string | null>(null);
+  const [securityKeyAdded, setSecurityKeyAdded] = useState<string | null>(null);
+  const [confirmSecurityKeyId, setConfirmSecurityKeyId] = useState<
+    string | null
+  >(null);
+  const revokeSecurityKey = useApiMutation<{ ok: true }, string>(
+    (id) => ({
+      path: `/v1/settings/security-keys/${id}`,
+      method: "DELETE",
+    }),
+    () => [["settings", "security-keys"]],
+  );
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
@@ -1028,6 +1047,144 @@ export function PersonalSecurityRoute(): React.JSX.Element {
     >
       <SettingsSection title="Account protection">
         <SecuritySummaryView security={security} />
+      </SettingsSection>
+
+      <SettingsSection title="Security keys">
+        <div className="max-w-lg space-y-4">
+          <p className="text-[12px] leading-5 text-text-muted">
+            Register a YubiKey or another FIDO2 security key for
+            phishing-resistant sign-in. TOTP and recovery codes remain available
+            as fallback factors.
+          </p>
+          {securityKeys.error && securityKeys.data === undefined ? (
+            <QueryError query={securityKeys} />
+          ) : securityKeys.data?.items.length ? (
+            <ul className="divide-y divide-border border-y border-border">
+              {securityKeys.data.items.map((key) => (
+                <li key={key.id} className="flex items-center gap-3 py-3">
+                  <KeyRound className="size-4 text-success" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[13px] font-medium">
+                      {key.name}
+                    </p>
+                    <p className="text-[11px] text-text-muted">
+                      Added {formatDateTime(key.createdAt)}
+                      {key.lastUsedAt
+                        ? ` · Last used ${formatDateTime(key.lastUsedAt)}`
+                        : " · Not used yet"}
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-semibold text-success">
+                    Active
+                  </span>
+                  {confirmSecurityKeyId === key.id ? (
+                    <div className="flex gap-1">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={revokeSecurityKey.isPending}
+                        onClick={() => setConfirmSecurityKeyId(null)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        loading={
+                          revokeSecurityKey.isPending &&
+                          revokeSecurityKey.variables === key.id
+                        }
+                        onClick={() =>
+                          revokeSecurityKey.mutate(key.id, {
+                            onSuccess: () => setConfirmSecurityKeyId(null),
+                          })
+                        }
+                      >
+                        Confirm removal
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={revokeSecurityKey.isPending}
+                      onClick={() => {
+                        revokeSecurityKey.reset();
+                        setConfirmSecurityKeyId(key.id);
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[12px] text-text-muted">
+              No security keys are registered.
+            </p>
+          )}
+          {revokeSecurityKey.error ? (
+            <p role="alert" className="text-[12px] text-danger">
+              {revokeSecurityKey.error.message}
+            </p>
+          ) : null}
+          <div>
+            <Label htmlFor="security-key-name">Security key name</Label>
+            <div className="mt-1.5 flex gap-2">
+              <Input
+                id="security-key-name"
+                value={securityKeyName}
+                maxLength={120}
+                disabled={securityKeyBusy}
+                onChange={(event) => {
+                  setSecurityKeyName(event.target.value);
+                  setSecurityKeyError(null);
+                  setSecurityKeyAdded(null);
+                }}
+              />
+              <Button
+                variant="secondary"
+                disabled={
+                  securityKeyBusy || securityKeyName.trim().length === 0
+                }
+                onClick={() => {
+                  setSecurityKeyBusy(true);
+                  setSecurityKeyError(null);
+                  setSecurityKeyAdded(null);
+                  void bridge()
+                    .auth.registerSecurityKey(securityKeyName.trim())
+                    .then(async (outcome) => {
+                      if (!outcome.ok) {
+                        setSecurityKeyError(outcome.message);
+                        return;
+                      }
+                      setSecurityKeyAdded(outcome.data.name);
+                      await securityKeys.refetch();
+                    })
+                    .catch(() =>
+                      setSecurityKeyError(
+                        "The security-key ceremony could not be completed.",
+                      ),
+                    )
+                    .finally(() => setSecurityKeyBusy(false));
+                }}
+              >
+                {securityKeyBusy ? "Waiting…" : "Add security key"}
+              </Button>
+            </div>
+            {securityKeyError ? (
+              <p role="alert" className="mt-2 text-[12px] text-danger">
+                {securityKeyError}
+              </p>
+            ) : null}
+            {securityKeyAdded ? (
+              <p role="status" className="mt-2 text-[12px] text-success">
+                {securityKeyAdded} is ready for sign-in.
+              </p>
+            ) : null}
+          </div>
+        </div>
       </SettingsSection>
 
       <SettingsSection title="Password">

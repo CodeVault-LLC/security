@@ -98,25 +98,34 @@ export function externalIdUrl(
 export const SCORE_SCHEMES = [
   "CVSS40",
   "CVSS31",
+  "CWSS10",
+  "OWASP_RR",
   "EPSS",
   "KEV",
   "SSVC",
+  "EVSS",
   "CUSTOM",
 ] as const;
 
 export type ScoreScheme = (typeof SCORE_SCHEMES)[number];
 
 /**
- * Whether a scheme produces a deterministic numeric score from a vector.
+ * Whether a scheme produces a deterministic assessment from a vector.
  *
- * Only these schemes may have their score computed by CodeVault; EPSS and KEV
- * are retrieved facts with a source and a retrieval timestamp, not something we
- * calculate, and they are never folded into a CVSS number.
+ * Only these schemes may have their result computed by CodeVault. Some produce
+ * a numeric score and others a decision category. Retrieved facts retain a
+ * source and timestamp and are never folded into a CVSS number.
  */
 export function isCalculableScheme(scheme: ScoreScheme): boolean {
-  return scheme === "CVSS40" || scheme === "CVSS31";
+  return (
+    scheme === "CVSS40" ||
+    scheme === "CVSS31" ||
+    scheme === "CWSS10" ||
+    scheme === "OWASP_RR" ||
+    scheme === "SSVC"
+  );
 }
 
 export function isIntelligenceScheme(scheme: ScoreScheme): boolean {
-  return scheme === "EPSS" || scheme === "KEV";
+  return scheme === "EPSS" || scheme === "KEV" || scheme === "EVSS";
 }

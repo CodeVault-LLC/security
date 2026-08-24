@@ -5,6 +5,26 @@ import { describe, expect, it, vi } from "vitest";
 import { MfaChallenge } from "./mfa-challenge.js";
 
 describe("MfaChallenge", () => {
+  it("offers a registered security key as an alternative", async () => {
+    const user = userEvent.setup();
+    const onSecurityKey = vi.fn(async () => undefined);
+    render(
+      <MfaChallenge
+        email="researcher@example.com"
+        busy={false}
+        error={null}
+        onSubmit={async () => undefined}
+        securityKeyAvailable
+        onSecurityKey={onSecurityKey}
+        onBack={() => undefined}
+      />,
+    );
+    await user.click(
+      screen.getByRole("button", { name: "Use a security key" }),
+    );
+    expect(onSecurityKey).toHaveBeenCalledOnce();
+  });
+
   it("collects and submits a six-digit code through separate slots", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn(async () => undefined);

@@ -233,13 +233,14 @@ export type AddAffectedRangeRequest = Static<typeof AddAffectedRangeRequest>;
 /**
  * Score submission.
  *
- * The client sends a vector, never a score: the server recomputes the number
- * with the deterministic implementation so an AI proposal cannot invent one.
+ * Calculable schemes send a vector, never a score: the server recomputes the
+ * numeric or categorical result. Retrieved/proprietary schemes instead send a
+ * sourced observation.
  */
 export const AddFindingScoreRequest = Type.Object({
   scheme: Type.String({ maxLength: 40 }),
   vector: Type.Optional(Type.String({ maxLength: 400 })),
-  /** Only accepted for retrieved intelligence schemes such as EPSS. */
+  /** Only accepted for sourced observations such as EPSS, KEV, or EVSS. */
   score: Type.Optional(Type.Number({ minimum: 0, maximum: 100 })),
   metrics: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
   reasoningMarkdown: Type.Optional(Markdown),

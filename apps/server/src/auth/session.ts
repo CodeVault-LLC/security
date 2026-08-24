@@ -34,7 +34,7 @@ export interface AuthenticatedPrincipal {
     createdAt: string;
     lastSeenAt: string | null;
     mfaVerifiedAt: string;
-    mfaMethod: "TOTP";
+    mfaMethod: "TOTP" | "WEBAUTHN";
   };
   organization: {
     id: string;
@@ -64,6 +64,7 @@ export async function createSession(
   userAgent: string | null,
   mfaVerifiedAt: Date,
   remembered = false,
+  mfaMethod: "TOTP" | "WEBAUTHN" = "TOTP",
 ): Promise<CreatedSession> {
   const token = generateOpaqueToken();
   const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
@@ -76,7 +77,7 @@ export async function createSession(
       expiresAt: expiresAt.toISOString(),
       remembered,
       mfaVerifiedAt: mfaVerifiedAt.toISOString(),
-      mfaMethod: "TOTP",
+      mfaMethod,
       ...(userAgent === null ? {} : { userAgent }),
     })
     .returning({

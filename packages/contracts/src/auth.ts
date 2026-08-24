@@ -22,6 +22,10 @@ export const LoginStartResponse = Type.Object({
     Type.Literal("MFA_REQUIRED"),
     Type.Literal("ENROLLMENT_REQUIRED"),
   ]),
+  methods: Type.Array(
+    Type.Union([Type.Literal("TOTP"), Type.Literal("WEBAUTHN")]),
+    { minItems: 1, uniqueItems: true },
+  ),
   expiresAt: Timestamp,
 });
 export type LoginStartResponse = Static<typeof LoginStartResponse>;
@@ -62,6 +66,104 @@ export const LoginResponse = Type.Object({
 });
 
 export type LoginResponse = Static<typeof LoginResponse>;
+
+const WebAuthnTransport = Type.Union([
+  Type.Literal("ble"),
+  Type.Literal("cable"),
+  Type.Literal("hybrid"),
+  Type.Literal("internal"),
+  Type.Literal("nfc"),
+  Type.Literal("smart-card"),
+  Type.Literal("usb"),
+]);
+
+const WebAuthnClientExtensions = Type.Record(Type.String(), Type.Unknown());
+
+/** JSON form returned by navigator.credentials.create(). */
+export const WebAuthnRegistrationCredential = Type.Object({
+  id: Type.String({ minLength: 1, maxLength: 2048 }),
+  rawId: Type.String({ minLength: 1, maxLength: 2048 }),
+  response: Type.Object({
+    attestationObject: Type.String({ minLength: 1, maxLength: 131_072 }),
+    clientDataJSON: Type.String({ minLength: 1, maxLength: 16_384 }),
+    transports: Type.Optional(Type.Array(WebAuthnTransport, { maxItems: 8 })),
+    publicKeyAlgorithm: Type.Optional(Type.Integer()),
+    publicKey: Type.Optional(Type.String({ maxLength: 16_384 })),
+    authenticatorData: Type.Optional(Type.String({ maxLength: 16_384 })),
+  }),
+  type: Type.Literal("public-key"),
+  clientExtensionResults: WebAuthnClientExtensions,
+  authenticatorAttachment: Type.Optional(
+    Type.Union([Type.Literal("cross-platform"), Type.Literal("platform")]),
+  ),
+});
+export type WebAuthnRegistrationCredential = Static<
+  typeof WebAuthnRegistrationCredential
+>;
+
+/** JSON form returned by navigator.credentials.get(). */
+export const WebAuthnAuthenticationCredential = Type.Object({
+  id: Type.String({ minLength: 1, maxLength: 2048 }),
+  rawId: Type.String({ minLength: 1, maxLength: 2048 }),
+  response: Type.Object({
+    authenticatorData: Type.String({ minLength: 1, maxLength: 16_384 }),
+    clientDataJSON: Type.String({ minLength: 1, maxLength: 16_384 }),
+    signature: Type.String({ minLength: 1, maxLength: 16_384 }),
+    userHandle: Type.Optional(
+      Type.Union([Type.String({ maxLength: 2048 }), Type.Null()]),
+    ),
+  }),
+  type: Type.Literal("public-key"),
+  clientExtensionResults: WebAuthnClientExtensions,
+  authenticatorAttachment: Type.Optional(
+    Type.Union([Type.Literal("cross-platform"), Type.Literal("platform")]),
+  ),
+});
+export type WebAuthnAuthenticationCredential = Static<
+  typeof WebAuthnAuthenticationCredential
+>;
+
+export const WebAuthnCeremonyOptions = Type.Object({
+  ceremonyToken: Type.String({ minLength: 32 }),
+  /** PublicKeyCredentialCreationOptionsJSON or RequestOptionsJSON. */
+  options: Type.Any(),
+});
+export type WebAuthnCeremonyOptions = Static<typeof WebAuthnCeremonyOptions>;
+
+export const StartWebAuthnLoginRequest = Type.Object({
+  challengeToken: Type.String({ minLength: 32, maxLength: 512 }),
+});
+export const CompleteWebAuthnLoginRequest = Type.Object({
+  ceremonyToken: Type.String({ minLength: 32, maxLength: 512 }),
+  response: WebAuthnAuthenticationCredential,
+  rememberMe: Type.Optional(Type.Boolean({ default: false })),
+});
+export const StartWebAuthnRegistrationRequest = Type.Object({
+  name: Type.String({ minLength: 1, maxLength: 120 }),
+});
+export const CompleteWebAuthnRegistrationRequest = Type.Object({
+  ceremonyToken: Type.String({ minLength: 32, maxLength: 512 }),
+  name: Type.String({ minLength: 1, maxLength: 120 }),
+  response: WebAuthnRegistrationCredential,
+});
+export const WebAuthnCredentialSummary = Type.Object({
+  id: Uuid,
+  name: Type.String(),
+  transports: Type.Array(WebAuthnTransport),
+  deviceType: Type.Union([
+    Type.Literal("singleDevice"),
+    Type.Literal("multiDevice"),
+  ]),
+  backedUp: Type.Boolean(),
+  createdAt: Timestamp,
+  lastUsedAt: Type.Union([Timestamp, Type.Null()]),
+});
+export type WebAuthnCredentialSummary = Static<
+  typeof WebAuthnCredentialSummary
+>;
+export const WebAuthnCredentialList = Type.Object({
+  items: Type.Array(WebAuthnCredentialSummary),
+});
 
 export const MeResponse = Type.Object({
   user: SessionUser,
