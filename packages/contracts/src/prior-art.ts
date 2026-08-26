@@ -111,7 +111,9 @@ export type PriorArtCheck = Static<typeof PriorArtCheck>;
 
 export const StartPriorArtCheckRequest = Type.Object({
   /** Extra technical keywords such as an endpoint, parameter or symbol name. */
-  keywords: Type.Optional(Type.Array(Type.String({ maxLength: 100 }))),
+  keywords: Type.Optional(
+    Type.Array(Type.String({ maxLength: 100 }), { maxItems: 20 }),
+  ),
   /** Skips AI synthesis even when a provider is available. */
   skipAiSynthesis: Type.Optional(Type.Boolean()),
 });

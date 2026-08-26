@@ -9,10 +9,16 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
+  Dialog,
+  DialogBody,
+  DialogContent,
+  DialogFooter,
   EmptyState,
+  Label,
   LoadingState,
   Mono,
   PriorArtBadge,
+  Textarea,
 } from "@codevault/ui";
 
 import { bridge } from "../../lib/bridge.js";
@@ -20,6 +26,7 @@ import { Avatar } from "../../components/avatar.js";
 import { formatDateTime } from "../../lib/dates.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../../lib/api.js";
 import { QueryError } from "../../components/query-boundary.js";
+import { parsePriorArtKeywords } from "./prior-art-options.js";
 
 /**
  * The prior-art tab.
@@ -69,6 +76,10 @@ export function PriorArtPanel({
   canEdit,
 }: PriorArtPanelProps): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [keywordInput, setKeywordInput] = useState("");
+  const [skipAiSynthesis, setSkipAiSynthesis] = useState(false);
+  const [optionsError, setOptionsError] = useState<string | null>(null);
 
   const checks = useApiQuery<{ items: PriorArtCheck[] }>(
     queryKeys.priorArt(finding.id),
@@ -81,11 +92,14 @@ export function PriorArtPanel({
     },
   );
 
-  const startCheck = useApiMutation<PriorArtCheck>(
-    () => ({
+  const startCheck = useApiMutation<
+    PriorArtCheck,
+    { keywords: string[]; skipAiSynthesis: boolean }
+  >(
+    (options) => ({
       path: `/v1/findings/${finding.id}/prior-art-checks`,
       method: "POST",
-      body: {},
+      body: options,
     }),
     () => [queryKeys.priorArt(finding.id), queryKeys.finding(finding.id)],
   );
@@ -115,6 +129,35 @@ export function PriorArtPanel({
     void bridge().app.openExternal(url);
   };
 
+  const openCheckOptions = (): void => {
+    setError(null);
+    setOptionsError(null);
+    setOptionsOpen(true);
+  };
+
+  const runCheck = (): void => {
+    const parsed = parsePriorArtKeywords(keywordInput);
+    if (parsed.error !== null) {
+      setOptionsError(parsed.error);
+      return;
+    }
+    setOptionsError(null);
+    startCheck.mutate(
+      {
+        keywords: parsed.keywords,
+        skipAiSynthesis,
+      },
+      {
+        onSuccess: () => {
+          setOptionsOpen(false);
+          setKeywordInput("");
+          setSkipAiSynthesis(false);
+        },
+        onError: (mutationError) => setOptionsError(mutationError.message),
+      },
+    );
+  };
+
   const newSinceLastCheck = new Set(
     previous === undefined
       ? []
@@ -141,13 +184,8 @@ export function PriorArtPanel({
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() =>
-                  startCheck.mutate(undefined, {
-                    onError: (mutationError) => setError(mutationError.message),
-                  })
-                }
-                loading={startCheck.isPending}
-                disabled={checkInProgress}
+                onClick={openCheckOptions}
+                disabled={checkInProgress || startCheck.isPending}
               >
                 {latest === undefined ? (
                   <ShieldQuestion aria-hidden className="size-3" />
@@ -180,13 +218,8 @@ export function PriorArtPanel({
               canEdit ? (
                 <Button
                   variant="primary"
-                  loading={startCheck.isPending}
-                  onClick={() =>
-                    startCheck.mutate(undefined, {
-                      onError: (mutationError) =>
-                        setError(mutationError.message),
-                    })
-                  }
+                  onClick={openCheckOptions}
+                  disabled={startCheck.isPending}
                 >
                   <ShieldQuestion aria-hidden className="size-3.5" />
                   Check prior art
@@ -419,6 +452,77 @@ export function PriorArtPanel({
           </CardBody>
         )}
       </Card>
+
+      <Dialog open={optionsOpen} onOpenChange={setOptionsOpen}>
+        <DialogContent
+          title={
+            latest === undefined ? "Check prior art" : "Re-run prior-art check"
+          }
+          description="Search with the finding's identifiers and content, plus any technical terms you add here."
+        >
+          <DialogBody className="space-y-3">
+            <div>
+              <Label htmlFor="prior-art-keywords">
+                Additional keywords (optional)
+              </Label>
+              <Textarea
+                id="prior-art-keywords"
+                value={keywordInput}
+                onChange={(event) => setKeywordInput(event.target.value)}
+                rows={4}
+                placeholder="wp_ajax, nonce, capability check"
+                aria-describedby="prior-art-keywords-help"
+                className="mt-1"
+                autoFocus
+              />
+              <p
+                id="prior-art-keywords-help"
+                className="mt-1 text-[11px] text-text-muted"
+              >
+                Separate up to 20 endpoint names, parameters, symbols, or other
+                distinctive terms with commas or new lines.
+              </p>
+            </div>
+
+            <label className="flex cursor-pointer items-start gap-2 rounded-(--cv-radius) border border-border px-2.5 py-2 text-[12px] hover:bg-surface-hover">
+              <input
+                type="checkbox"
+                aria-label="Skip AI comparison"
+                checked={skipAiSynthesis}
+                onChange={(event) => setSkipAiSynthesis(event.target.checked)}
+                className="mt-0.5 size-3.5 accent-accent"
+              />
+              <span>
+                <span className="block font-medium">Skip AI comparison</span>
+                <span className="block text-text-muted">
+                  Collect source results without asking a local AI provider to
+                  compare candidates.
+                </span>
+              </span>
+            </label>
+
+            {optionsError === null ? null : (
+              <p className="rounded-(--cv-radius) border border-danger/40 bg-danger/10 px-2 py-1.5 text-[12px] text-danger">
+                {optionsError}
+              </p>
+            )}
+          </DialogBody>
+
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setOptionsOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={startCheck.isPending}
+              onClick={runCheck}
+            >
+              <ShieldQuestion aria-hidden className="size-3.5" />
+              Start check
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
