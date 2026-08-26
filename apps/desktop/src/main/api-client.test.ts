@@ -126,3 +126,20 @@ describe("API client cancellation", () => {
     });
   });
 });
+
+describe("API client response validation", () => {
+  it("classifies malformed JSON as an unexpected server response", async () => {
+    const client = createApiClient({
+      sessionStore: storedSession(),
+      fetchImpl: vi
+        .fn()
+        .mockResolvedValue(new Response("not json", { status: 200 })),
+    });
+
+    await expect(client.request("/v1/dashboard")).rejects.toMatchObject({
+      status: 200,
+      category: "SERVER_ERROR",
+      message: "The server returned invalid JSON.",
+    });
+  });
+});
