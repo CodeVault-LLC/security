@@ -89,6 +89,14 @@ export function parseCaptureArguments(
   }
   const suppliedName = values.get("--name");
   const name = suppliedName === undefined ? undefined : safeFilename(suppliedName);
+  const mimeType = values.get("--mime") ?? "application/octet-stream";
+  if (
+    mimeType.length === 0 ||
+    mimeType.length > 200 ||
+    hasControlCharacter(mimeType)
+  ) {
+    throw new Error("--mime must be 1 to 200 characters without controls.");
+  }
 
   return {
     caseId,
@@ -101,7 +109,7 @@ export function parseCaptureArguments(
     ...(values.get("--description") === undefined
       ? {}
       : { descriptionMarkdown: values.get("--description")! }),
-    mimeType: values.get("--mime") ?? "application/octet-stream",
+    mimeType,
     artifactKind: artifactKind as ArtifactKind,
     visibility,
     ...(sourceTime === undefined ? {} : { sourceTime }),
@@ -301,6 +309,13 @@ function safeFilename(value: string): string {
   if (name === "" || name === "." || name === ".." || name.length > 300)
     throw new Error("The capture name must be 1 to 300 characters.");
   return name;
+}
+
+function hasControlCharacter(value: string): boolean {
+  return [...value].some((character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= 31 || codePoint === 127;
+  });
 }
 
 function serverMessage(value: unknown): string | null {
