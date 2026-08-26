@@ -78,6 +78,10 @@ describe("parseDirectives", () => {
     ).toHaveLength(0);
   });
 
+  it("ignores a backslash-escaped directive", () => {
+    expect(parseDirectives("Literal \\[asset:AST-000001].")).toHaveLength(0);
+  });
+
   it("ignores directive-shaped text inside fenced code", () => {
     expect(
       parseDirectives(
