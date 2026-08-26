@@ -79,6 +79,43 @@ function inlineCodeRanges(markdown: string): Array<[number, number]> {
   return ranges;
 }
 
+function fencedCodeRanges(markdown: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  let open: { character: "`" | "~"; length: number; start: number } | null =
+    null;
+  let offset = 0;
+
+  for (const rawLine of markdown.split(/(?<=\n)/u)) {
+    const line = rawLine.replace(/\r?\n$/u, "");
+    if (open === null) {
+      const match = /^ {0,3}(`{3,}|~{3,})/u.exec(line);
+      const fence = match?.[1];
+      if (fence !== undefined) {
+        open = {
+          character: fence[0] as "`" | "~",
+          length: fence.length,
+          start: offset,
+        };
+      }
+    } else {
+      const match = /^ {0,3}(`+|~+)\s*$/u.exec(line);
+      const fence = match?.[1];
+      if (
+        fence !== undefined &&
+        fence[0] === open.character &&
+        fence.length >= open.length
+      ) {
+        ranges.push([open.start, offset + rawLine.length]);
+        open = null;
+      }
+    }
+    offset += rawLine.length;
+  }
+
+  if (open !== null) ranges.push([open.start, markdown.length]);
+  return ranges;
+}
+
 function lineNumberAt(markdown: string, offset: number): number {
   let line = 1;
 
@@ -95,6 +132,7 @@ export function parseDirectives(markdown: string): ParsedDirective[] {
   const ignoredRanges = [
     ...linkRanges(markdown),
     ...inlineCodeRanges(markdown),
+    ...fencedCodeRanges(markdown),
   ];
   const directives: ParsedDirective[] = [];
 

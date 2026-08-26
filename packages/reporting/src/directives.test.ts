@@ -70,6 +70,16 @@ describe("parseDirectives", () => {
     ).toHaveLength(0);
   });
 
+  it("ignores directive-shaped text inside fenced code", () => {
+    expect(
+      parseDirectives(
+        ["```text", "[asset:AST-000001]", "```", "[finding:FIND-1]"].join(
+          "\n",
+        ),
+      ).map((item) => item.raw),
+    ).toEqual(["[finding:FIND-1]"]);
+  });
+
   it("records the line so a lint message can point at it", () => {
     const directives = parseDirectives("line one\nline two\n[evidence:EVID-1]");
 
