@@ -94,7 +94,10 @@ const PREFIX_TO_KIND = new Map<string, ReferenceKind>(
   ]),
 );
 
-function parseCanonicalSequence(value: string, minimumWidth: number): number | null {
+function parseCanonicalSequence(
+  value: string,
+  minimumWidth: number,
+): number | null {
   const hasCanonicalDigits =
     (value.length === minimumWidth && /^\d+$/u.test(value)) ||
     (value.length > minimumWidth && /^[1-9]\d+$/u.test(value));

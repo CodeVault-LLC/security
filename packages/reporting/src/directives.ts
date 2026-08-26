@@ -148,7 +148,11 @@ function fencedCodeRanges(markdown: string): Array<[number, number]> {
 
 function isEscaped(markdown: string, offset: number): boolean {
   let backslashes = 0;
-  for (let index = offset - 1; index >= 0 && markdown[index] === "\\"; index -= 1) {
+  for (
+    let index = offset - 1;
+    index >= 0 && markdown[index] === "\\";
+    index -= 1
+  ) {
     backslashes += 1;
   }
   return backslashes % 2 === 1;
@@ -176,8 +180,7 @@ export function parseDirectives(markdown: string): ParsedDirective[] {
     while (lineCursor < start) {
       if (
         markdown[lineCursor] === "\r" ||
-        (markdown[lineCursor] === "\n" &&
-          markdown[lineCursor - 1] !== "\r")
+        (markdown[lineCursor] === "\n" && markdown[lineCursor - 1] !== "\r")
       ) {
         line += 1;
       }
@@ -291,10 +294,7 @@ export async function resolveDirectives(
   const errors: DirectiveError[] = [];
   const substitutions: DirectiveSubstitution[] = [];
   const replacements: Array<{ start: number; end: number; text: string }> = [];
-  const resolutionCache = new Map<
-    string,
-    Promise<ResolvedDirective | null>
-  >();
+  const resolutionCache = new Map<string, Promise<ResolvedDirective | null>>();
 
   let placeholderIndex = 0;
   const nextPlaceholder = (): string => {

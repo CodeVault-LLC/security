@@ -423,9 +423,7 @@ function validateManifest(value: unknown): asserts value is CvcaseManifest {
   if (
     Object.values(value.recordCounts).some(
       (count) =>
-        typeof count !== "number" ||
-        !Number.isSafeInteger(count) ||
-        count < 0,
+        typeof count !== "number" || !Number.isSafeInteger(count) || count < 0,
     )
   ) {
     throw new Error("The .cvcase manifest record counts are invalid.");
@@ -455,9 +453,7 @@ function validateManifest(value: unknown): asserts value is CvcaseManifest {
     if (ids.has(item.sourceId))
       throw new Error("The .cvcase manifest repeats an artifact ID.");
     if (paths.has(item.archivePath)) {
-      throw new Error(
-        "The .cvcase manifest repeats an artifact archive path.",
-      );
+      throw new Error("The .cvcase manifest repeats an artifact archive path.");
     }
     ids.add(item.sourceId);
     paths.add(item.archivePath);

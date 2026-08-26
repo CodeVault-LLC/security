@@ -106,7 +106,9 @@ export function parseFindingsCsv(input: string): ExchangeFinding[] {
   const seenColumns = new Set<string>();
   for (const column of columns) {
     if (column !== "" && seenColumns.has(column)) {
-      throw new Error(`The CSV finding exchange repeats the "${column}" column.`);
+      throw new Error(
+        `The CSV finding exchange repeats the "${column}" column.`,
+      );
     }
     seenColumns.add(column);
   }

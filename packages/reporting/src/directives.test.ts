@@ -85,9 +85,7 @@ describe("parseDirectives", () => {
   it("ignores directive-shaped text inside fenced code", () => {
     expect(
       parseDirectives(
-        ["```text", "[asset:AST-000001]", "```", "[finding:FIND-1]"].join(
-          "\n",
-        ),
+        ["```text", "[asset:AST-000001]", "```", "[finding:FIND-1]"].join("\n"),
       ).map((item) => item.raw),
     ).toEqual(["[finding:FIND-1]"]);
   });
@@ -102,9 +100,9 @@ describe("parseDirectives", () => {
 
   it("ignores directives inside HTML comments", () => {
     expect(
-      parseDirectives(
-        "<!-- [evidence:EVID-000001] -->\n[finding:FIND-1]",
-      ).map((item) => item.raw),
+      parseDirectives("<!-- [evidence:EVID-000001] -->\n[finding:FIND-1]").map(
+        (item) => item.raw,
+      ),
     ).toEqual(["[finding:FIND-1]"]);
   });
 
@@ -116,9 +114,7 @@ describe("parseDirectives", () => {
 
   it("counts carriage-return line endings without double-counting CRLF", () => {
     expect(parseDirectives("one\rtwo\r[evidence:EVID-1]")[0]?.line).toBe(3);
-    expect(parseDirectives("one\r\ntwo\r\n[evidence:EVID-1]")[0]?.line).toBe(
-      3,
-    );
+    expect(parseDirectives("one\r\ntwo\r\n[evidence:EVID-1]")[0]?.line).toBe(3);
   });
 
   it("recognises exactly the known kinds", () => {

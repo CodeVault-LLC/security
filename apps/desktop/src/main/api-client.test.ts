@@ -53,7 +53,9 @@ describe("API client session invalidation", () => {
 
   it("reports the original 401 when persisted-session cleanup fails", async () => {
     const sessionStore = storedSession();
-    vi.mocked(sessionStore.clear).mockRejectedValue(new Error("keychain locked"));
+    vi.mocked(sessionStore.clear).mockRejectedValue(
+      new Error("keychain locked"),
+    );
     const onSessionExpired = vi.fn();
     const client = createApiClient({
       sessionStore,
@@ -82,9 +84,11 @@ describe("API client session invalidation", () => {
 
 describe("API client origin boundary", () => {
   it("rejects an absolute request URL before attaching credentials", async () => {
-    const fetchImpl = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: true }), { status: 200 }),
-    );
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      );
     const client = createApiClient({
       sessionStore: storedSession(),
       fetchImpl,
@@ -106,9 +110,11 @@ describe("API client cancellation", () => {
     const removeListener = vi.spyOn(caller.signal, "removeEventListener");
     const client = createApiClient({
       sessionStore: storedSession(),
-      fetchImpl: vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ ok: true }), { status: 200 }),
-      ),
+      fetchImpl: vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ ok: true }), { status: 200 }),
+        ),
     });
 
     await client.request("/v1/dashboard", { signal: caller.signal });
@@ -187,9 +193,11 @@ describe("API client response validation", () => {
   it("handles a malformed error envelope without hiding the HTTP response", async () => {
     const client = createApiClient({
       sessionStore: storedSession(),
-      fetchImpl: vi.fn().mockResolvedValue(
-        new Response(JSON.stringify({ error: null }), { status: 400 }),
-      ),
+      fetchImpl: vi
+        .fn()
+        .mockResolvedValue(
+          new Response(JSON.stringify({ error: null }), { status: 400 }),
+        ),
     });
 
     await expect(client.request("/v1/dashboard")).rejects.toMatchObject({
