@@ -97,6 +97,11 @@ export const PriorArtCheck = Type.Object({
   ),
   matches: Type.Array(PriorArtMatch),
   analysis: Type.Union([PriorArtAnalysisSchema, Type.Null()]),
+  requestOptions: Type.Object({
+    keywords: Type.Array(Type.String({ maxLength: 100 }), { maxItems: 20 }),
+    skipAiSynthesis: Type.Boolean(),
+  }),
+  retryOfCheckId: Type.Union([Uuid, Type.Null()]),
   /** Human verdict; the only thing that changes the finding's state. */
   humanConclusion: Type.Union([PriorArtStateSchema, Type.Null()]),
   concludedBy: Type.Union([ActorSummary, Type.Null()]),

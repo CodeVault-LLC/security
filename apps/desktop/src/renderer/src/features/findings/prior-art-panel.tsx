@@ -119,6 +119,13 @@ export function PriorArtPanel({
       queryKeys.findings(),
     ],
   );
+  const retry = useApiMutation<PriorArtCheck, string>(
+    (checkId) => ({
+      path: `/v1/prior-art-checks/${checkId}/retry`,
+      method: "POST",
+    }),
+    () => [queryKeys.priorArt(finding.id)],
+  );
 
   const latest = checks.data?.items[0];
   const previous = checks.data?.items[1];
@@ -248,6 +255,12 @@ export function PriorArtPanel({
                 className="gap-1"
               />
             </div>
+
+            {latest.failureReason === null ? null : (
+              <p className="rounded-(--cv-radius) border border-danger/40 bg-danger/10 px-2 py-1.5 text-[12px] text-danger">
+                {latest.failureReason}
+              </p>
+            )}
 
             <div>
               <h3 className="mb-1 text-[11px] uppercase tracking-wide text-text-muted">
@@ -452,6 +465,88 @@ export function PriorArtPanel({
           </CardBody>
         )}
       </Card>
+
+      {checks.data === undefined || checks.data.items.length === 0 ? null : (
+        <Card>
+          <CardHeader>
+            <div>
+              <CardTitle>Run history</CardTitle>
+              <p className="mt-0.5 text-[11px] text-text-muted">
+                Latest 20 checks, including the exact options and retry chain.
+              </p>
+            </div>
+          </CardHeader>
+          <ul className="divide-y divide-border">
+            {checks.data.items.map((check, index) => {
+              const failedProviderCount = check.sourcesChecked.filter(
+                (source) =>
+                  source.error !== null && source.retrievedAt !== null,
+              ).length;
+              const retryable =
+                check.status === "FAILED" || failedProviderCount > 0;
+              return (
+                <li
+                  key={check.id}
+                  className="flex flex-wrap items-start gap-3 px-3 py-2.5 text-[11px]"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-text">
+                        {index === 0 ? "Latest run" : `Run ${index + 1}`}
+                      </span>
+                      <Mono className="text-[10px] text-text-muted">
+                        {check.status.toLowerCase()}
+                      </Mono>
+                      {check.retryOfCheckId === null ? null : (
+                        <span className="text-text-muted">
+                          retry of {check.retryOfCheckId.slice(0, 8)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-text-muted">
+                      {formatDateTime(check.startedAt)} · {check.matches.length}{" "}
+                      candidate{check.matches.length === 1 ? "" : "s"} ·{" "}
+                      {check.requestOptions.skipAiSynthesis
+                        ? "AI skipped"
+                        : "AI enabled"}
+                    </p>
+                    <p className="mt-0.5 text-text-muted">
+                      {check.requestOptions.keywords.length === 0
+                        ? "No extra keywords"
+                        : `Keywords: ${check.requestOptions.keywords.join(", ")}`}
+                      {failedProviderCount === 0
+                        ? ""
+                        : ` · ${failedProviderCount} provider failure${
+                            failedProviderCount === 1 ? "" : "s"
+                          }`}
+                    </p>
+                    {check.failureReason === null ? null : (
+                      <p className="mt-1 text-danger">{check.failureReason}</p>
+                    )}
+                  </div>
+                  {canEdit && retryable ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      loading={retry.isPending}
+                      disabled={checkInProgress}
+                      onClick={() =>
+                        retry.mutate(check.id, {
+                          onError: (mutationError) =>
+                            setError(mutationError.message),
+                        })
+                      }
+                    >
+                      <RefreshCw aria-hidden className="size-3" />
+                      Retry
+                    </Button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
 
       <Dialog open={optionsOpen} onOpenChange={setOptionsOpen}>
         <DialogContent
