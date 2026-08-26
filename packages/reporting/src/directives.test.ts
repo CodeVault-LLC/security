@@ -98,6 +98,13 @@ describe("parseDirectives", () => {
     expect(directives[0]?.line).toBe(3);
   });
 
+  it("counts carriage-return line endings without double-counting CRLF", () => {
+    expect(parseDirectives("one\rtwo\r[evidence:EVID-1]")[0]?.line).toBe(3);
+    expect(parseDirectives("one\r\ntwo\r\n[evidence:EVID-1]")[0]?.line).toBe(
+      3,
+    );
+  });
+
   it("recognises exactly the known kinds", () => {
     expect(isKnownDirectiveKind("evidence")).toBe(true);
     expect(isKnownDirectiveKind("score")).toBe(true);
