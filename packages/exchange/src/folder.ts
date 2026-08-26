@@ -265,6 +265,11 @@ function toIntakeDraft(finding: ExchangeFinding): IntakeDraft {
   if (finding.cweIds.length > 25) {
     throw new Error("A mapped finding can contain at most 25 CWE identifiers.");
   }
+  if (finding.cweIds.some((id) => !/^CWE-[1-9][0-9]*$/u.test(id))) {
+    throw new Error(
+      "A mapped finding must contain only valid CWE identifiers.",
+    );
+  }
   for (const content of [
     finding.summaryMarkdown,
     finding.technicalMarkdown,
