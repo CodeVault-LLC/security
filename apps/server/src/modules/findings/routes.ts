@@ -332,7 +332,7 @@ export async function registerFindingRoutes(app: AppInstance): Promise<void> {
   );
 
   app.post(
-    "/v1/findings/bulk-remediation",
+    "/v1/findings/actions/bulk-remediation",
     {
       schema: {
         body: BulkSetRemediationStateRequest,

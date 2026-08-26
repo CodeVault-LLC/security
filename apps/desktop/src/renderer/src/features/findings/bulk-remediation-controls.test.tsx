@@ -66,17 +66,20 @@ describe("BulkRemediationControls", () => {
     );
 
     await waitFor(() =>
-      expect(apiRequest).toHaveBeenCalledWith("/v1/findings/bulk-remediation", {
-        method: "POST",
-        body: {
-          caseId: findings[0]!.caseId,
-          remediationState: "FIXED",
-          items: findings.map((finding) => ({
-            id: finding.id,
-            expectedRevision: finding.revision,
-          })),
+      expect(apiRequest).toHaveBeenCalledWith(
+        "/v1/findings/actions/bulk-remediation",
+        {
+          method: "POST",
+          body: {
+            caseId: findings[0]!.caseId,
+            remediationState: "FIXED",
+            items: findings.map((finding) => ({
+              id: finding.id,
+              expectedRevision: finding.revision,
+            })),
+          },
         },
-      }),
+      ),
     );
   });
 });

@@ -48,7 +48,7 @@ describeIntegration("bulk finding remediation", () => {
   it("updates selected findings atomically and audits each transition", async () => {
     const response = await harness.app.inject({
       method: "POST",
-      url: "/v1/findings/bulk-remediation",
+      url: "/v1/findings/actions/bulk-remediation",
       headers: owner.headers,
       payload: {
         caseId: caseDetail.id,
@@ -115,7 +115,7 @@ describeIntegration("bulk finding remediation", () => {
   it("rejects the whole batch when any revision is stale", async () => {
     const response = await harness.app.inject({
       method: "POST",
-      url: "/v1/findings/bulk-remediation",
+      url: "/v1/findings/actions/bulk-remediation",
       headers: owner.headers,
       payload: {
         caseId: caseDetail.id,

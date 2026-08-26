@@ -27,7 +27,7 @@ export function BulkRemediationControls({
     { target: RemediationState; findings: FindingSummary[] }
   >(
     ({ target: remediationState, findings: chosen }) => ({
-      path: "/v1/findings/bulk-remediation",
+      path: "/v1/findings/actions/bulk-remediation",
       method: "POST",
       body: {
         caseId,
