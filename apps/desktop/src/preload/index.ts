@@ -161,11 +161,11 @@ const api: CodeVaultDesktopApi = {
   },
 
   reports: {
-    downloadPdf: (artifactId) =>
-      ipcRenderer.invoke(
-        IPC_CHANNELS.reportsDownloadPdf,
+    downloadExport: (artifactId, format) =>
+      ipcRenderer.invoke(IPC_CHANNELS.reportsDownloadExport, {
         artifactId,
-      ) as ReturnType<CodeVaultDesktopApi["reports"]["downloadPdf"]>,
+        format,
+      }) as ReturnType<CodeVaultDesktopApi["reports"]["downloadExport"]>,
   },
 
   avatars: {

@@ -1,10 +1,16 @@
+import { createHash } from "node:crypto";
+
 import { eq, sql } from "drizzle-orm";
 
 import { generateObjectKey, uuidv7 } from "@codevault/core/crypto";
 import { schema } from "@codevault/db";
 import { renderPdf } from "@codevault/reporting/pdf";
 
-import { lintReportById, renderReportHtml } from "@codevault/server/reports";
+import {
+  lintReportById,
+  renderReportHtml,
+  renderReportMarkdown,
+} from "@codevault/server/reports";
 import type { WorkerContext } from "../context.js";
 
 /**
@@ -15,9 +21,9 @@ import type { WorkerContext } from "../context.js";
  * request and this job the report may have changed, and the export is the
  * artifact that leaves the building.
  *
- * The finished PDF is stored as an ordinary artifact — hashed, keyed opaquely,
- * and immutable — so an exported advisory can be proved identical to the one
- * that was sent.
+ * The finished document is stored as an ordinary artifact, hashed, keyed
+ * opaquely, and immutable, so an exported advisory can be proved identical to
+ * the one that was sent.
  */
 
 export interface ReportPdfJobData {
@@ -27,7 +33,7 @@ export interface ReportPdfJobData {
   requestedBy: string;
 }
 
-export async function generateReportPdf(
+export async function generateReportExport(
   context: WorkerContext,
   data: ReportPdfJobData,
 ): Promise<void> {
@@ -39,6 +45,17 @@ export async function generateReportPdf(
     .where(eq(schema.reportExports.id, data.exportId));
 
   try {
+    const exportRows = await db
+      .select({ format: schema.reportExports.format })
+      .from(schema.reportExports)
+      .where(eq(schema.reportExports.id, data.exportId))
+      .limit(1);
+    const exportFormat = exportRows[0]?.format;
+
+    if (exportFormat === undefined) {
+      throw new Error("The report export no longer exists.");
+    }
+
     const lint = await lintReportById(db, data.reportId);
 
     if (lint.blocking) {
@@ -77,22 +94,24 @@ export async function generateReportPdf(
         ? null
         : `Embargoed until ${embargoEnd.slice(0, 10)}. Do not distribute beyond the recipients named above.`;
 
-    const rendered = await renderReportHtml(db, data.reportId, {
-      authorName: requesters[0]?.displayName ?? "CodeVault",
-      notice,
-    });
+    const authorName = requesters[0]?.displayName ?? "CodeVault";
+    let output: ReportOutput;
 
-    if (rendered.directiveErrors.length > 0) {
-      throw new Error(
-        `Unresolved directives: ${rendered.directiveErrors.join("; ")}`,
-      );
+    if (exportFormat === "MARKDOWN") {
+      const rendered = await renderReportMarkdown(db, data.reportId, {
+        authorName,
+        notice,
+      });
+      assertNoDirectiveErrors(rendered.directiveErrors);
+      output = markdownReportOutput(rendered.markdown);
+    } else {
+      const rendered = await renderReportHtml(db, data.reportId, {
+        authorName,
+        notice,
+      });
+      assertNoDirectiveErrors(rendered.directiveErrors);
+      output = await pdfOutput(rendered.html, report.title);
     }
-
-    const pdf = await renderPdf({
-      html: rendered.html,
-      title: report.title,
-      timeoutMs: 180_000,
-    });
 
     const artifactId = uuidv7();
     const objectKey = generateObjectKey(data.caseId, artifactId);
@@ -106,17 +125,17 @@ export async function generateReportPdf(
       throw new Error("The report case no longer exists.");
     }
 
-    await context.storage.putObject(objectKey, pdf.bytes, "application/pdf");
+    await context.storage.putObject(objectKey, output.bytes, output.mimeType);
 
     await db.transaction(async (tx) => {
       await tx.insert(schema.artifacts).values({
         id: artifactId,
         caseId: data.caseId,
-        filename: `${report.ref}.pdf`,
+        filename: `${report.ref}.${output.extension}`,
         objectKey,
-        mimeType: "application/pdf",
-        sizeBytes: pdf.byteLength,
-        sha256: pdf.sha256,
+        mimeType: output.mimeType,
+        sizeBytes: output.bytes.byteLength,
+        sha256: output.sha256,
         artifactKind: "DOCUMENT",
         // An export is only ever as shareable as the report it came from.
         visibility: report.visibilityCeiling,
@@ -134,7 +153,7 @@ export async function generateReportPdf(
         .set({
           status: "COMPLETED",
           artifactId,
-          sha256: pdf.sha256,
+          sha256: output.sha256,
           lintResult: { findings: lint.findings, blocking: lint.blocking },
           completedAt: sql`now()`,
         })
@@ -149,14 +168,17 @@ export async function generateReportPdf(
         actorId: data.requestedBy,
         after: {
           reportId: report.id,
-          sha256: pdf.sha256,
+          sha256: output.sha256,
           tlp: report.tlp,
-          sizeBytes: pdf.byteLength,
+          format: exportFormat,
+          sizeBytes: output.bytes.byteLength,
         },
       });
     });
 
-    context.log(`exported report ${report.ref} (${pdf.sha256.slice(0, 12)}…)`);
+    context.log(
+      `exported ${exportFormat.toLowerCase()} report ${report.ref} (${output.sha256.slice(0, 12)}…)`,
+    );
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
 
@@ -171,4 +193,39 @@ export async function generateReportPdf(
 
     throw error;
   }
+}
+
+interface ReportOutput {
+  bytes: Uint8Array;
+  sha256: string;
+  mimeType: "application/pdf" | "text/markdown; charset=utf-8";
+  extension: "pdf" | "md";
+}
+
+function assertNoDirectiveErrors(errors: readonly string[]): void {
+  if (errors.length > 0) {
+    throw new Error(`Unresolved directives: ${errors.join("; ")}`);
+  }
+}
+
+async function pdfOutput(html: string, title: string): Promise<ReportOutput> {
+  const pdf = await renderPdf({ html, title, timeoutMs: 180_000 });
+
+  return {
+    bytes: pdf.bytes,
+    sha256: pdf.sha256,
+    mimeType: "application/pdf",
+    extension: "pdf",
+  };
+}
+
+export function markdownReportOutput(markdown: string): ReportOutput {
+  const bytes = new TextEncoder().encode(markdown);
+
+  return {
+    bytes,
+    sha256: createHash("sha256").update(bytes).digest("hex"),
+    mimeType: "text/markdown; charset=utf-8",
+    extension: "md",
+  };
 }

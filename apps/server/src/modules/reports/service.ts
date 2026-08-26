@@ -6,8 +6,10 @@ import type { Database } from "@codevault/db";
 import { schema } from "@codevault/db";
 import {
   buildReportHtml,
+  buildReportMarkdown,
   lintReport,
   renderSection,
+  renderSectionMarkdown,
   templateById,
   templateForAudience,
   type ReportTemplate,
@@ -252,6 +254,11 @@ export interface RenderedReport {
   directiveErrors: string[];
 }
 
+export interface RenderedMarkdownReport {
+  markdown: string;
+  directiveErrors: string[];
+}
+
 /**
  * Renders the report to a self-contained HTML document.
  *
@@ -335,4 +342,69 @@ export async function renderReportHtml(
   });
 
   return { html, directiveErrors };
+}
+
+/** Renders the same audience-filtered report as a portable Markdown document. */
+export async function renderReportMarkdown(
+  db: Database,
+  reportId: string,
+  options: {
+    organisation?: string;
+    authorName: string;
+    notice?: string | null;
+  },
+): Promise<RenderedMarkdownReport> {
+  const report = await loadReportDetail(db, reportId);
+  const template = resolveTemplate(report.templateId, report.audience);
+  const resolver = createDirectiveResolver({
+    db,
+    caseId: report.caseId,
+    audience: report.audience,
+  });
+  const caseRows = await db
+    .select({
+      ref: schema.cases.ref,
+      organizationName: schema.organizations.name,
+    })
+    .from(schema.cases)
+    .innerJoin(
+      schema.organizations,
+      eq(schema.organizations.id, schema.cases.organizationId),
+    )
+    .where(eq(schema.cases.id, report.caseId))
+    .limit(1);
+  const directiveErrors: string[] = [];
+  const sections = [];
+
+  for (const section of report.sections) {
+    if (section.contentMarkdown.trim().length === 0) continue;
+
+    const rendered = await renderSectionMarkdown(
+      section.contentMarkdown,
+      report.audience,
+      resolver,
+    );
+    for (const error of rendered.directiveErrors) {
+      directiveErrors.push(`${section.title}: ${error.message}`);
+    }
+    sections.push({ title: section.title, markdown: rendered.markdown });
+  }
+
+  return {
+    markdown: buildReportMarkdown({
+      title: report.title,
+      reference: report.ref,
+      audience: report.audience,
+      tlp: report.tlp,
+      caseReference: caseRows[0]?.ref ?? report.caseId,
+      generatedAt: new Date().toISOString().slice(0, 10),
+      organisation:
+        options.organisation ?? caseRows[0]?.organizationName ?? "CodeVault",
+      authorName: options.authorName,
+      templateVersion: template.version,
+      notice: options.notice ?? null,
+      sections,
+    }),
+    directiveErrors,
+  };
 }

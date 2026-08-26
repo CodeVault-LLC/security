@@ -3,6 +3,7 @@ import { markdownToPlainText, renderMarkdown } from "@codevault/markdown";
 import type { ReportAudience } from "@codevault/core";
 
 import {
+  applyResolvedDirectiveText,
   applyResolvedDirectives,
   resolveDirectives,
   type DirectiveError,
@@ -23,6 +24,11 @@ export interface RenderResult {
   html: string;
   directiveErrors: DirectiveError[];
   resolvedDirectives: ResolvedDirective[];
+}
+
+export interface MarkdownRenderResult {
+  markdown: string;
+  directiveErrors: DirectiveError[];
 }
 
 export { renderMarkdown };
@@ -46,6 +52,23 @@ export async function renderSection(
     html,
     directiveErrors: resolution.errors,
     resolvedDirectives: resolution.resolved,
+  };
+}
+
+/** Resolves CodeVault directives into portable text for a Markdown export. */
+export async function renderSectionMarkdown(
+  markdown: string,
+  audience: ReportAudience,
+  resolver: DirectiveResolver,
+): Promise<MarkdownRenderResult> {
+  const resolution = await resolveDirectives(markdown, audience, resolver);
+
+  return {
+    markdown: applyResolvedDirectiveText(
+      resolution.markdown,
+      resolution.substitutions,
+    ),
+    directiveErrors: resolution.errors,
   };
 }
 

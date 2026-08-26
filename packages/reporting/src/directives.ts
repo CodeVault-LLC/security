@@ -253,6 +253,7 @@ export interface DirectiveResolver {
 export interface DirectiveSubstitution {
   placeholder: string;
   html: string;
+  text: string;
 }
 
 export interface DirectiveResolutionResult {
@@ -330,6 +331,7 @@ export async function resolveDirectives(
     substitutions.push({
       placeholder,
       html: `<span class="cv-directive-error">${escapeForError(message)}</span>`,
+      text: `[Directive error: ${message}]`,
     });
     replacements.push({
       start: directive.start,
@@ -389,7 +391,7 @@ export async function resolveDirectives(
     }
 
     const placeholder = nextPlaceholder();
-    substitutions.push({ placeholder, html: item.html });
+    substitutions.push({ placeholder, html: item.html, text: item.text });
     replacements.push({
       start: directive.start,
       end: directive.end,
@@ -443,6 +445,20 @@ export function applyResolvedDirectives(
     }
 
     output = output.split(substitution.placeholder).join(substitution.html);
+  }
+
+  return output;
+}
+
+/** Substitutes portable plain text for directives in a Markdown export. */
+export function applyResolvedDirectiveText(
+  markdown: string,
+  substitutions: readonly DirectiveSubstitution[],
+): string {
+  let output = markdown;
+
+  for (const substitution of substitutions) {
+    output = output.split(substitution.placeholder).join(substitution.text);
   }
 
   return output;

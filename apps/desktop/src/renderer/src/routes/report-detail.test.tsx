@@ -20,7 +20,7 @@ const ARTIFACT_ID = "018f2f56-7c9a-7abc-8def-0123456789ac";
 
 const apiBridge = vi.hoisted(() => ({ request: vi.fn() }));
 const appBridge = vi.hoisted(() => ({ openExternal: vi.fn() }));
-const reportsBridge = vi.hoisted(() => ({ downloadPdf: vi.fn() }));
+const reportsBridge = vi.hoisted(() => ({ downloadExport: vi.fn() }));
 
 vi.mock("../lib/bridge.js", () => ({
   bridge: () => ({
@@ -80,6 +80,14 @@ const completedExport: ReportExport = {
   completedAt: "2026-08-24T10:02:00.000Z",
 };
 
+const completedMarkdownExport: ReportExport = {
+  ...completedExport,
+  id: "018f2f56-7c9a-7abc-8def-0123456789b1",
+  format: "MARKDOWN",
+  artifactId: "018f2f56-7c9a-7abc-8def-0123456789b2",
+  sha256: "b".repeat(64),
+};
+
 const section: ReportSection = {
   id: "018f2f56-7c9a-7abc-8def-0123456789b0",
   reportId: REPORT_ID,
@@ -99,7 +107,10 @@ const section: ReportSection = {
   revision: 1,
 };
 
-function renderReport(detail: ReportDetail = report): void {
+function renderReport(
+  detail: ReportDetail = report,
+  reportExports: ReportExport[] = [completedExport],
+): void {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false, staleTime: Number.POSITIVE_INFINITY },
@@ -110,7 +121,7 @@ function renderReport(detail: ReportDetail = report): void {
   client.setQueryData(queryKeys.reportLint(REPORT_ID), lint);
   client.setQueryData(queryKeys.reportPreview(REPORT_ID), preview);
   client.setQueryData(queryKeys.reportExports(REPORT_ID), {
-    items: [completedExport],
+    items: reportExports,
   });
 
   render(
@@ -146,8 +157,8 @@ describe("completed report exports", () => {
       data: { url: "http://127.0.0.1:9000/report.pdf" },
     });
     appBridge.openExternal.mockReset();
-    reportsBridge.downloadPdf.mockReset();
-    reportsBridge.downloadPdf.mockResolvedValue({
+    reportsBridge.downloadExport.mockReset();
+    reportsBridge.downloadExport.mockResolvedValue({
       ok: true,
       data: { saved: true, sha256: completedExport.sha256 },
     });
@@ -170,9 +181,56 @@ describe("completed report exports", () => {
     await user.click(screen.getByRole("menuitem", { name: "Show exports" }));
     await user.click(screen.getByRole("button", { name: "Download" }));
 
-    expect(reportsBridge.downloadPdf).toHaveBeenCalledWith(ARTIFACT_ID);
+    expect(reportsBridge.downloadExport).toHaveBeenCalledWith(
+      ARTIFACT_ID,
+      "PDF",
+    );
     expect(apiBridge.request).not.toHaveBeenCalled();
     expect(appBridge.openExternal).not.toHaveBeenCalled();
+  });
+
+  it("saves a Markdown export through the trusted native download path", async () => {
+    const user = userEvent.setup();
+    renderReport(report, [completedMarkdownExport]);
+
+    await user.click(screen.getByRole("button", { name: "Report details" }));
+    await user.click(screen.getByRole("menuitem", { name: "Show exports" }));
+    await user.click(screen.getByRole("button", { name: "Download" }));
+
+    expect(reportsBridge.downloadExport).toHaveBeenCalledWith(
+      completedMarkdownExport.artifactId,
+      "MARKDOWN",
+    );
+  });
+});
+
+describe("report export formats", () => {
+  beforeEach(() => {
+    mockReportRequests();
+    useSession.getState().signIn(
+      {
+        ...actor,
+        role: "MEMBER",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        lastLoginAt: null,
+      },
+      null,
+    );
+  });
+
+  it("queues a Markdown export from the report menu", async () => {
+    const user = userEvent.setup();
+    renderReport();
+
+    await user.click(screen.getByRole("button", { name: "Report details" }));
+    await user.click(screen.getByRole("menuitem", { name: "Export Markdown" }));
+
+    await waitFor(() =>
+      expect(apiBridge.request).toHaveBeenCalledWith(
+        `/v1/reports/${REPORT_ID}/exports`,
+        { method: "POST", body: { format: "MARKDOWN" } },
+      ),
+    );
   });
 });
 

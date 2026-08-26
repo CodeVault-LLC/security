@@ -10,7 +10,7 @@ import { verifyArtifactIntegrity } from "./jobs/artifact-integrity.js";
 import { generateArtifactPreview } from "./jobs/artifact-preview.js";
 import { refreshIntelligence } from "./jobs/intelligence-refresh.js";
 import { runPriorArtCheck } from "./jobs/prior-art.js";
-import { generateReportPdf } from "./jobs/report-pdf.js";
+import { generateReportExport } from "./jobs/report-pdf.js";
 import { runGmailSend } from "./jobs/gmail-send.js";
 import { runGmailSync } from "./jobs/gmail-sync.js";
 import { renewGmailWatches } from "./jobs/gmail-watch-renewal.js";
@@ -61,7 +61,7 @@ const HANDLERS = [
     // One at a time: each render launches Chromium.
     concurrency: 1,
     expireInSeconds: 900,
-    run: generateReportPdf,
+    run: generateReportExport,
   } satisfies Handler<"report-pdf">,
   {
     queue: JOB_QUEUES.gmailSend,
