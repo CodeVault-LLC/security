@@ -56,6 +56,7 @@ const LINK_PATTERN = /\[[^\]]*\]\([^)]*\)/g;
 const REFERENCE_LINK_PATTERN = /\[[^\]]*\]\[[^\]]*\]/g;
 const LINK_DEFINITION_PATTERN = /^ {0,3}\[[^\]]+\]:[^\n]*$/gm;
 const INLINE_CODE_PATTERN = /(`+)(.*?)\1/g;
+const INDENTED_CODE_PATTERN = /^(?: {4}|\t).*$/gm;
 
 function linkRanges(markdown: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
@@ -84,6 +85,16 @@ function inlineCodeRanges(markdown: string): Array<[number, number]> {
     }
   }
 
+  return ranges;
+}
+
+function indentedCodeRanges(markdown: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  for (const match of markdown.matchAll(INDENTED_CODE_PATTERN)) {
+    if (match.index !== undefined) {
+      ranges.push([match.index, match.index + match[0].length]);
+    }
+  }
   return ranges;
 }
 
@@ -137,6 +148,7 @@ export function parseDirectives(markdown: string): ParsedDirective[] {
     ...linkRanges(markdown),
     ...inlineCodeRanges(markdown),
     ...fencedCodeRanges(markdown),
+    ...indentedCodeRanges(markdown),
   ];
   const directives: ParsedDirective[] = [];
   let line = 1;

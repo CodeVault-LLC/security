@@ -92,6 +92,14 @@ describe("parseDirectives", () => {
     ).toEqual(["[finding:FIND-1]"]);
   });
 
+  it("ignores directive-shaped text inside indented code", () => {
+    expect(
+      parseDirectives(
+        "Example:\n\n    [asset:AST-000001]\n\t[evidence:EVID-1]",
+      ),
+    ).toHaveLength(0);
+  });
+
   it("records the line so a lint message can point at it", () => {
     const directives = parseDirectives("line one\nline two\n[evidence:EVID-1]");
 
