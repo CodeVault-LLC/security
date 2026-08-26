@@ -128,7 +128,10 @@ function lineNumberAt(markdown: string, offset: number): number {
   let line = 1;
 
   for (let index = 0; index < offset && index < markdown.length; index += 1) {
-    if (markdown[index] === "\n") {
+    if (
+      markdown[index] === "\r" ||
+      (markdown[index] === "\n" && markdown[index - 1] !== "\r")
+    ) {
       line += 1;
     }
   }
