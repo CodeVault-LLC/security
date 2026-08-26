@@ -64,6 +64,14 @@ describe("parseDirectives", () => {
     );
   });
 
+  it("ignores directive-shaped reference link text", () => {
+    expect(
+      parseDirectives(
+        "See [evidence:EVID-000123][capture].\n\n[capture]: https://example.com",
+      ),
+    ).toHaveLength(0);
+  });
+
   it("ignores directive-shaped text inside inline code", () => {
     expect(
       parseDirectives("Run `[asset:AST-000001]` to illustrate the syntax."),
