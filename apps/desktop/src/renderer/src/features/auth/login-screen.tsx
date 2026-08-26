@@ -11,14 +11,27 @@ import { MfaChallenge } from "./mfa-challenge.js";
 import type { EnrollmentSetup } from "../../../../preload/contracts.js";
 
 const DEFAULT_SERVER_KEY = "codevault.serverUrl";
+const DEFAULT_SERVER_URL = "http://localhost:4310";
+
+function readDefaultServer(): string {
+  try {
+    return window.localStorage.getItem(DEFAULT_SERVER_KEY) ?? DEFAULT_SERVER_URL;
+  } catch {
+    return DEFAULT_SERVER_URL;
+  }
+}
+
+function rememberServer(serverUrl: string): void {
+  try {
+    window.localStorage.setItem(DEFAULT_SERVER_KEY, serverUrl);
+  } catch {
+    // Sign-in must not depend on persisting this convenience value.
+  }
+}
 
 export function LoginScreen(): React.JSX.Element {
   const signIn = useSession((state) => state.signIn);
-  const [serverUrl, setServerUrl] = useState(
-    () =>
-      window.localStorage.getItem(DEFAULT_SERVER_KEY) ??
-      "http://localhost:4310",
-  );
+  const [serverUrl, setServerUrl] = useState(readDefaultServer);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
@@ -119,7 +132,7 @@ export function LoginScreen(): React.JSX.Element {
               setError(outcome.message);
               return;
             }
-            window.localStorage.setItem(DEFAULT_SERVER_KEY, normalizedServer);
+            rememberServer(normalizedServer);
             signIn(outcome.data.user, outcome.data.storageWarning);
           } catch {
             setError("The CodeVault Security server could not be reached.");
@@ -137,7 +150,7 @@ export function LoginScreen(): React.JSX.Element {
               setError(outcome.message);
               return;
             }
-            window.localStorage.setItem(DEFAULT_SERVER_KEY, normalizedServer);
+            rememberServer(normalizedServer);
             signIn(outcome.data.user, outcome.data.storageWarning);
           } catch {
             setError("The security-key ceremony could not be completed.");
@@ -177,7 +190,7 @@ export function LoginScreen(): React.JSX.Element {
       }
       if ("user" in outcome.data) {
         setPassword("");
-        window.localStorage.setItem(DEFAULT_SERVER_KEY, normalizedServer);
+        rememberServer(normalizedServer);
         signIn(outcome.data.user, outcome.data.storageWarning);
         return;
       }
