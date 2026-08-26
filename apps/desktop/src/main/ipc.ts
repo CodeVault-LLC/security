@@ -1691,6 +1691,57 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
   });
 
+  handle(IPC_CHANNELS.disclosureSaveCalendar, async (payload) => {
+    const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu;
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      !("caseId" in payload) ||
+      typeof payload.caseId !== "string" ||
+      !uuid.test(payload.caseId) ||
+      !("ics" in payload) ||
+      typeof payload.ics !== "string" ||
+      payload.ics.length === 0 ||
+      payload.ics.length > 1_000_000 ||
+      !payload.ics.startsWith("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n") ||
+      !payload.ics.endsWith("END:VCALENDAR\r\n") ||
+      !payload.ics.includes(`${payload.caseId}@codevault.local`)
+    ) {
+      return failure(new Error("invalid disclosure calendar export"));
+    }
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+
+    try {
+      const filename = `case-${payload.caseId.slice(0, 8)}-disclosure.ics`;
+      const destination = await dialog.showSaveDialog(window, {
+        title: "Save disclosure calendar",
+        defaultPath: filename,
+        filters: [{ name: "iCalendar", extensions: ["ics"] }],
+        properties: ["createDirectory", "showOverwriteConfirmation"],
+      });
+      if (destination.canceled || destination.filePath === undefined) {
+        return { ok: true as const, data: { saved: false, sha256: null } };
+      }
+
+      const bytes = new TextEncoder().encode(payload.ics);
+      const sha256 = createHash("sha256").update(bytes).digest("hex");
+      const temporaryDirectory = await mkdtemp(
+        join(tmpdir(), "codevault-disclosure-calendar-"),
+      );
+      const temporaryPath = join(temporaryDirectory, filename);
+      try {
+        await writeFile(temporaryPath, bytes, { flag: "wx" });
+        await copyFile(temporaryPath, destination.filePath);
+        return { ok: true as const, data: { saved: true, sha256 } };
+      } finally {
+        await rm(temporaryDirectory, { recursive: true, force: true });
+      }
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
   handle(IPC_CHANNELS.aiProviders, async () => providers.statuses());
 
   handle(IPC_CHANNELS.aiPreviewContext, async (payload) => {

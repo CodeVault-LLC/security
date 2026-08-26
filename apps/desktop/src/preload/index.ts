@@ -185,6 +185,14 @@ const api: CodeVaultDesktopApi = {
       }) as ReturnType<CodeVaultDesktopApi["evidence"]["saveManifest"]>,
   },
 
+  disclosure: {
+    saveCalendar: (caseId, ics) =>
+      ipcRenderer.invoke(IPC_CHANNELS.disclosureSaveCalendar, {
+        caseId,
+        ics,
+      }) as ReturnType<CodeVaultDesktopApi["disclosure"]["saveCalendar"]>,
+  },
+
   avatars: {
     selectAndUpload: (target) =>
       ipcRenderer.invoke(
