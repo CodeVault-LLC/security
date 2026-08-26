@@ -11,6 +11,11 @@ import type { FolderIntakePreviewResult } from "../../../../preload/contracts.js
 import { formatBytesApprox } from "../../lib/format.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../../lib/api.js";
 import { bridge } from "../../lib/bridge.js";
+import {
+  readLocalStorage,
+  removeLocalStorage,
+  writeLocalStorage,
+} from "../../lib/local-storage.js";
 import { useSession } from "../../lib/session.js";
 
 interface StoredTransfer {
@@ -53,10 +58,10 @@ export function FolderIntake({
 
   useEffect(() => {
     if (preview === null) {
-      window.localStorage.removeItem(storageKey);
+      removeLocalStorage(storageKey);
       return;
     }
-    window.localStorage.setItem(
+    writeLocalStorage(
       storageKey,
       JSON.stringify({
         preview,
@@ -355,13 +360,13 @@ export function FolderIntake({
 }
 
 function restoreTransfer(storageKey: string): StoredTransfer | null {
-  const raw = window.localStorage.getItem(storageKey);
+  const raw = readLocalStorage(storageKey);
   if (raw === null) return null;
   try {
     const value = JSON.parse(raw) as unknown;
     return isStoredTransfer(value) ? value : null;
   } catch {
-    window.localStorage.removeItem(storageKey);
+    removeLocalStorage(storageKey);
     return null;
   }
 }
