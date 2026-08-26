@@ -2,7 +2,7 @@ import { FileDown } from "lucide-react";
 import { useState } from "react";
 
 import type { AuditEvent } from "@codevault/contracts";
-import { exportAuditEventsCsv } from "@codevault/exchange";
+import { exportAuditEventsCsv } from "@codevault/exchange/audit-export";
 import {
   Button,
   Card,
