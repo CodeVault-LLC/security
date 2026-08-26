@@ -53,14 +53,22 @@ const DIRECTIVE_PATTERN = /\[([a-z][a-z-]*)(?::([A-Za-z0-9:_.-]+))?\]/g;
  * would be parsed as one.
  */
 const LINK_PATTERN = /\[[^\]]*\]\([^)]*\)/g;
+const REFERENCE_LINK_PATTERN = /\[[^\]]*\]\[[^\]]*\]/g;
+const LINK_DEFINITION_PATTERN = /^ {0,3}\[[^\]]+\]:[^\n]*$/gm;
 const INLINE_CODE_PATTERN = /(`+)(.*?)\1/g;
 
 function linkRanges(markdown: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
 
-  for (const match of markdown.matchAll(LINK_PATTERN)) {
-    if (match.index !== undefined) {
-      ranges.push([match.index, match.index + match[0].length]);
+  for (const pattern of [
+    LINK_PATTERN,
+    REFERENCE_LINK_PATTERN,
+    LINK_DEFINITION_PATTERN,
+  ]) {
+    for (const match of markdown.matchAll(pattern)) {
+      if (match.index !== undefined) {
+        ranges.push([match.index, match.index + match[0].length]);
+      }
     }
   }
 
