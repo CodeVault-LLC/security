@@ -157,4 +157,12 @@ describe("markdownToPlainText", () => {
       ),
     ).toBe("Impact critical now.");
   });
+
+  it("flattens reference links and removes their destination definitions", () => {
+    expect(
+      markdownToPlainText(
+        "An [attacker][actor] can exploit this.\n\n[actor]: https://example.test/threat-model",
+      ),
+    ).toBe("An attacker can exploit this.");
+  });
 });
