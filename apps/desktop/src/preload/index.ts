@@ -176,6 +176,15 @@ const api: CodeVaultDesktopApi = {
       }) as ReturnType<CodeVaultDesktopApi["audit"]["saveCsv"]>,
   },
 
+  evidence: {
+    saveManifest: (caseId, findingId, json) =>
+      ipcRenderer.invoke(IPC_CHANNELS.evidenceSaveManifest, {
+        caseId,
+        findingId,
+        json,
+      }) as ReturnType<CodeVaultDesktopApi["evidence"]["saveManifest"]>,
+  },
+
   avatars: {
     selectAndUpload: (target) =>
       ipcRenderer.invoke(

@@ -1,8 +1,9 @@
-import { Upload } from "lucide-react";
+import { FileJson2, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { Evidence } from "@codevault/contracts";
 import { ARTIFACT_KINDS, CONTENT_VISIBILITIES } from "@codevault/core";
+import { buildEvidenceManifest } from "@codevault/exchange/evidence-manifest";
 import {
   artifactKindSelectOptions,
   Button,
@@ -55,6 +56,8 @@ export function EvidencePanel({
   canEdit,
 }: EvidencePanelProps): React.JSX.Element {
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   const query =
     findingId === undefined
@@ -87,6 +90,38 @@ export function EvidencePanel({
     return outcome.data.url;
   };
 
+  const exportManifest = async (): Promise<void> => {
+    if (items.length === 0) return;
+    setExporting(true);
+    setExportMessage(null);
+    try {
+      const manifest = buildEvidenceManifest({
+        caseId,
+        ...(findingId === undefined ? {} : { findingId }),
+        generatedAt: new Date().toISOString(),
+        evidence: items,
+      });
+      const outcome = await bridge().evidence.saveManifest(
+        caseId,
+        findingId ?? null,
+        manifest,
+      );
+      if (!outcome.ok) {
+        setExportMessage(
+          `${outcome.message} Choose Export shown manifest to retry.`,
+        );
+      } else if (outcome.data.saved) {
+        setExportMessage(
+          `Manifest saved. SHA-256 ${outcome.data.sha256?.slice(0, 12)}…`,
+        );
+      }
+    } catch {
+      setExportMessage("The evidence manifest could not be saved.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <section aria-labelledby="evidence-heading" className="p-4 sm:p-6">
       <div className="flex items-start justify-between gap-4 border-b border-border pb-4">
@@ -103,21 +138,35 @@ export function EvidencePanel({
               ? " · Refreshing"
               : ""}
           </p>
+          {exportMessage === null ? null : (
+            <p className="mt-1 text-[11px] text-text-muted" role="status">
+              {exportMessage}
+            </p>
+          )}
         </div>
-        {canEdit ? (
+        <div className="flex flex-wrap justify-end gap-2">
           <Button
-            variant="primary"
+            variant="secondary"
             size="sm"
-            onClick={() => setUploadOpen(true)}
+            loading={exporting}
+            disabled={items.length === 0}
+            title="Exports metadata and SHA-256 digests, not evidence files"
+            onClick={() => void exportManifest()}
           >
-            <Upload aria-hidden className="size-3.5" strokeWidth={2} />
-            Add evidence
+            <FileJson2 aria-hidden className="size-3.5" />
+            Export shown manifest
           </Button>
-        ) : (
-          <p className="max-w-52 text-right text-pretty text-[11px] leading-4 text-text-muted">
-            Read only. Ask a case editor to add evidence.
-          </p>
-        )}
+          {canEdit ? (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setUploadOpen(true)}
+            >
+              <Upload aria-hidden className="size-3.5" strokeWidth={2} />
+              Add evidence
+            </Button>
+          ) : null}
+        </div>
       </div>
 
       {evidence.error !== null && evidence.data === undefined ? (

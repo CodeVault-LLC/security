@@ -1621,6 +1621,76 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
   });
 
+  handle(IPC_CHANNELS.evidenceSaveManifest, async (payload) => {
+    const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu;
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      !("caseId" in payload) ||
+      typeof payload.caseId !== "string" ||
+      !uuid.test(payload.caseId) ||
+      !("findingId" in payload) ||
+      (payload.findingId !== null &&
+        (typeof payload.findingId !== "string" ||
+          !uuid.test(payload.findingId))) ||
+      !("json" in payload) ||
+      typeof payload.json !== "string" ||
+      payload.json.length === 0 ||
+      payload.json.length > 10_000_000
+    ) {
+      return failure(new Error("invalid evidence manifest export"));
+    }
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+
+    try {
+      const parsed = JSON.parse(payload.json) as {
+        format?: unknown;
+        version?: unknown;
+        scope?: { caseId?: unknown; findingId?: unknown };
+      };
+      if (
+        parsed.format !== "codevault.evidence-manifest" ||
+        parsed.version !== 1 ||
+        parsed.scope?.caseId !== payload.caseId ||
+        parsed.scope.findingId !== payload.findingId
+      ) {
+        throw new Error("evidence manifest scope does not match the request");
+      }
+
+      const scope =
+        payload.findingId === null
+          ? `case-${payload.caseId.slice(0, 8)}`
+          : `finding-${payload.findingId.slice(0, 8)}`;
+      const filename = `${scope}-evidence-manifest.json`;
+      const destination = await dialog.showSaveDialog(window, {
+        title: "Save evidence manifest",
+        defaultPath: filename,
+        filters: [{ name: "JSON document", extensions: ["json"] }],
+        properties: ["createDirectory", "showOverwriteConfirmation"],
+      });
+      if (destination.canceled || destination.filePath === undefined) {
+        return { ok: true as const, data: { saved: false, sha256: null } };
+      }
+
+      const bytes = new TextEncoder().encode(payload.json);
+      const sha256 = createHash("sha256").update(bytes).digest("hex");
+      const temporaryDirectory = await mkdtemp(
+        join(tmpdir(), "codevault-evidence-manifest-"),
+      );
+      const temporaryPath = join(temporaryDirectory, filename);
+      try {
+        await writeFile(temporaryPath, bytes, { flag: "wx" });
+        await copyFile(temporaryPath, destination.filePath);
+        return { ok: true as const, data: { saved: true, sha256 } };
+      } finally {
+        await rm(temporaryDirectory, { recursive: true, force: true });
+      }
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
   handle(IPC_CHANNELS.aiProviders, async () => providers.statuses());
 
   handle(IPC_CHANNELS.aiPreviewContext, async (payload) => {

@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./audit-export": "./src/audit-export.ts"
+    "./audit-export": "./src/audit-export.ts",
+    "./evidence-manifest": "./src/evidence-manifest.ts"
   },
   "scripts": {
     "build": "tsc --noEmit",

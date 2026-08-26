@@ -193,6 +193,11 @@ export interface AuditCsvExportResult {
   sha256: string | null;
 }
 
+export interface EvidenceManifestExportResult {
+  saved: boolean;
+  sha256: string | null;
+}
+
 /**
  * What the renderer may say about a run.
  *
@@ -297,6 +302,15 @@ export interface CodeVaultDesktopApi {
     ): Promise<ApiOutcome<AuditCsvExportResult>>;
   };
 
+  evidence: {
+    /** Saves a metadata-only artifact digest inventory. */
+    saveManifest(
+      caseId: string,
+      findingId: string | null,
+      json: string,
+    ): Promise<ApiOutcome<EvidenceManifestExportResult>>;
+  };
+
   avatars: {
     selectAndUpload(
       target: "USER" | "ORGANIZATION",
@@ -391,6 +405,7 @@ export const IPC_CHANNELS = {
   caseArchivesImport: "case-archives:import",
   reportsDownloadExport: "reports:download-export",
   auditSaveCsv: "audit:save-csv",
+  evidenceSaveManifest: "evidence:save-manifest",
   avatarsSelectAndUpload: "avatars:select-and-upload",
   avatarsLoad: "avatars:load",
   avatarsLoadUser: "avatars:load-user",
