@@ -218,7 +218,7 @@ jobs:
             apps/desktop/release/*.rpm
             apps/desktop/release/*.AppImage
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
   container:
     name: Container image (${{ matrix.component }})
@@ -300,7 +300,7 @@ jobs:
           name: container-scan-${{ matrix.component }}
           path: trivy-${{ matrix.component }}.sarif
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
       - name: Record immutable image identity
         shell: bash
         env:
@@ -320,7 +320,7 @@ jobs:
           name: container-${{ matrix.component }}
           path: container-${{ matrix.component }}.json
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
   publish:
     name: Publish verified release
@@ -510,3 +510,26 @@ jobs:
             | xargs -0 gh release upload "$GITHUB_REF_NAME"
           gh release edit "$GITHUB_REF_NAME" --draft=false
           created_draft=false
+
+  cleanup:
+    name: Remove intermediate workflow artifacts
+    if: always()
+    needs: [desktop, container, publish]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Delete artifacts from this release run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate \
+            "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
+            --jq '.artifacts[].id' \
+            | while read -r artifact_id; do
+                gh api --method DELETE \
+                  "repos/${GITHUB_REPOSITORY}/actions/artifacts/${artifact_id}"
+              done

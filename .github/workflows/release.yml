@@ -10,7 +10,7 @@ permissions: {}
 jobs:
   release:
     permissions:
-      actions: read
+      actions: write
       attestations: write
       contents: write
       id-token: write

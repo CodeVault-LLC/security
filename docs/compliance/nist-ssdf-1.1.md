@@ -21,7 +21,7 @@ This is a task-level self-assessment. **Implemented** means repository evidence 
 | PO.4.2 | Partial | Tool configuration is version controlled; workflow results and false-positive decisions will exist only after CI runs. |
 | PO.5.1 | Implemented | `docs/security/security-evidence-index.md` defines evidence locations and limitations. |
 | PO.5.2 | Partial | Release artifacts have a retention policy; organization-level audit and retention records are external. |
-| PS.1.1 | Partial | Protected workflow design, pinned actions, least-privilege permissions, and secret isolation exist; GitHub rulesets and MFA remain external. |
+| PS.1.1 | Partial | The default branch uses a required merge-queue gate. Pinned actions, least-privilege permissions, and secret isolation exist. Organization MFA evidence remains external. |
 | PS.2.1 | Partial | Release evidence is immutable by policy; a first published release and registry-retention evidence are pending. |
 | PS.3.1 | Implemented | Each release emits checksums, an evidence manifest, CycloneDX SBOMs, VEX, and attestations. |
 | PS.3.2 | Partial | Release verification is documented; long-term evidence access must be confirmed after the first release. |
