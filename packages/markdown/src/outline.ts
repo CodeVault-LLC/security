@@ -46,7 +46,7 @@ export function collectHeadings(markdown: string): OutlineEntry[] {
       // A `#` inside a code fence is a comment or a shell prompt, not a
       // heading. Tracking the fence is the whole reason this is not one regex.
       if (fence === null) {
-        fence = marker[0] ?? null;
+        fence = marker;
       } else if (marker.startsWith(fence)) {
         fence = null;
       }
