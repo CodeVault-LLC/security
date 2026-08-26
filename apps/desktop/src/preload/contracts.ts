@@ -193,6 +193,11 @@ export interface AuditCsvExportResult {
   sha256: string | null;
 }
 
+export interface CaseHandoffBriefExportResult {
+  saved: boolean;
+  sha256: string | null;
+}
+
 export interface EvidenceManifestExportResult {
   saved: boolean;
   sha256: string | null;
@@ -307,6 +312,14 @@ export interface CodeVaultDesktopApi {
     ): Promise<ApiOutcome<AuditCsvExportResult>>;
   };
 
+  caseHandoff: {
+    /** Saves a locally assembled case handoff snapshot. */
+    saveBrief(
+      caseId: string,
+      markdown: string,
+    ): Promise<ApiOutcome<CaseHandoffBriefExportResult>>;
+  };
+
   evidence: {
     /** Saves a metadata-only artifact digest inventory. */
     saveManifest(
@@ -418,6 +431,7 @@ export const IPC_CHANNELS = {
   caseArchivesImport: "case-archives:import",
   reportsDownloadExport: "reports:download-export",
   auditSaveCsv: "audit:save-csv",
+  caseHandoffSaveBrief: "case-handoff:save-brief",
   evidenceSaveManifest: "evidence:save-manifest",
   disclosureSaveCalendar: "disclosure:save-calendar",
   avatarsSelectAndUpload: "avatars:select-and-upload",

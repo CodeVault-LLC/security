@@ -176,6 +176,14 @@ const api: CodeVaultDesktopApi = {
       }) as ReturnType<CodeVaultDesktopApi["audit"]["saveCsv"]>,
   },
 
+  caseHandoff: {
+    saveBrief: (caseId, markdown) =>
+      ipcRenderer.invoke(IPC_CHANNELS.caseHandoffSaveBrief, {
+        caseId,
+        markdown,
+      }) as ReturnType<CodeVaultDesktopApi["caseHandoff"]["saveBrief"]>,
+  },
+
   evidence: {
     saveManifest: (caseId, findingId, json) =>
       ipcRenderer.invoke(IPC_CHANNELS.evidenceSaveManifest, {
