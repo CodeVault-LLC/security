@@ -149,4 +149,12 @@ describe("markdownToPlainText", () => {
       "Before After",
     );
   });
+
+  it("removes raw HTML markup and comments while preserving text", () => {
+    expect(
+      markdownToPlainText(
+        'Impact <span class="severity">critical</span><!-- internal note --> now.',
+      ),
+    ).toBe("Impact critical now.");
+  });
 });
