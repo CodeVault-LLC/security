@@ -1,5 +1,11 @@
 import { createHash } from "node:crypto";
-import { appendFile, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import {
+  appendFile,
+  mkdtemp,
+  readFile,
+  readdir,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -141,5 +147,15 @@ describe(".cvcase archive", () => {
     await expect(readCvcase(archive, join(root, "extracted"))).rejects.toThrow(
       "unexpected trailing data",
     );
+  });
+
+  it("cleans staging when the source archive cannot be opened", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codevault-archive-"));
+
+    await expect(
+      readCvcase(join(root, "missing.cvcase"), join(root, "extracted")),
+    ).rejects.toMatchObject({ code: "ENOENT" });
+
+    await expect(readdir(root)).resolves.toEqual([]);
   });
 });
