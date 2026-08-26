@@ -1,14 +1,30 @@
+import { createHash } from "node:crypto";
+
 import type { AppInstance } from "../../http/app-instance.js";
-import { and, desc, eq, inArray, lt, or, sql, type SQL } from "drizzle-orm";
+import { Type } from "@sinclair/typebox";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  lt,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 
 import {
   Artifact,
   ArtifactDownload,
   CompleteUploadRequest,
   CreateEvidenceRequest,
+  CreateEvidenceCustodyEventRequest,
   CreateUploadRequest,
   ErrorResponse,
   Evidence,
+  EvidenceCustodyEvent,
+  type EvidenceCustodyEvent as EvidenceCustodyEventContract,
   IdParam,
   ListEvidenceQuery,
   OkResponse,
@@ -561,6 +577,150 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
   );
 
   app.get(
+    "/v1/evidence/:id/custody",
+    {
+      schema: {
+        params: IdParam,
+        response: { 200: Type.Array(EvidenceCustodyEvent), 404: ErrorResponse },
+      },
+    },
+    async (request) => {
+      const user = actingUser(request);
+      const [evidence] = await app.db
+        .select()
+        .from(schema.evidence)
+        .where(eq(schema.evidence.id, request.params.id))
+        .limit(1);
+      if (evidence === undefined) throw notFound("Evidence");
+      await requireCaseRead(app.db, user, evidence.caseId);
+      return loadCustodyEvents(app, evidence.id);
+    },
+  );
+
+  app.post(
+    "/v1/evidence/:id/custody",
+    {
+      schema: {
+        params: IdParam,
+        body: CreateEvidenceCustodyEventRequest,
+        response: {
+          200: EvidenceCustodyEvent,
+          400: ErrorResponse,
+          404: ErrorResponse,
+        },
+      },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const principal = principalOf(request);
+      const [evidence] = await app.db
+        .select()
+        .from(schema.evidence)
+        .where(eq(schema.evidence.id, request.params.id))
+        .limit(1);
+      if (evidence === undefined) throw notFound("Evidence");
+      await requireCaseWrite(app.db, user, evidence.caseId);
+      if (request.body.artifactId !== undefined) {
+        const [link] = await app.db
+          .select()
+          .from(schema.evidenceArtifacts)
+          .where(
+            and(
+              eq(schema.evidenceArtifacts.evidenceId, evidence.id),
+              eq(schema.evidenceArtifacts.artifactId, request.body.artifactId),
+            ),
+          )
+          .limit(1);
+        if (link === undefined) {
+          throw validationError(
+            "A custody event artifact must be attached to this evidence record.",
+          );
+        }
+      }
+      const occurredAt = request.body.occurredAt ?? new Date().toISOString();
+      const custodian = request.body.custodian.trim();
+      const note = request.body.note?.trim() || null;
+      const eventId = await app.db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT id FROM evidence WHERE id = ${evidence.id} FOR UPDATE`,
+        );
+        const [previous] = await tx
+          .select({ eventHash: schema.evidenceCustodyEvents.eventHash })
+          .from(schema.evidenceCustodyEvents)
+          .where(eq(schema.evidenceCustodyEvents.evidenceId, evidence.id))
+          .orderBy(
+            desc(schema.evidenceCustodyEvents.createdAt),
+            desc(schema.evidenceCustodyEvents.id),
+          )
+          .limit(1);
+        const previousEventHash = previous?.eventHash ?? null;
+        const eventHash = createHash("sha256")
+          .update(
+            JSON.stringify({
+              version: 1,
+              evidenceId: evidence.id,
+              artifactId: request.body.artifactId ?? null,
+              eventType: request.body.eventType,
+              custodian,
+              note,
+              occurredAt,
+              attestedBy: user.id,
+              previousEventHash,
+            }),
+            "utf8",
+          )
+          .digest("hex");
+        const [created] = await tx
+          .insert(schema.evidenceCustodyEvents)
+          .values({
+            evidenceId: evidence.id,
+            artifactId: request.body.artifactId ?? null,
+            eventType: request.body.eventType,
+            custodian,
+            note,
+            occurredAt,
+            previousEventHash,
+            eventHash,
+            attestedBy: user.id,
+          })
+          .returning({ id: schema.evidenceCustodyEvents.id });
+        if (created === undefined) {
+          throw new DomainError(
+            "SERVER_ERROR",
+            "Could not record the custody attestation.",
+          );
+        }
+        await app.audit.write(
+          tx,
+          {
+            actorId: user.id,
+            sessionId: principal.session.id,
+            requestId: request.requestId,
+          },
+          {
+            action: "evidence.custody_attested",
+            entityType: "evidence",
+            entityId: evidence.id,
+            caseId: evidence.caseId,
+            after: {
+              eventId: created.id,
+              eventType: request.body.eventType,
+              eventHash,
+              previousEventHash,
+            },
+          },
+        );
+        return created.id;
+      });
+      const result = (await loadCustodyEvents(app, evidence.id)).find(
+        (event) => event.id === eventId,
+      );
+      if (result === undefined) throw notFound("Custody event");
+      return result;
+    },
+  );
+
+  app.get(
     "/v1/evidence",
     {
       schema: {
@@ -799,6 +959,46 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
       return item;
     },
   );
+}
+
+async function loadCustodyEvents(
+  app: AppInstance,
+  evidenceId: string,
+): Promise<EvidenceCustodyEventContract[]> {
+  const rows = await app.db
+    .select({
+      event: schema.evidenceCustodyEvents,
+      actorId: schema.users.id,
+      actorName: schema.users.displayName,
+      actorEmail: schema.users.email,
+    })
+    .from(schema.evidenceCustodyEvents)
+    .innerJoin(
+      schema.users,
+      eq(schema.users.id, schema.evidenceCustodyEvents.attestedBy),
+    )
+    .where(eq(schema.evidenceCustodyEvents.evidenceId, evidenceId))
+    .orderBy(
+      asc(schema.evidenceCustodyEvents.createdAt),
+      asc(schema.evidenceCustodyEvents.id),
+    );
+  return rows.map(({ event, actorId, actorName, actorEmail }) => ({
+    id: event.id,
+    evidenceId: event.evidenceId,
+    artifactId: event.artifactId,
+    eventType: event.eventType,
+    custodian: event.custodian,
+    note: event.note,
+    occurredAt: event.occurredAt,
+    previousEventHash: event.previousEventHash,
+    eventHash: event.eventHash,
+    attestedBy: {
+      id: actorId,
+      displayName: actorName,
+      email: actorEmail,
+    },
+    createdAt: event.createdAt,
+  }));
 }
 
 /**

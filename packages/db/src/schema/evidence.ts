@@ -152,6 +152,38 @@ export const evidence = pgTable(
   ],
 );
 
+export const evidenceCustodyEvents = pgTable(
+  "evidence_custody_events",
+  {
+    id: primaryId(),
+    evidenceId: uuid("evidence_id")
+      .notNull()
+      .references(() => evidence.id, { onDelete: "cascade" }),
+    artifactId: uuid("artifact_id").references(() => artifacts.id, {
+      onDelete: "set null",
+    }),
+    eventType: text("event_type")
+      .$type<"COLLECTED" | "TRANSFERRED" | "VERIFIED" | "SEALED" | "RELEASED">()
+      .notNull(),
+    custodian: text("custodian").notNull(),
+    note: text("note"),
+    occurredAt: timestampColumn("occurred_at").notNull(),
+    previousEventHash: text("previous_event_hash"),
+    eventHash: text("event_hash").notNull(),
+    attestedBy: uuid("attested_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("evidence_custody_events_hash_key").on(table.eventHash),
+    index("evidence_custody_events_evidence_idx").on(
+      table.evidenceId,
+      table.occurredAt,
+    ),
+  ],
+);
+
 export const evidenceArtifacts = pgTable(
   "evidence_artifacts",
   {

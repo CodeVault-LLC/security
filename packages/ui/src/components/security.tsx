@@ -280,6 +280,7 @@ export interface EvidenceCardProps {
   onOpenArtifact?: (artifactId: string) => void;
   onLoadArtifact?: (artifactId: string) => Promise<string>;
   onManagePreviewRedaction?: (artifact: Artifact) => void;
+  onOpenCustody?: () => void;
   className?: string;
 }
 
@@ -293,6 +294,7 @@ export function EvidenceCard({
   onOpenArtifact,
   onLoadArtifact,
   onManagePreviewRedaction,
+  onOpenCustody,
   className,
 }: EvidenceCardProps): React.JSX.Element {
   return (
@@ -314,7 +316,14 @@ export function EvidenceCard({
             </p>
           )}
         </div>
-        <VisibilityBadge visibility={visibility} />
+        <div className="flex shrink-0 items-center gap-2">
+          {onOpenCustody === undefined ? null : (
+            <Button variant="ghost" size="sm" onClick={onOpenCustody}>
+              <ScrollText aria-hidden className="size-3.5" /> Custody
+            </Button>
+          )}
+          <VisibilityBadge visibility={visibility} />
+        </div>
       </div>
 
       <ul className="mt-3 space-y-2">
