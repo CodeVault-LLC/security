@@ -34,6 +34,10 @@ import {
 import { formatDateTime } from "../../lib/dates.js";
 import { queryKeys, useApiMutation } from "../../lib/api.js";
 import { Avatar } from "../../components/avatar.js";
+import {
+  intelligenceFreshness,
+  isFreshnessTrackedIntelligence,
+} from "./intelligence-freshness.js";
 
 /**
  * Scoring.
@@ -282,6 +286,13 @@ export function ScoringPanel({
     () => (cweQuery.trim().length === 0 ? [] : searchCwe(cweQuery, 6)),
     [cweQuery],
   );
+  const staleIntelligenceCount = finding.scores.filter((score) => {
+    return (
+      score.source === "EXTERNAL" &&
+      isFreshnessTrackedIntelligence(score.scheme) &&
+      intelligenceFreshness(score.scheme, score.retrievedAt).state === "STALE"
+    );
+  }).length;
 
   return (
     <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
@@ -460,69 +471,89 @@ export function ScoringPanel({
               No score has been recorded yet.
             </CardBody>
           ) : (
-            <ul className="divide-y divide-border">
-              {finding.scores.map((score) => (
-                <li key={score.id} className="px-3 py-2 text-[12px]">
-                  <div className="flex items-center gap-2">
-                    <Mono className="w-16 shrink-0">{score.scheme}</Mono>
-                    {score.severity === null ? (
-                      <span className="font-mono">
-                        {recordedScoreLabel(score)}
+            <>
+              {staleIntelligenceCount === 0 ? null : (
+                <div
+                  role="status"
+                  className="border-b border-warning/35 bg-warning/10 px-3 py-2 text-[11px] text-warning"
+                >
+                  {staleIntelligenceCount} intelligence source
+                  {staleIntelligenceCount === 1 ? " is" : "s are"} stale. Review
+                  {staleIntelligenceCount === 1 ? " its" : " their"} retrieval
+                  time before using it in a decision.
+                </div>
+              )}
+              <ul className="divide-y divide-border">
+                {finding.scores.map((score) => (
+                  <li key={score.id} className="px-3 py-2 text-[12px]">
+                    <div className="flex items-center gap-2">
+                      <Mono className="w-16 shrink-0">{score.scheme}</Mono>
+                      {score.severity === null ? (
+                        <span className="font-mono">
+                          {recordedScoreLabel(score)}
+                        </span>
+                      ) : (
+                        <SeverityBadge
+                          severity={score.severity}
+                          score={score.score}
+                        />
+                      )}
+                      <span className="rounded border border-border px-1 text-[10px] uppercase text-text-muted">
+                        {score.reviewState.toLowerCase()}
                       </span>
-                    ) : (
-                      <SeverityBadge
-                        severity={score.severity}
-                        score={score.score}
-                      />
-                    )}
-                    <span className="rounded border border-border px-1 text-[10px] uppercase text-text-muted">
-                      {score.reviewState.toLowerCase()}
-                    </span>
-                    <span className="text-[10px] uppercase text-text-muted">
-                      {score.source.replace("_", " ").toLowerCase()}
-                    </span>
-                    {canEdit && score.reviewState === "PROPOSED" ? (
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        className="ml-auto"
-                        onClick={() => approveExisting.mutate(score.id)}
-                        disabled={approveExisting.isPending}
-                      >
-                        Approve
-                      </Button>
-                    ) : null}
-                  </div>
-                  {score.vector === null ? null : (
-                    <Mono className="mt-0.5 block truncate text-text-muted">
-                      {score.vector}
-                    </Mono>
-                  )}
-                  {score.sourceName === null ? null : (
-                    <p className="mt-0.5 text-text-muted">
-                      {score.sourceName}
-                      {score.retrievedAt === null
-                        ? ""
-                        : ` · retrieved ${formatDateTime(score.retrievedAt)}`}
-                    </p>
-                  )}
-                  {score.reviewedBy === null ? null : (
-                    <div className="mt-0.5 flex items-center gap-1 text-text-muted">
-                      <span>Approved by</span>
-                      <Avatar
-                        avatarId={null}
-                        userId={score.reviewedBy.id}
-                        label={score.reviewedBy.displayName}
-                        size="sm"
-                        showLabel
-                        className="gap-1"
-                      />
-                      <span>on {formatDateTime(score.reviewedAt)}</span>
+                      <span className="text-[10px] uppercase text-text-muted">
+                        {score.source.replace("_", " ").toLowerCase()}
+                      </span>
+                      {score.source === "EXTERNAL" &&
+                      isFreshnessTrackedIntelligence(score.scheme) ? (
+                        <IntelligenceFreshnessBadge
+                          scheme={score.scheme}
+                          retrievedAt={score.retrievedAt}
+                        />
+                      ) : null}
+                      {canEdit && score.reviewState === "PROPOSED" ? (
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="ml-auto"
+                          onClick={() => approveExisting.mutate(score.id)}
+                          disabled={approveExisting.isPending}
+                        >
+                          Approve
+                        </Button>
+                      ) : null}
                     </div>
-                  )}
-                </li>
-              ))}
-            </ul>
+                    {score.vector === null ? null : (
+                      <Mono className="mt-0.5 block truncate text-text-muted">
+                        {score.vector}
+                      </Mono>
+                    )}
+                    {score.sourceName === null ? null : (
+                      <p className="mt-0.5 text-text-muted">
+                        {score.sourceName}
+                        {score.retrievedAt === null
+                          ? ""
+                          : ` · retrieved ${formatDateTime(score.retrievedAt)}`}
+                      </p>
+                    )}
+                    {score.reviewedBy === null ? null : (
+                      <div className="mt-0.5 flex items-center gap-1 text-text-muted">
+                        <span>Approved by</span>
+                        <Avatar
+                          avatarId={null}
+                          userId={score.reviewedBy.id}
+                          label={score.reviewedBy.displayName}
+                          size="sm"
+                          showLabel
+                          className="gap-1"
+                        />
+                        <span>on {formatDateTime(score.reviewedAt)}</span>
+                      </div>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </Card>
 
@@ -602,5 +633,40 @@ export function ScoringPanel({
         </Card>
       </div>
     </div>
+  );
+}
+
+function IntelligenceFreshnessBadge({
+  scheme,
+  retrievedAt,
+}: {
+  scheme: string;
+  retrievedAt: string | null;
+}): React.JSX.Element {
+  const freshness = intelligenceFreshness(scheme, retrievedAt);
+  const label =
+    freshness.state === "FRESH"
+      ? "Fresh"
+      : freshness.state === "STALE"
+        ? "Stale"
+        : "Age unknown";
+  const description =
+    freshness.ageDays === null
+      ? `${scheme} has no valid retrieval timestamp.`
+      : `${scheme} was retrieved ${freshness.ageDays.toFixed(1)} days ago; its freshness window is ${freshness.thresholdDays} days.`;
+
+  return (
+    <span
+      title={description}
+      className={
+        freshness.state === "FRESH"
+          ? "rounded border border-success/35 bg-success/10 px-1 text-[10px] text-success"
+          : freshness.state === "STALE"
+            ? "rounded border border-warning/35 bg-warning/10 px-1 text-[10px] text-warning"
+            : "rounded border border-border px-1 text-[10px] text-text-muted"
+      }
+    >
+      {label}
+    </span>
   );
 }
