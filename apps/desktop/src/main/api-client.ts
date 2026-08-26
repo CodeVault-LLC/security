@@ -121,9 +121,10 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
 
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), timeoutMs);
+      const abortFromCaller = (): void => controller.abort();
 
       if (request.signal !== undefined) {
-        request.signal.addEventListener("abort", () => controller.abort(), {
+        request.signal.addEventListener("abort", abortFromCaller, {
           once: true,
         });
       }
@@ -181,6 +182,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         );
       } finally {
         clearTimeout(timer);
+        request.signal?.removeEventListener("abort", abortFromCaller);
       }
     },
   };

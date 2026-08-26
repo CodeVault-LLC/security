@@ -71,3 +71,20 @@ describe("API client origin boundary", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 });
+
+describe("API client cancellation", () => {
+  it("removes the caller abort listener after a completed request", async () => {
+    const caller = new AbortController();
+    const removeListener = vi.spyOn(caller.signal, "removeEventListener");
+    const client = createApiClient({
+      sessionStore: storedSession(),
+      fetchImpl: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ ok: true }), { status: 200 }),
+      ),
+    });
+
+    await client.request("/v1/dashboard", { signal: caller.signal });
+
+    expect(removeListener).toHaveBeenCalledWith("abort", expect.any(Function));
+  });
+});
