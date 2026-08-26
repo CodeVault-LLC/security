@@ -48,13 +48,9 @@ describe("collectHeadings", () => {
 
   it("does not close a long fence with a shorter marker", () => {
     const outline = collectHeadings(
-      [
-        "````markdown",
-        "```",
-        "# still code",
-        "````",
-        "# Real heading",
-      ].join("\n"),
+      ["````markdown", "```", "# still code", "````", "# Real heading"].join(
+        "\n",
+      ),
     );
 
     expect(outline.map((entry) => entry.text)).toEqual(["Real heading"]);

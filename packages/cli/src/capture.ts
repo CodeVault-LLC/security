@@ -113,7 +113,8 @@ export function parseCaptureArguments(
     throw new Error("--source-time must be an ISO 8601 timestamp.");
   }
   const suppliedName = values.get("--name");
-  const name = suppliedName === undefined ? undefined : safeFilename(suppliedName);
+  const name =
+    suppliedName === undefined ? undefined : safeFilename(suppliedName);
   const mimeType = values.get("--mime") ?? "application/octet-stream";
   if (
     mimeType.length === 0 ||
@@ -123,11 +124,17 @@ export function parseCaptureArguments(
     throw new Error("--mime must be 1 to 200 characters without controls.");
   }
   const title = values.get("--title");
-  if (title !== undefined && (title.trim().length === 0 || title.length > 200)) {
+  if (
+    title !== undefined &&
+    (title.trim().length === 0 || title.length > 200)
+  ) {
     throw new Error("--title must contain 1 to 200 characters.");
   }
   const descriptionMarkdown = values.get("--description");
-  if (descriptionMarkdown !== undefined && descriptionMarkdown.length > 200_000) {
+  if (
+    descriptionMarkdown !== undefined &&
+    descriptionMarkdown.length > 200_000
+  ) {
     throw new Error("--description cannot exceed 200000 characters.");
   }
 

@@ -145,9 +145,9 @@ describe("markdownToPlainText", () => {
   });
 
   it("removes tilde-fenced code blocks from metadata and snippets", () => {
-    expect(markdownToPlainText("Before\n~~~http\nsecret payload\n~~~\nAfter")).toBe(
-      "Before After",
-    );
+    expect(
+      markdownToPlainText("Before\n~~~http\nsecret payload\n~~~\nAfter"),
+    ).toBe("Before After");
   });
 
   it("removes raw HTML markup and comments while preserving text", () => {
@@ -171,8 +171,6 @@ describe("markdownToPlainText", () => {
       markdownToPlainText(
         "See <https://example.test/advisory> or email <security@example.test>.",
       ),
-    ).toBe(
-      "See https://example.test/advisory or email security@example.test.",
-    );
+    ).toBe("See https://example.test/advisory or email security@example.test.");
   });
 });

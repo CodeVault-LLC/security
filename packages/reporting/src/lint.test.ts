@@ -272,9 +272,7 @@ describe("public-report hygiene", () => {
   it("checks every private address on the same line", () => {
     const result = lintReport(
       input({
-        sections: [
-          section("Proxy 192.168.1.5 forwards to 10.20.30.40."),
-        ],
+        sections: [section("Proxy 192.168.1.5 forwards to 10.20.30.40.")],
         allowedPrivateAddresses: ["192.168.1.5"],
       }),
     );

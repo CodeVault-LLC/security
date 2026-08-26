@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  normalizeCaptureServerUrl,
-  parseCaptureArguments,
-} from "./capture.js";
+import { normalizeCaptureServerUrl, parseCaptureArguments } from "./capture.js";
 
 describe("capture arguments", () => {
   it("parses a file capture with explicit provenance", () => {

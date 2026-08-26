@@ -15,7 +15,9 @@ const DEFAULT_SERVER_URL = "http://localhost:4310";
 
 function readDefaultServer(): string {
   try {
-    return window.localStorage.getItem(DEFAULT_SERVER_KEY) ?? DEFAULT_SERVER_URL;
+    return (
+      window.localStorage.getItem(DEFAULT_SERVER_KEY) ?? DEFAULT_SERVER_URL
+    );
   } catch {
     return DEFAULT_SERVER_URL;
   }
