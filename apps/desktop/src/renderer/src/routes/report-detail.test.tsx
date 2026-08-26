@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -221,5 +221,67 @@ describe("report preview", () => {
 
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(document.activeElement).toBe(trigger);
+  });
+});
+
+describe("report TLP marking", () => {
+  beforeEach(() => {
+    apiBridge.request.mockReset();
+    apiBridge.request.mockImplementation((path: string, options?: unknown) => {
+      if (options !== undefined)
+        return Promise.resolve({ ok: true, data: report });
+      if (path.endsWith("/lint"))
+        return Promise.resolve({ ok: true, data: lint });
+      if (path.endsWith("/preview")) {
+        return Promise.resolve({ ok: true, data: preview });
+      }
+      if (path.endsWith("/exports")) {
+        return Promise.resolve({
+          ok: true,
+          data: { items: [completedExport] },
+        });
+      }
+
+      return Promise.resolve({ ok: true, data: report });
+    });
+    useSession.getState().signIn(
+      {
+        ...actor,
+        role: "MEMBER",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        lastLoginAt: null,
+      },
+      null,
+    );
+  });
+
+  it("offers only audience-compatible labels and saves the selection", async () => {
+    const user = userEvent.setup();
+    renderReport();
+
+    await user.click(screen.getByRole("button", { name: "Report details" }));
+    await user.click(screen.getByRole("menuitem", { name: /TLP marking/i }));
+
+    const red = await screen.findByRole("menuitemradio", { name: "TLP:RED" });
+    expect(red).toBeTruthy();
+    expect(
+      screen.getByRole("menuitemradio", { name: "TLP:AMBER+STRICT" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("menuitemradio", { name: "TLP:CLEAR" }),
+    ).toBeNull();
+
+    red.focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() =>
+      expect(apiBridge.request).toHaveBeenCalledWith(
+        `/v1/reports/${REPORT_ID}`,
+        {
+          method: "PATCH",
+          body: { tlp: "TLP:RED", expectedRevision: report.revision },
+        },
+      ),
+    );
   });
 });
