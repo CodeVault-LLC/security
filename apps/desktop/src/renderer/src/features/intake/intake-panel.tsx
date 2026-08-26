@@ -36,6 +36,8 @@ export function IntakePanel({
   findings: readonly FindingSummary[];
 }): React.JSX.Element {
   const [manualOpen, setManualOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmingBulk, setConfirmingBulk] = useState(false);
   const items = useApiQuery<{ items: IntakeItem[] }>(
     queryKeys.intake(caseId),
     `/v1/intake?caseId=${caseId}`,
@@ -82,11 +84,37 @@ export function IntakePanel({
     }),
     () => [queryKeys.intake(caseId)],
   );
+  const bulkAccept = useApiMutation<{ items: IntakeItem[] }, IntakeItem[]>(
+    (selected) => ({
+      path: "/v1/intake/bulk-accept",
+      method: "POST",
+      body: {
+        caseId,
+        items: selected.map((item) => ({
+          id: item.id,
+          expectedRevision: item.revision,
+        })),
+      },
+    }),
+    () => [queryKeys.intake(caseId), queryKeys.findings({ caseId })],
+  );
 
   const pending = (items.data?.items ?? []).filter(
     (item) => item.status === "PENDING",
   );
-  const error = accept.error ?? reject.error ?? save.error ?? merge.error;
+  const selected = pending.filter((item) => selectedIds.has(item.id));
+  const busy =
+    accept.isPending ||
+    reject.isPending ||
+    save.isPending ||
+    merge.isPending ||
+    bulkAccept.isPending;
+  const error =
+    accept.error ??
+    reject.error ??
+    save.error ??
+    merge.error ??
+    bulkAccept.error;
 
   return (
     <div className="space-y-3 p-4">
@@ -130,17 +158,98 @@ export function IntakePanel({
         />
       ) : (
         <div className="space-y-3">
+          {canEdit ? (
+            <div className="rounded-(--cv-radius) border border-border bg-surface-raised px-3 py-2 text-[12px]">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-text-muted">
+                  {selected.length} selected
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={() =>
+                    setSelectedIds(
+                      new Set(pending.slice(0, 50).map((item) => item.id)),
+                    )
+                  }
+                >
+                  {pending.length > 50 ? "Select first 50" : "Select all"}
+                </Button>
+                {selected.length === 0 ? null : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={() => {
+                      setSelectedIds(new Set());
+                      setConfirmingBulk(false);
+                    }}
+                  >
+                    Clear
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="primary"
+                  className="ml-auto"
+                  disabled={selected.length === 0 || busy}
+                  onClick={() => setConfirmingBulk(true)}
+                >
+                  Review accepting {selected.length} draft
+                  {selected.length === 1 ? "" : "s"}
+                </Button>
+              </div>
+              {confirmingBulk && selected.length > 0 ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-warning/35 pt-2">
+                  <p className="mr-auto font-medium text-warning">
+                    Accept {selected.length} draft
+                    {selected.length === 1 ? "" : "s"} as new findings?
+                  </p>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={bulkAccept.isPending}
+                    onClick={() => setConfirmingBulk(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="primary"
+                    loading={bulkAccept.isPending}
+                    onClick={() =>
+                      bulkAccept.mutate(selected, {
+                        onSuccess: () => {
+                          setSelectedIds(new Set());
+                          setConfirmingBulk(false);
+                        },
+                      })
+                    }
+                  >
+                    Confirm accepting {selected.length} draft
+                    {selected.length === 1 ? "" : "s"}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {pending.map((item) => (
             <IntakeItemCard
               key={item.id}
               item={item}
               canEdit={canEdit}
-              busy={
-                accept.isPending ||
-                reject.isPending ||
-                save.isPending ||
-                merge.isPending
-              }
+              busy={busy}
+              selected={selectedIds.has(item.id)}
+              onSelectedChange={(checked) => {
+                setSelectedIds(() => {
+                  const next = new Set(selected.map((entry) => entry.id));
+                  if (checked && next.size < 50) next.add(item.id);
+                  if (!checked) next.delete(item.id);
+                  return next;
+                });
+                setConfirmingBulk(false);
+              }}
               findingOptions={findings.map((finding) => ({
                 id: finding.id,
                 label: `${finding.ref} · ${finding.title}`,
@@ -172,6 +281,8 @@ export function IntakeItemCard({
   onSave,
   findingOptions = [],
   onMerge,
+  selected = false,
+  onSelectedChange,
 }: {
   item: IntakeItem;
   canEdit: boolean;
@@ -181,6 +292,8 @@ export function IntakeItemCard({
   onSave: (draft: IntakeDraft) => void;
   findingOptions?: readonly { id: string; label: string }[];
   onMerge?: (findingId: string) => void;
+  selected?: boolean;
+  onSelectedChange?: (selected: boolean) => void;
 }): React.JSX.Element {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(item.draft);
@@ -201,6 +314,16 @@ export function IntakeItemCard({
   return (
     <Card>
       <CardHeader>
+        {canEdit && onSelectedChange !== undefined ? (
+          <input
+            type="checkbox"
+            aria-label={`Select ${item.draft.title}`}
+            checked={selected}
+            disabled={busy}
+            className="size-4 shrink-0 accent-accent"
+            onChange={(event) => onSelectedChange(event.target.checked)}
+          />
+        ) : null}
         <div className="min-w-0">
           <CardTitle>{item.draft.title}</CardTitle>
           <p className="mt-0.5 text-[11px] text-text-muted">

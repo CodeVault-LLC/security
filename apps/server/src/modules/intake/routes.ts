@@ -5,6 +5,8 @@ import { Type } from "@sinclair/typebox";
 
 import type { AppInstance } from "../../http/app-instance.js";
 import {
+  BulkAcceptIntakeItemsRequest,
+  BulkAcceptIntakeItemsResult,
   CreateManualIntakeRequest,
   CreateFolderIntakeRequest,
   DecideIntakeItemRequest,
@@ -460,6 +462,85 @@ export async function registerIntakeRoutes(app: AppInstance): Promise<void> {
   );
 
   app.post(
+    "/v1/intake/bulk-accept",
+    {
+      schema: {
+        body: BulkAcceptIntakeItemsRequest,
+        response: {
+          200: BulkAcceptIntakeItemsResult,
+          400: ErrorResponse,
+          404: ErrorResponse,
+          409: ErrorResponse,
+        },
+      },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const principal = principalOf(request);
+      const { caseId, items } = request.body;
+      await requireCaseWrite(app.db, user, caseId);
+      const itemIds = items.map((item) => item.id);
+      if (new Set(itemIds).size !== itemIds.length) {
+        throw validationError("Select each intake item only once.");
+      }
+
+      const accessRows = await app.db
+        .select({
+          id: schema.aiIntakeItems.id,
+          caseId: schema.aiIntakeBatches.caseId,
+        })
+        .from(schema.aiIntakeItems)
+        .innerJoin(
+          schema.aiIntakeBatches,
+          eq(schema.aiIntakeBatches.id, schema.aiIntakeItems.batchId),
+        )
+        .where(inArray(schema.aiIntakeItems.id, itemIds));
+      if (
+        accessRows.length !== itemIds.length ||
+        accessRows.some((row) => row.caseId !== caseId)
+      ) {
+        throw notFound("Intake item");
+      }
+
+      const findingIds = await app.db.transaction(async (tx) => {
+        const accepted: string[] = [];
+        // Stable lock order prevents overlapping bulk requests from deadlocking.
+        for (const input of [...items].sort((left, right) =>
+          left.id.localeCompare(right.id),
+        )) {
+          const locked = await lockPending(tx, input.id);
+          assertRevision(locked, input.expectedRevision, "intake item");
+          accepted.push(
+            await acceptLockedIntakeItem(app, tx, {
+              item: locked,
+              caseId,
+              userId: user.id,
+              organizationId: user.organizationId,
+              sessionId: principal.session.id,
+              requestId: request.requestId,
+            }),
+          );
+        }
+        return accepted;
+      });
+
+      for (const findingId of findingIds) {
+        app.events.publish({
+          type: "entity.changed",
+          entityType: "finding",
+          entityId: findingId,
+          caseId,
+        });
+      }
+      return {
+        items: await Promise.all(
+          itemIds.map((itemId) => loadIntakeItem(app.db, itemId)),
+        ),
+      };
+    },
+  );
+
+  app.post(
     "/v1/intake/items/:id/accept",
     {
       schema: {
@@ -478,68 +559,14 @@ export async function registerIntakeRoutes(app: AppInstance): Promise<void> {
       const findingId = await app.db.transaction(async (tx) => {
         const locked = await lockPending(tx, access.item.id);
         assertRevision(locked, request.body.expectedRevision, "intake item");
-        const ref = await allocateReference(tx, user.organizationId, "finding");
-        const draft = locked.draft;
-        const [finding] = await tx
-          .insert(schema.findings)
-          .values({
-            ref,
-            caseId: access.batch.caseId,
-            title: draft.title,
-            summaryMarkdown: draft.summaryMarkdown ?? null,
-            technicalMarkdown: draft.technicalMarkdown ?? null,
-            impactMarkdown: draft.impactMarkdown ?? null,
-            remediationMarkdown: draft.remediationMarkdown ?? null,
-            cweIds: draft.suggestedCweIds,
-            ownerId: user.id,
-          })
-          .returning({ id: schema.findings.id });
-        if (finding === undefined) {
-          throw new DomainError("SERVER_ERROR", "Could not create finding.");
-        }
-
-        await tx
-          .update(schema.aiIntakeItems)
-          .set({
-            status: "ACCEPTED",
-            createdFindingId: finding.id,
-            reviewedBy: user.id,
-            reviewedAt: sql`now()`,
-            revision: sql`revision + 1`,
-          })
-          .where(eq(schema.aiIntakeItems.id, locked.id));
-
-        await app.audit.write(
-          tx,
-          {
-            actorId: user.id,
-            sessionId: principal.session.id,
-            requestId: request.requestId,
-          },
-          {
-            action: "intake.item_accepted",
-            entityType: "ai_intake_item",
-            entityId: locked.id,
-            caseId: access.batch.caseId,
-            after: { findingId: finding.id, ref, title: draft.title },
-          },
-        );
-        await app.audit.write(
-          tx,
-          {
-            actorId: user.id,
-            sessionId: principal.session.id,
-            requestId: request.requestId,
-          },
-          {
-            action: "finding.created_from_intake",
-            entityType: "finding",
-            entityId: finding.id,
-            caseId: access.batch.caseId,
-            after: { intakeItemId: locked.id, ref, title: draft.title },
-          },
-        );
-        return finding.id;
+        return acceptLockedIntakeItem(app, tx, {
+          item: locked,
+          caseId: access.batch.caseId,
+          userId: user.id,
+          organizationId: user.organizationId,
+          sessionId: principal.session.id,
+          requestId: request.requestId,
+        });
       });
 
       app.events.publish({
@@ -837,4 +864,70 @@ async function lockPending(
   if (item === undefined) throw notFound("Intake item");
   assertPending(item.status);
   return item;
+}
+
+async function acceptLockedIntakeItem(
+  app: AppInstance,
+  tx: AppInstance["db"],
+  input: {
+    item: typeof schema.aiIntakeItems.$inferSelect;
+    caseId: string;
+    userId: string;
+    organizationId: string;
+    sessionId: string;
+    requestId: string;
+  },
+): Promise<string> {
+  const ref = await allocateReference(tx, input.organizationId, "finding");
+  const draft = input.item.draft;
+  const [finding] = await tx
+    .insert(schema.findings)
+    .values({
+      ref,
+      caseId: input.caseId,
+      title: draft.title,
+      summaryMarkdown: draft.summaryMarkdown ?? null,
+      technicalMarkdown: draft.technicalMarkdown ?? null,
+      impactMarkdown: draft.impactMarkdown ?? null,
+      remediationMarkdown: draft.remediationMarkdown ?? null,
+      cweIds: draft.suggestedCweIds,
+      ownerId: input.userId,
+    })
+    .returning({ id: schema.findings.id });
+  if (finding === undefined) {
+    throw new DomainError("SERVER_ERROR", "Could not create finding.");
+  }
+
+  await tx
+    .update(schema.aiIntakeItems)
+    .set({
+      status: "ACCEPTED",
+      createdFindingId: finding.id,
+      reviewedBy: input.userId,
+      reviewedAt: sql`now()`,
+      revision: sql`revision + 1`,
+    })
+    .where(eq(schema.aiIntakeItems.id, input.item.id));
+
+  const actor = {
+    actorId: input.userId,
+    sessionId: input.sessionId,
+    requestId: input.requestId,
+  };
+  await app.audit.write(tx, actor, {
+    action: "intake.item_accepted",
+    entityType: "ai_intake_item",
+    entityId: input.item.id,
+    caseId: input.caseId,
+    after: { findingId: finding.id, ref, title: draft.title },
+  });
+  await app.audit.write(tx, actor, {
+    action: "finding.created_from_intake",
+    entityType: "finding",
+    entityId: finding.id,
+    caseId: input.caseId,
+    after: { intakeItemId: input.item.id, ref, title: draft.title },
+  });
+
+  return finding.id;
 }
