@@ -74,6 +74,11 @@ export function invalidateForEvent(
       break;
     }
 
+    case "intelligence_refresh_policy": {
+      invalidate(queryKeys.intelligenceRefresh(event.entityId));
+      break;
+    }
+
     case "disclosure": {
       invalidate(["disclosure"]);
       break;

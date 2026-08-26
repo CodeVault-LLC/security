@@ -13,6 +13,7 @@ import { registerEvidenceRoutes } from "./modules/evidence/routes.js";
 import { registerPocRoutes } from "./modules/evidence/poc-routes.js";
 import { registerFindingRoutes } from "./modules/findings/routes.js";
 import { registerIntakeRoutes } from "./modules/intake/routes.js";
+import { registerIntelligenceRoutes } from "./modules/intelligence/routes.js";
 import { registerMetricsRoutes } from "./modules/metrics/routes.js";
 import { registerNotificationRoutes } from "./modules/notifications/routes.js";
 import { registerPriorArtRoutes } from "./modules/prior-art/routes.js";
@@ -54,6 +55,7 @@ export async function registerRoutes(app: AppInstance): Promise<void> {
   await registerMailRoutes(app);
   await registerFindingRoutes(app);
   await registerIntakeRoutes(app);
+  await registerIntelligenceRoutes(app);
   await registerEvidenceRoutes(app);
   await registerPocRoutes(app);
   await registerPriorArtRoutes(app);

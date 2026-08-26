@@ -51,6 +51,7 @@ export type ArtifactIntegrityJobData = ArtifactPreviewJobData;
 export interface IntelligenceRefreshJobData {
   findingId: string;
   cveIds: string[];
+  scheduled?: boolean;
 }
 
 export interface ArtifactDeleteJobData {
@@ -91,6 +92,14 @@ export interface JobQueue {
     data: JobPayloadMap[Name],
     options?: { db?: JobTransactionDatabase; singletonKey?: string },
   ): Promise<string | null>;
+  schedule<Name extends JobQueueName>(
+    queue: Name,
+    cron: string,
+    data: JobPayloadMap[Name],
+    key: string,
+    options?: { db?: JobTransactionDatabase },
+  ): Promise<void>;
+  unschedule(queue: JobQueueName, key: string): Promise<void>;
   instance(): PgBoss;
 }
 
@@ -144,6 +153,23 @@ export function createJobQueue(options: JobQueueOptions): JobQueue {
           ? {}
           : { singletonKey: sendOptions.singletonKey }),
       });
+    },
+
+    async schedule(queue, cron, data, key, scheduleOptions) {
+      await boss.schedule(queue, cron, data, {
+        key,
+        tz: "UTC",
+        retryLimit: 3,
+        retryDelay: 30,
+        retryBackoff: true,
+        ...(scheduleOptions?.db === undefined
+          ? {}
+          : { db: scheduleOptions.db }),
+      });
+    },
+
+    async unschedule(queue, key) {
+      await boss.unschedule(queue, key);
     },
 
     instance() {
