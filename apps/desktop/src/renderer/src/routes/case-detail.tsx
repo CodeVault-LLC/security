@@ -31,6 +31,7 @@ import {
 import { CreateFindingDialog } from "../features/findings/create-finding-dialog.js";
 import { ExportCaseArchiveButton } from "../features/cases/case-archive-actions.js";
 import { CaseActivityPanel } from "../features/cases/case-activity-panel.js";
+import { DuplicateCaseButton } from "../features/cases/duplicate-case-dialog.js";
 import { Avatar } from "../components/avatar.js";
 import { DisclosurePanel } from "../features/disclosure/disclosure-panel.js";
 import { EvidencePanel } from "../features/evidence/evidence-panel.js";
@@ -144,14 +145,17 @@ export function CaseDetailRoute({
           <div className="flex shrink-0 flex-wrap items-start gap-2 self-start">
             <ExportCaseArchiveButton caseId={caseId} />
             {canEdit ? (
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={() => setCreateFindingOpen(true)}
-              >
-                <Plus aria-hidden className="size-3" />
-                New finding
-              </Button>
+              <>
+                <DuplicateCaseButton source={data} />
+                <Button
+                  size="sm"
+                  variant="primary"
+                  onClick={() => setCreateFindingOpen(true)}
+                >
+                  <Plus aria-hidden className="size-3" />
+                  New finding
+                </Button>
+              </>
             ) : null}
           </div>
         </div>
