@@ -217,9 +217,14 @@ export function CorrespondenceThread({
                         <span className="text-text-muted">Subject:</span>{" "}
                         {message.subject}
                       </p>
-                      {message.encrypted &&
-                      localPlaintext === undefined &&
+                      {message.rawArtifactId === null &&
                       message.bodyText === null ? (
+                        <p className="mt-2 rounded bg-surface-raised p-2 text-text-muted">
+                          Message body omitted from the portable case archive.
+                        </p>
+                      ) : message.encrypted &&
+                        localPlaintext === undefined &&
+                        message.bodyText === null ? (
                         <Button
                           size="sm"
                           variant="secondary"

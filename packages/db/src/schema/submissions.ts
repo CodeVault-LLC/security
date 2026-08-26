@@ -360,9 +360,7 @@ export const correspondenceMessages = pgTable(
       .$type<"PLAIN" | "OPENPGP">()
       .notNull()
       .default("PLAIN"),
-    rawArtifactId: uuid("raw_artifact_id")
-      .notNull()
-      .references(() => artifacts.id),
+    rawArtifactId: uuid("raw_artifact_id").references(() => artifacts.id),
     classification: text("classification")
       .$type<MessageClassification>()
       .notNull()

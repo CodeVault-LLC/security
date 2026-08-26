@@ -444,7 +444,7 @@ export const CorrespondenceMessage = Type.Object(
     subject: MailSubject,
     bodyText: Type.Union([Type.String({ maxLength: 1_000_000 }), Type.Null()]),
     encrypted: Type.Boolean(),
-    rawArtifactId: Uuid,
+    rawArtifactId: Type.Union([Uuid, Type.Null()]),
     attachments: Type.Array(SubmissionAttachment),
     classification: MessageClassificationSchema,
     receivedAt: Type.Union([Timestamp, Type.Null()]),

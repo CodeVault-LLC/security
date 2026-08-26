@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { Type } from "@sinclair/typebox";
 
 import type { AppInstance } from "../../http/app-instance.js";
@@ -88,7 +88,7 @@ export async function registerArchiveRoutes(app: AppInstance): Promise<void> {
       );
       const manifest: CvcaseManifest = {
         format: CVCASE_FORMAT,
-        version: 1,
+        version: 2,
         exportedAt: new Date().toISOString(),
         sourceVersion: SERVER_VERSION,
         case: {
@@ -149,7 +149,7 @@ export async function registerArchiveRoutes(app: AppInstance): Promise<void> {
     async (request) => {
       const user = requireAuthor(request);
       const manifest = parseManifest(request.body.manifest);
-      validateRecords(request.body.records);
+      validateRecords(request.body.records, manifest.version);
       validateArchiveConsistency(manifest, request.body.records);
       const importId = randomUUID();
       const expiresAt = new Date(Date.now() + 24 * 60 * 60_000).toISOString();
@@ -410,6 +410,26 @@ async function exportRecords(
     .innerJoin(schema.assets, eq(schema.assets.id, schema.caseAssets.assetId))
     .where(eq(schema.caseAssets.caseId, caseId));
   const assetIds = assets.map((item) => item.asset.id);
+  const submissions = await app.db
+    .select()
+    .from(schema.submissions)
+    .where(eq(schema.submissions.caseId, caseId));
+  const submissionIds = submissions.map((item) => item.id);
+  const correspondenceMessages =
+    submissionIds.length === 0
+      ? []
+      : await app.db
+          .select()
+          .from(schema.correspondenceMessages)
+          .where(
+            inArray(schema.correspondenceMessages.submissionId, submissionIds),
+          );
+  const correspondenceMessageIds = correspondenceMessages.map(
+    (item) => item.id,
+  );
+  const rawMessageArtifactIds = correspondenceMessages.flatMap((item) =>
+    item.rawArtifactId === null ? [] : [item.rawArtifactId],
+  );
   const artifacts = await app.db
     .select()
     .from(schema.artifacts)
@@ -417,6 +437,9 @@ async function exportRecords(
       and(
         eq(schema.artifacts.caseId, caseId),
         sql`${schema.artifacts.status} = 'STORED'`,
+        rawMessageArtifactIds.length === 0
+          ? undefined
+          : notInArray(schema.artifacts.id, rawMessageArtifactIds),
       ),
     );
   const artifactIds = artifacts.map((item) => item.id);
@@ -438,6 +461,8 @@ async function exportRecords(
           .from(schema.reportSections)
           .where(inArray(schema.reportSections.reportId, reportIds));
   const sectionIds = reportSections.map((item) => item.id);
+  const vendorIds = [...new Set(submissions.map((item) => item.vendorId))];
+  const routeIds = [...new Set(submissions.map((item) => item.routeId))];
   return {
     case: researchCase,
     casePolicyPacks: await app.db
@@ -524,6 +549,60 @@ async function exportRecords(
             .select()
             .from(schema.reportRevisions)
             .where(inArray(schema.reportRevisions.sectionId, sectionIds)),
+    vendors:
+      vendorIds.length === 0
+        ? []
+        : (
+            await app.db
+              .select()
+              .from(schema.vendors)
+              .where(inArray(schema.vendors.id, vendorIds))
+          ).map(portableVendorRecord),
+    vendorRoutes:
+      routeIds.length === 0
+        ? []
+        : (
+            await app.db
+              .select()
+              .from(schema.vendorRoutes)
+              .where(inArray(schema.vendorRoutes.id, routeIds))
+          ).map(portableVendorRouteRecord),
+    submissions: submissions.map(portableSubmissionRecord),
+    submissionRevisions:
+      submissionIds.length === 0
+        ? []
+        : (
+            await app.db
+              .select()
+              .from(schema.submissionRevisions)
+              .where(
+                inArray(schema.submissionRevisions.submissionId, submissionIds),
+              )
+          ).map(portableSubmissionRevisionRecord),
+    submissionAttachments:
+      submissionIds.length === 0
+        ? []
+        : await app.db
+            .select()
+            .from(schema.submissionAttachments)
+            .where(
+              inArray(schema.submissionAttachments.submissionId, submissionIds),
+            ),
+    correspondenceMessages: correspondenceMessages.map(
+      portableCorrespondenceRecord,
+    ),
+    correspondenceMessageAttachments:
+      correspondenceMessageIds.length === 0
+        ? []
+        : await app.db
+            .select()
+            .from(schema.correspondenceMessageAttachments)
+            .where(
+              inArray(
+                schema.correspondenceMessageAttachments.messageId,
+                correspondenceMessageIds,
+              ),
+            ),
   };
 }
 
@@ -549,6 +628,16 @@ async function importRecords(
   const sourceFindings = recordRows(options.records, "findings");
   const sourceEvidence = recordRows(options.records, "evidence");
   const sourceReports = recordRows(options.records, "reports");
+  const sourceVendors = optionalRecordRows(options.records, "vendors");
+  const sourceVendorRoutes = optionalRecordRows(
+    options.records,
+    "vendorRoutes",
+  );
+  const sourceSubmissions = optionalRecordRows(options.records, "submissions");
+  const sourceMessages = optionalRecordRows(
+    options.records,
+    "correspondenceMessages",
+  );
   const templateIds = [
     ...new Set(sourceReports.map((item) => stringField(item, "templateId"))),
   ];
@@ -589,6 +678,76 @@ async function importRecords(
       caseId,
       policyPackId: defaultPolicyPackForProfile(profile).id,
     });
+
+    const vendorMap = new Map<string, string>();
+    for (const source of sourceVendors) {
+      const normalizedName = stringField(source, "normalizedName");
+      const [existing] = await tx
+        .select({ id: schema.vendors.id })
+        .from(schema.vendors)
+        .where(eq(schema.vendors.normalizedName, normalizedName))
+        .limit(1);
+      if (existing !== undefined) {
+        vendorMap.set(stringField(source, "id"), existing.id);
+        continue;
+      }
+      const id = randomUUID();
+      vendorMap.set(stringField(source, "id"), id);
+      await tx.insert(schema.vendors).values({
+        id,
+        ref: await allocateReference(tx, options.user.organizationId, "vendor"),
+        slug: stringField(source, "slug"),
+        name: stringField(source, "name"),
+        normalizedName,
+        websiteUrl: nullableStringField(source, "websiteUrl"),
+        sourceUrl: nullableStringField(source, "sourceUrl"),
+        sourceReviewedAt: nullableStringField(source, "sourceReviewedAt"),
+        createdBy: options.user.id,
+      });
+    }
+
+    const routeMap = new Map<
+      string,
+      { id: string; vendorId: string; revision: number }
+    >();
+    for (const source of sourceVendorRoutes) {
+      const vendorId = vendorMap.get(stringField(source, "vendorId"));
+      if (vendorId === undefined) continue;
+      const name = stringField(source, "name");
+      const [existing] = await tx
+        .select({
+          id: schema.vendorRoutes.id,
+          revision: schema.vendorRoutes.revision,
+        })
+        .from(schema.vendorRoutes)
+        .where(
+          and(
+            eq(schema.vendorRoutes.vendorId, vendorId),
+            eq(schema.vendorRoutes.name, name),
+          ),
+        )
+        .limit(1);
+      if (existing !== undefined) {
+        routeMap.set(stringField(source, "id"), { ...existing, vendorId });
+        continue;
+      }
+      const id = randomUUID();
+      await tx.insert(schema.vendorRoutes).values({
+        id,
+        vendorId,
+        name,
+        type: stringField(
+          source,
+          "type",
+        ) as typeof schema.vendorRoutes.$inferInsert.type,
+        requirements: recordField(source, "requirements"),
+        active: booleanField(source, "active"),
+        sourceUrl: nullableStringField(source, "sourceUrl"),
+        sourceReviewedAt: nullableStringField(source, "sourceReviewedAt"),
+        createdBy: options.user.id,
+      });
+      routeMap.set(stringField(source, "id"), { id, vendorId, revision: 1 });
+    }
 
     const assetMap = new Map<string, string>();
     for (const source of sourceAssets) {
@@ -946,6 +1105,143 @@ async function importRecords(
       });
     }
 
+    const submissionMap = new Map<string, string>();
+    for (const source of sourceSubmissions) {
+      const vendorId = vendorMap.get(stringField(source, "vendorId"));
+      const route = routeMap.get(stringField(source, "routeId"));
+      if (vendorId === undefined || route === undefined) continue;
+      const id = randomUUID();
+      submissionMap.set(stringField(source, "id"), id);
+      const sourceSnapshot = recordField(source, "routeSnapshot");
+      await tx.insert(schema.submissions).values({
+        id,
+        ref: await allocateReference(
+          tx,
+          options.user.organizationId,
+          "submission",
+        ),
+        caseId,
+        vendorId,
+        routeId: route.id,
+        routeSnapshot: {
+          ...sourceSnapshot,
+          vendorId,
+          routeId: route.id,
+          routeRevision: route.revision,
+          capturedAt: new Date().toISOString(),
+        } as typeof schema.submissions.$inferInsert.routeSnapshot,
+        status: "DRAFT",
+        coordinationState: "PREPARING",
+        cryptoMode: stringField(
+          source,
+          "cryptoMode",
+        ) as typeof schema.submissions.$inferInsert.cryptoMode,
+        subject: stringField(source, "subject"),
+        bodyMarkdown: stringField(source, "bodyMarkdown"),
+        manualFields: recordField(source, "manualFields"),
+        plannedNextContactAt: nullableStringField(
+          source,
+          "plannedNextContactAt",
+        ),
+        agreedDisclosureAt: nullableStringField(source, "agreedDisclosureAt"),
+        vendorReference: nullableStringField(source, "vendorReference"),
+        coordinationNotes: nullableStringField(source, "coordinationNotes"),
+        snoozedUntil: nullableStringField(source, "snoozedUntil"),
+        snoozeReason: nullableStringField(source, "snoozeReason"),
+        createdBy: options.user.id,
+        lastEditedBy: options.user.id,
+      });
+    }
+    for (const source of optionalRecordRows(
+      options.records,
+      "submissionRevisions",
+    )) {
+      const submissionId = submissionMap.get(
+        stringField(source, "submissionId"),
+      );
+      if (submissionId === undefined) continue;
+      await tx.insert(schema.submissionRevisions).values({
+        submissionId,
+        revision: numberField(source, "revision"),
+        subject: stringField(source, "subject"),
+        bodyMarkdown: stringField(source, "bodyMarkdown"),
+        manualFields: recordField(source, "manualFields"),
+        cryptoMode: stringField(
+          source,
+          "cryptoMode",
+        ) as typeof schema.submissionRevisions.$inferInsert.cryptoMode,
+        authoredBy: options.user.id,
+      });
+    }
+    for (const source of optionalRecordRows(
+      options.records,
+      "submissionAttachments",
+    )) {
+      const submissionId = submissionMap.get(
+        stringField(source, "submissionId"),
+      );
+      const artifactId = artifactMap.get(stringField(source, "artifactId"));
+      if (submissionId === undefined || artifactId === undefined) continue;
+      await tx.insert(schema.submissionAttachments).values({
+        submissionId,
+        artifactId,
+        position: numberField(source, "position"),
+        sourceRevision: nullableNumberField(source, "sourceRevision"),
+        createdBy: options.user.id,
+      });
+    }
+
+    const messageMap = new Map<string, string>();
+    for (const source of sourceMessages) {
+      const submissionId = submissionMap.get(
+        stringField(source, "submissionId"),
+      );
+      if (submissionId === undefined) continue;
+      const id = randomUUID();
+      messageMap.set(stringField(source, "id"), id);
+      await tx.insert(schema.correspondenceMessages).values({
+        id,
+        submissionId,
+        direction: stringField(
+          source,
+          "direction",
+        ) as typeof schema.correspondenceMessages.$inferInsert.direction,
+        rfcMessageId: stringField(source, "rfcMessageId"),
+        inReplyTo: nullableStringField(source, "inReplyTo"),
+        references: stringArrayField(source, "references"),
+        fromAddress: stringField(source, "fromAddress"),
+        toAddresses: stringArrayField(source, "toAddresses"),
+        ccAddresses: stringArrayField(source, "ccAddresses"),
+        subject: stringField(source, "subject"),
+        bodyText: null,
+        bodyEncrypted: stringField(
+          source,
+          "bodyEncrypted",
+        ) as typeof schema.correspondenceMessages.$inferInsert.bodyEncrypted,
+        rawArtifactId: null,
+        classification: stringField(
+          source,
+          "classification",
+        ) as typeof schema.correspondenceMessages.$inferInsert.classification,
+        visibility: stringField(source, "visibility") as ContentVisibility,
+        receivedAt: nullableStringField(source, "receivedAt"),
+        sentAt: nullableStringField(source, "sentAt"),
+      });
+    }
+    for (const source of optionalRecordRows(
+      options.records,
+      "correspondenceMessageAttachments",
+    )) {
+      const messageId = messageMap.get(stringField(source, "messageId"));
+      const artifactId = artifactMap.get(stringField(source, "artifactId"));
+      if (messageId === undefined || artifactId === undefined) continue;
+      await tx.insert(schema.correspondenceMessageAttachments).values({
+        messageId,
+        artifactId,
+        position: numberField(source, "position"),
+      });
+    }
+
     await tx
       .update(schema.caseArchiveImports)
       .set({ status: "COMMITTED" })
@@ -956,6 +1252,8 @@ async function importRecords(
       artifacts: options.artifacts.length,
       evidence: sourceEvidence.length,
       reports: sourceReports.length,
+      submissions: sourceSubmissions.length,
+      correspondenceMessages: sourceMessages.length,
     };
     await app.audit.write(
       tx,
@@ -979,7 +1277,7 @@ async function importRecords(
 function parseManifest(value: Record<string, unknown>): CvcaseManifest {
   if (
     value["format"] !== CVCASE_FORMAT ||
-    value["version"] !== 1 ||
+    (value["version"] !== 1 && value["version"] !== 2) ||
     typeof value["sourceVersion"] !== "string" ||
     !isRecord(value["recordCounts"]) ||
     !Array.isArray(value["artifacts"]) ||
@@ -1042,7 +1340,10 @@ function parseManifest(value: Record<string, unknown>): CvcaseManifest {
   return value as unknown as CvcaseManifest;
 }
 
-function validateRecords(value: Record<string, unknown>): void {
+function validateRecords(
+  value: Record<string, unknown>,
+  version: CvcaseManifest["version"],
+): void {
   const researchCase = record(value, "case");
   for (const field of ["id", "title", "profile", "status"] as const)
     stringField(researchCase, field);
@@ -1055,6 +1356,53 @@ function validateRecords(value: Record<string, unknown>): void {
     "reports",
   ] as const)
     recordRows(value, key);
+  if (version === 2) validatePortableCorrespondenceRecords(value);
+}
+
+function validatePortableCorrespondenceRecords(
+  records: Record<string, unknown>,
+): void {
+  const vendors = optionalRecordRows(records, "vendors");
+  const routes = optionalRecordRows(records, "vendorRoutes");
+  const submissions = optionalRecordRows(records, "submissions");
+  const messages = optionalRecordRows(records, "correspondenceMessages");
+  const vendorIds = new Set(vendors.map((item) => stringField(item, "id")));
+  const routeIds = new Set(routes.map((item) => stringField(item, "id")));
+  const submissionIds = new Set(
+    submissions.map((item) => stringField(item, "id")),
+  );
+  if (
+    routes.some((item) => !vendorIds.has(stringField(item, "vendorId"))) ||
+    submissions.some(
+      (item) =>
+        !vendorIds.has(stringField(item, "vendorId")) ||
+        !routeIds.has(stringField(item, "routeId")),
+    ) ||
+    messages.some(
+      (item) => !submissionIds.has(stringField(item, "submissionId")),
+    )
+  ) {
+    throw validationError(
+      "The .cvcase correspondence records contain broken relationships.",
+    );
+  }
+  const forbiddenMessageFields = [
+    "bodyText",
+    "rawArtifactId",
+    "providerMessageId",
+    "providerThreadId",
+    "mailboxConnectionId",
+    "reviewedPlaintextSavedAt",
+  ];
+  if (
+    messages.some((message) =>
+      forbiddenMessageFields.some((field) => field in message),
+    )
+  ) {
+    throw validationError(
+      "Version 2 correspondence records must contain metadata only.",
+    );
+  }
 }
 
 function validateArchiveConsistency(
@@ -1139,6 +1487,13 @@ function recordRows(
     throw validationError(`Archive field ${key} must be an array of objects.`);
   }
   return value as Array<Record<string, unknown>>;
+}
+
+function optionalRecordRows(
+  source: Record<string, unknown>,
+  key: string,
+): Array<Record<string, unknown>> {
+  return source[key] === undefined ? [] : recordRows(source, key);
 }
 
 function stringField(source: Record<string, unknown>, key: string): string {
@@ -1226,4 +1581,92 @@ function redactArtifactRecord(
     ...record
   } = artifact;
   return record;
+}
+
+function portableVendorRecord(
+  vendor: typeof schema.vendors.$inferSelect,
+): Record<string, unknown> {
+  return {
+    id: vendor.id,
+    slug: vendor.slug,
+    name: vendor.name,
+    normalizedName: vendor.normalizedName,
+    websiteUrl: vendor.websiteUrl,
+    sourceUrl: vendor.sourceUrl,
+    sourceReviewedAt: vendor.sourceReviewedAt,
+  };
+}
+
+function portableVendorRouteRecord(
+  route: typeof schema.vendorRoutes.$inferSelect,
+): Record<string, unknown> {
+  return {
+    id: route.id,
+    vendorId: route.vendorId,
+    name: route.name,
+    type: route.type,
+    requirements: route.requirements,
+    active: route.active,
+    sourceUrl: route.sourceUrl,
+    sourceReviewedAt: route.sourceReviewedAt,
+  };
+}
+
+function portableSubmissionRecord(
+  submission: typeof schema.submissions.$inferSelect,
+): Record<string, unknown> {
+  return {
+    id: submission.id,
+    vendorId: submission.vendorId,
+    routeId: submission.routeId,
+    routeSnapshot: submission.routeSnapshot,
+    cryptoMode: submission.cryptoMode,
+    subject: submission.subject,
+    bodyMarkdown: submission.bodyMarkdown,
+    manualFields: submission.manualFields,
+    plannedNextContactAt: submission.plannedNextContactAt,
+    agreedDisclosureAt: submission.agreedDisclosureAt,
+    vendorReference: submission.vendorReference,
+    coordinationNotes: submission.coordinationNotes,
+    snoozedUntil: submission.snoozedUntil,
+    snoozeReason: submission.snoozeReason,
+  };
+}
+
+function portableSubmissionRevisionRecord(
+  revision: typeof schema.submissionRevisions.$inferSelect,
+): Record<string, unknown> {
+  return {
+    id: revision.id,
+    submissionId: revision.submissionId,
+    revision: revision.revision,
+    subject: revision.subject,
+    bodyMarkdown: revision.bodyMarkdown,
+    manualFields: revision.manualFields,
+    cryptoMode: revision.cryptoMode,
+    createdAt: revision.createdAt,
+  };
+}
+
+function portableCorrespondenceRecord(
+  message: typeof schema.correspondenceMessages.$inferSelect,
+): Record<string, unknown> {
+  return {
+    id: message.id,
+    submissionId: message.submissionId,
+    direction: message.direction,
+    rfcMessageId: message.rfcMessageId,
+    inReplyTo: message.inReplyTo,
+    references: message.references,
+    fromAddress: message.fromAddress,
+    toAddresses: message.toAddresses,
+    ccAddresses: message.ccAddresses,
+    subject: message.subject,
+    bodyEncrypted: message.bodyEncrypted,
+    classification: message.classification,
+    visibility: message.visibility,
+    receivedAt: message.receivedAt,
+    sentAt: message.sentAt,
+    createdAt: message.createdAt,
+  };
 }
