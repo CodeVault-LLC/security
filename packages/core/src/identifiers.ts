@@ -67,6 +67,9 @@ export function formatReference(
     if (year === undefined) {
       throw new Error(`Reference kind "${kind}" requires a year`);
     }
+    if (!Number.isInteger(year) || year < 1000 || year > 9999) {
+      throw new RangeError("Reference year must be a four-digit integer.");
+    }
 
     const padded = String(sequence).padStart(YEAR_SCOPED_SEQUENCE_WIDTH, "0");
 

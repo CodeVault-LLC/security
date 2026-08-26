@@ -45,6 +45,15 @@ describe("formatReference", () => {
     expect(() => formatReference("case", 1)).toThrow(/requires a year/);
   });
 
+  it.each([0, 99, 10_000, 2026.5, Number.NaN])(
+    "rejects invalid reference year %s",
+    (year) => {
+      expect(() => formatReference("case", 1, year)).toThrow(
+        /four-digit integer/,
+      );
+    },
+  );
+
   it.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])(
     "rejects invalid sequence %s",
     (sequence) => {
