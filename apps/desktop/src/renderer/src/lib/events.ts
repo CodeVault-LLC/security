@@ -67,6 +67,13 @@ export function invalidateForEvent(
       break;
     }
 
+    case "scanner_sync_profile": {
+      if (event.caseId !== null) {
+        invalidate(queryKeys.scannerSyncProfiles(event.caseId));
+      }
+      break;
+    }
+
     case "disclosure": {
       invalidate(["disclosure"]);
       break;

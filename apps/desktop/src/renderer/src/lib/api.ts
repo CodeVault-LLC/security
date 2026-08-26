@@ -90,6 +90,8 @@ export const queryKeys = {
       : (["findings", filters] as const),
   finding: (id: string) => ["finding", id] as const,
   intake: (caseId: string) => ["intake", caseId] as const,
+  scannerSyncProfiles: (caseId: string) =>
+    ["intake", caseId, "scanner-sync-profiles"] as const,
   assets: (filters?: Record<string, unknown>) =>
     filters === undefined
       ? (["assets"] as const)
