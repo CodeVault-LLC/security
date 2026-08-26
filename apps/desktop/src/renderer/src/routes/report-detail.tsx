@@ -8,6 +8,7 @@ import {
   Maximize2,
   MoreHorizontal,
   PanelLeft,
+  Pencil,
   Pilcrow,
   Sparkles,
 } from "lucide-react";
@@ -48,6 +49,7 @@ import {
   Mono,
   ReportSectionStatus,
   Select,
+  Input,
 } from "@codevault/ui";
 
 import { AiToolbar } from "../features/ai/ai-toolbar.js";
@@ -102,6 +104,8 @@ const SECTION_AI_ACTIONS = [
   },
 ];
 
+type ReportMetadataUpdate = { title: string } | { tlp: TlpLabel };
+
 export function ReportDetailRoute({
   reportId,
 }: {
@@ -117,6 +121,7 @@ export function ReportDetailRoute({
   const [showPreview, setShowPreview] = useState(false);
   const [showSections, setShowSections] = useState(false);
   const [showExports, setShowExports] = useState(false);
+  const [titleDraft, setTitleDraft] = useState<string | null>(null);
 
   const report = useApiQuery<ReportDetail>(
     queryKeys.report(reportId),
@@ -185,11 +190,11 @@ export function ReportDetailRoute({
     () => [queryKeys.report(reportId), queryKeys.dashboard],
   );
 
-  const updateTlp = useApiMutation<ReportDetail, TlpLabel>(
-    (tlp) => ({
+  const updateReport = useApiMutation<ReportDetail, ReportMetadataUpdate>(
+    (update) => ({
       path: `/v1/reports/${reportId}`,
       method: "PATCH",
-      body: { tlp, expectedRevision: report.data?.revision ?? 1 },
+      body: { ...update, expectedRevision: report.data?.revision ?? 1 },
     }),
     (updated) => [
       queryKeys.report(reportId),
@@ -357,9 +362,62 @@ export function ReportDetailRoute({
     <div className="flex h-full flex-col">
       <header className="flex min-h-16 items-center gap-3 border-b border-border px-3 sm:px-4">
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[15px] font-semibold leading-5">
-            {data.title}
-          </h1>
+          {titleDraft === null ? (
+            <h1 className="truncate text-[15px] font-semibold leading-5">
+              {data.title}
+            </h1>
+          ) : (
+            <form
+              className="flex max-w-2xl items-center gap-1.5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const title = titleDraft.trim();
+                if (title === "" || title === data.title) return;
+                updateReport.mutate(
+                  { title },
+                  {
+                    onSuccess: () => setTitleDraft(null),
+                    onError: (mutationError) => setError(mutationError.message),
+                  },
+                );
+              }}
+            >
+              <Input
+                autoFocus
+                aria-label="Report title"
+                value={titleDraft}
+                maxLength={200}
+                className="h-8 min-w-0 text-[15px] font-semibold"
+                onChange={(event) => setTitleDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    setTitleDraft(null);
+                  }
+                }}
+              />
+              <Button
+                type="submit"
+                size="sm"
+                variant="primary"
+                loading={updateReport.isPending}
+                disabled={
+                  titleDraft.trim() === "" || titleDraft.trim() === data.title
+                }
+              >
+                Save title
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                disabled={updateReport.isPending}
+                onClick={() => setTitleDraft(null)}
+              >
+                Cancel
+              </Button>
+            </form>
+          )}
           <Mono className="text-[10.5px] text-text-muted">{data.ref}</Mono>
         </div>
 
@@ -414,7 +472,7 @@ export function ReportDetailRoute({
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuSub>
-                    <DropdownMenuSubTrigger disabled={updateTlp.isPending}>
+                    <DropdownMenuSubTrigger disabled={updateReport.isPending}>
                       TLP marking · {data.tlp}
                     </DropdownMenuSubTrigger>
                     <DropdownMenuSubContent>
@@ -428,10 +486,13 @@ export function ReportDetailRoute({
                             value={label}
                             onClick={() => {
                               if (label !== data.tlp) {
-                                updateTlp.mutate(label, {
-                                  onError: (mutationError) =>
-                                    setError(mutationError.message),
-                                });
+                                updateReport.mutate(
+                                  { tlp: label },
+                                  {
+                                    onError: (mutationError) =>
+                                      setError(mutationError.message),
+                                  },
+                                );
                               }
                             }}
                           >
@@ -441,6 +502,10 @@ export function ReportDetailRoute({
                       </DropdownMenuRadioGroup>
                     </DropdownMenuSubContent>
                   </DropdownMenuSub>
+                  <DropdownMenuItem onSelect={() => setTitleDraft(data.title)}>
+                    <Pencil aria-hidden className="size-4" />
+                    Rename report
+                  </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={
                       reportBlocked ||
