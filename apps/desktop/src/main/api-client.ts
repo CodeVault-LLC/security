@@ -95,6 +95,18 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         );
       }
 
+      const target = new URL(path, baseUrl);
+
+      if (!path.startsWith("/") || target.origin !== baseUrl) {
+        throw new ApiError(
+          0,
+          "VALIDATION",
+          "The API path must stay on the configured CodeVault Security server.",
+          null,
+          null,
+        );
+      }
+
       const headers: Record<string, string> = {
         accept: "application/json",
       };
@@ -117,7 +129,7 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       }
 
       try {
-        const response = await doFetch(new URL(path, baseUrl).toString(), {
+        const response = await doFetch(target.toString(), {
           method: request.method ?? "GET",
           headers,
           body:
