@@ -308,4 +308,20 @@ describe("applyResolvedDirectives", () => {
 
     expect(html).not.toContain("cvdirective");
   });
+
+  it("does not replace literal text that resembles a placeholder", async () => {
+    const resolution = await resolveDirectives(
+      "Literal cvdirective0x then [evidence:EVID-000003]",
+      "PUBLIC",
+      RESOLVER,
+    );
+
+    const html = applyResolvedDirectives(
+      resolution.markdown,
+      resolution.substitutions,
+    );
+
+    expect(html).toContain("Literal cvdirective0x then");
+    expect(html.match(/cv-evidence/g)).toHaveLength(1);
+  });
 });
