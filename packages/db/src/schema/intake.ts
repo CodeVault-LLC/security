@@ -1,5 +1,14 @@
 import { relations } from "drizzle-orm";
-import { index, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 import { aiRuns } from "./ai.js";
 import { users } from "./auth.js";
@@ -10,12 +19,15 @@ import {
   primaryId,
   revision,
   timestampColumn,
+  updatedAt,
 } from "./columns.js";
 import { findings } from "./findings.js";
 
 type IntakeSource = "MANUAL" | "FOLDER_SCAN" | "EXTERNAL_AGENT";
 type IntakeItemStatus = "PENDING" | "ACCEPTED" | "REJECTED" | "MERGED";
 type IntakeConfidence = "LOW" | "MEDIUM" | "HIGH";
+type ScannerSyncFormat = "JSON" | "CSV" | "SARIF";
+type ScannerSyncDeduplication = "STAGE_ALL" | "SKIP_MATCHING_TITLES";
 type IntakeDraft = {
   title: string;
   summaryMarkdown?: string;
@@ -61,6 +73,40 @@ export const aiIntakeBatches = pgTable(
   (table) => [
     index("ai_intake_batches_case_idx").on(table.caseId, table.createdAt),
     index("ai_intake_batches_run_idx").on(table.runId),
+  ],
+);
+
+export const scannerSyncProfiles = pgTable(
+  "scanner_sync_profiles",
+  {
+    id: primaryId(),
+    caseId: uuid("case_id")
+      .notNull()
+      .references(() => cases.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    format: text("format").$type<ScannerSyncFormat>().notNull(),
+    sourceLabel: text("source_label").notNull(),
+    deduplicationPolicy: text("deduplication_policy")
+      .$type<ScannerSyncDeduplication>()
+      .notNull(),
+    cadenceHours: integer("cadence_hours").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    nextRunAt: timestampColumn("next_run_at").notNull(),
+    lastRunAt: timestampColumn("last_run_at"),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    revision: revision(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (table) => [
+    uniqueIndex("scanner_sync_profiles_case_name_key").on(
+      table.caseId,
+      table.name,
+    ),
+    index("scanner_sync_profiles_due_idx").on(table.enabled, table.nextRunAt),
+    index("scanner_sync_profiles_case_idx").on(table.caseId, table.createdAt),
   ],
 );
 

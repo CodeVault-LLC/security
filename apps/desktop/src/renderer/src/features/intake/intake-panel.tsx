@@ -25,6 +25,7 @@ import { QueryError } from "../../components/query-boundary.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../../lib/api.js";
 import { FolderIntake } from "./folder-intake.js";
 import { ManualIntakeDialog } from "./manual-intake-dialog.js";
+import { ScannerSyncProfiles } from "./scanner-sync-profiles.js";
 
 export function IntakePanel({
   caseId,
@@ -137,6 +138,8 @@ export function IntakePanel({
       </div>
 
       {canEdit ? <FolderIntake key={caseId} caseId={caseId} /> : null}
+
+      <ScannerSyncProfiles caseId={caseId} canEdit={canEdit} />
 
       {error === null ? null : <InlineError>{error.message}</InlineError>}
 

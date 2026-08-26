@@ -266,3 +266,64 @@ export const ImportFindingExchangeRequest = Type.Object(
 export type ImportFindingExchangeRequest = Static<
   typeof ImportFindingExchangeRequest
 >;
+
+export const SCANNER_SYNC_DEDUPLICATION_POLICIES = [
+  "STAGE_ALL",
+  "SKIP_MATCHING_TITLES",
+] as const;
+export const ScannerSyncDeduplicationPolicySchema = enumOf(
+  SCANNER_SYNC_DEDUPLICATION_POLICIES,
+);
+
+export const ScannerSyncProfile = Type.Object({
+  id: Uuid,
+  caseId: Uuid,
+  name: Type.String({ minLength: 1, maxLength: 120 }),
+  format: FindingExchangeFormatSchema,
+  sourceLabel: Type.String({ minLength: 1, maxLength: 200 }),
+  deduplicationPolicy: ScannerSyncDeduplicationPolicySchema,
+  cadenceHours: Type.Integer({ minimum: 1, maximum: 8_760 }),
+  enabled: Type.Boolean(),
+  nextRunAt: Timestamp,
+  lastRunAt: Type.Union([Timestamp, Type.Null()]),
+  revision: RevisionField,
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+});
+export type ScannerSyncProfile = Static<typeof ScannerSyncProfile>;
+
+export const CreateScannerSyncProfileRequest = Type.Object(
+  {
+    caseId: Uuid,
+    name: Type.String({ minLength: 1, maxLength: 120 }),
+    format: FindingExchangeFormatSchema,
+    sourceLabel: Type.String({ minLength: 1, maxLength: 200 }),
+    deduplicationPolicy: ScannerSyncDeduplicationPolicySchema,
+    cadenceHours: Type.Integer({ minimum: 1, maximum: 8_760 }),
+  },
+  { additionalProperties: false },
+);
+export type CreateScannerSyncProfileRequest = Static<
+  typeof CreateScannerSyncProfileRequest
+>;
+
+export const UpdateScannerSyncProfileRequest = Type.Object(
+  {
+    expectedRevision: RevisionField,
+    name: Type.Optional(Type.String({ minLength: 1, maxLength: 120 })),
+    format: Type.Optional(FindingExchangeFormatSchema),
+    sourceLabel: Type.Optional(Type.String({ minLength: 1, maxLength: 200 })),
+    deduplicationPolicy: Type.Optional(ScannerSyncDeduplicationPolicySchema),
+    cadenceHours: Type.Optional(Type.Integer({ minimum: 1, maximum: 8_760 })),
+    enabled: Type.Optional(Type.Boolean()),
+  },
+  { additionalProperties: false },
+);
+export type UpdateScannerSyncProfileRequest = Static<
+  typeof UpdateScannerSyncProfileRequest
+>;
+
+export const ListScannerSyncProfilesQuery = Type.Object({ caseId: Uuid });
+export type ListScannerSyncProfilesQuery = Static<
+  typeof ListScannerSyncProfilesQuery
+>;

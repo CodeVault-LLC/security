@@ -1,12 +1,13 @@
 import { createHash } from "node:crypto";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { Type } from "@sinclair/typebox";
 
 import type { AppInstance } from "../../http/app-instance.js";
 import {
   BulkAcceptIntakeItemsRequest,
   BulkAcceptIntakeItemsResult,
+  CreateScannerSyncProfileRequest,
   CreateManualIntakeRequest,
   CreateFolderIntakeRequest,
   DecideIntakeItemRequest,
@@ -19,8 +20,11 @@ import {
   ImportFindingExchangeRequest,
   IntakeItem,
   ListIntakeQuery,
+  ListScannerSyncProfilesQuery,
   MergeIntakeItemRequest,
   RejectIntakeItemRequest,
+  ScannerSyncProfile,
+  UpdateScannerSyncProfileRequest,
   UpdateIntakeItemRequest,
 } from "@codevault/contracts";
 import {
@@ -48,8 +52,188 @@ import {
 import { listIntakeItems, loadIntakeItem } from "./service.js";
 
 const IntakeListResponse = Type.Object({ items: Type.Array(IntakeItem) });
+const ScannerSyncProfileListResponse = Type.Object({
+  items: Type.Array(ScannerSyncProfile),
+});
 
 export async function registerIntakeRoutes(app: AppInstance): Promise<void> {
+  app.get(
+    "/v1/intake/scanner-profiles",
+    {
+      schema: {
+        querystring: ListScannerSyncProfilesQuery,
+        response: { 200: ScannerSyncProfileListResponse },
+      },
+    },
+    async (request) => {
+      const user = actingUser(request);
+      await requireCaseRead(app.db, user, request.query.caseId);
+      return {
+        items: await app.db
+          .select(profileSelection)
+          .from(schema.scannerSyncProfiles)
+          .where(eq(schema.scannerSyncProfiles.caseId, request.query.caseId))
+          .orderBy(asc(schema.scannerSyncProfiles.name)),
+      };
+    },
+  );
+
+  app.post(
+    "/v1/intake/scanner-profiles",
+    {
+      schema: {
+        body: CreateScannerSyncProfileRequest,
+        response: { 200: ScannerSyncProfile, 403: ErrorResponse },
+      },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const principal = principalOf(request);
+      await requireCaseWrite(app.db, user, request.body.caseId);
+      const profileId = await app.db.transaction(async (tx) => {
+        const [created] = await tx
+          .insert(schema.scannerSyncProfiles)
+          .values({
+            ...request.body,
+            name: request.body.name.trim(),
+            sourceLabel: request.body.sourceLabel.trim(),
+            nextRunAt: nextRunAt(request.body.cadenceHours),
+            createdBy: user.id,
+          })
+          .returning({ id: schema.scannerSyncProfiles.id });
+        if (created === undefined) {
+          throw new DomainError(
+            "SERVER_ERROR",
+            "Could not create scanner synchronization profile.",
+          );
+        }
+        await app.audit.write(
+          tx,
+          {
+            actorId: user.id,
+            sessionId: principal.session.id,
+            requestId: request.requestId,
+          },
+          {
+            action: "scanner_sync_profile.created",
+            entityType: "scanner_sync_profile",
+            entityId: created.id,
+            caseId: request.body.caseId,
+            after: {
+              name: request.body.name.trim(),
+              format: request.body.format,
+              cadenceHours: request.body.cadenceHours,
+            },
+          },
+        );
+        return created.id;
+      });
+      app.events.publish({
+        type: "entity.changed",
+        entityType: "scanner_sync_profile",
+        entityId: profileId,
+        caseId: request.body.caseId,
+      });
+      return loadScannerSyncProfile(app, profileId);
+    },
+  );
+
+  app.patch(
+    "/v1/intake/scanner-profiles/:id",
+    {
+      schema: {
+        params: IdParam,
+        body: UpdateScannerSyncProfileRequest,
+        response: {
+          200: ScannerSyncProfile,
+          403: ErrorResponse,
+          404: ErrorResponse,
+          409: ErrorResponse,
+        },
+      },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const principal = principalOf(request);
+      const current = await loadScannerSyncProfile(app, request.params.id);
+      await requireCaseWrite(app.db, user, current.caseId);
+      assertRevision(current, request.body.expectedRevision, "scanner profile");
+      const { expectedRevision: _expectedRevision, ...changes } = request.body;
+      const updated = await app.db.transaction(async (tx) => {
+        const rows = await tx
+          .update(schema.scannerSyncProfiles)
+          .set({
+            ...changes,
+            ...(changes.name === undefined
+              ? {}
+              : { name: changes.name.trim() }),
+            ...(changes.sourceLabel === undefined
+              ? {}
+              : { sourceLabel: changes.sourceLabel.trim() }),
+            ...(changes.cadenceHours === undefined
+              ? {}
+              : { nextRunAt: nextRunAt(changes.cadenceHours) }),
+            revision: sql`revision + 1`,
+            updatedAt: sql`now()`,
+          })
+          .where(
+            and(
+              eq(schema.scannerSyncProfiles.id, current.id),
+              eq(
+                schema.scannerSyncProfiles.revision,
+                request.body.expectedRevision,
+              ),
+            ),
+          )
+          .returning({ id: schema.scannerSyncProfiles.id });
+        if (rows[0] === undefined) {
+          throw conflict("The scanner profile changed since you loaded it.");
+        }
+        await app.audit.write(
+          tx,
+          {
+            actorId: user.id,
+            sessionId: principal.session.id,
+            requestId: request.requestId,
+          },
+          {
+            action: "scanner_sync_profile.updated",
+            entityType: "scanner_sync_profile",
+            entityId: current.id,
+            caseId: current.caseId,
+            before: {
+              ...(changes.name === undefined ? {} : { name: current.name }),
+              ...(changes.format === undefined
+                ? {}
+                : { format: current.format }),
+              ...(changes.sourceLabel === undefined
+                ? {}
+                : { sourceLabel: current.sourceLabel }),
+              ...(changes.deduplicationPolicy === undefined
+                ? {}
+                : { deduplicationPolicy: current.deduplicationPolicy }),
+              ...(changes.cadenceHours === undefined
+                ? {}
+                : { cadenceHours: current.cadenceHours }),
+              ...(changes.enabled === undefined
+                ? {}
+                : { enabled: current.enabled }),
+            },
+            after: changes,
+          },
+        );
+        return rows[0];
+      });
+      app.events.publish({
+        type: "entity.changed",
+        entityType: "scanner_sync_profile",
+        entityId: current.id,
+        caseId: current.caseId,
+      });
+      return loadScannerSyncProfile(app, updated.id);
+    },
+  );
+
   app.get(
     "/v1/intake",
     {
@@ -683,6 +867,38 @@ export async function registerIntakeRoutes(app: AppInstance): Promise<void> {
       return loadIntakeItem(app.db, access.item.id);
     },
   );
+}
+
+const profileSelection = {
+  id: schema.scannerSyncProfiles.id,
+  caseId: schema.scannerSyncProfiles.caseId,
+  name: schema.scannerSyncProfiles.name,
+  format: schema.scannerSyncProfiles.format,
+  sourceLabel: schema.scannerSyncProfiles.sourceLabel,
+  deduplicationPolicy: schema.scannerSyncProfiles.deduplicationPolicy,
+  cadenceHours: schema.scannerSyncProfiles.cadenceHours,
+  enabled: schema.scannerSyncProfiles.enabled,
+  nextRunAt: schema.scannerSyncProfiles.nextRunAt,
+  lastRunAt: schema.scannerSyncProfiles.lastRunAt,
+  revision: schema.scannerSyncProfiles.revision,
+  createdAt: schema.scannerSyncProfiles.createdAt,
+  updatedAt: schema.scannerSyncProfiles.updatedAt,
+};
+
+async function loadScannerSyncProfile(
+  app: AppInstance,
+  id: string,
+): Promise<ScannerSyncProfile> {
+  const [profile] = await app.db
+    .select(profileSelection)
+    .from(schema.scannerSyncProfiles)
+    .where(eq(schema.scannerSyncProfiles.id, id));
+  if (profile === undefined) throw notFound("Scanner profile not found.");
+  return profile;
+}
+
+function nextRunAt(cadenceHours: number): string {
+  return new Date(Date.now() + cadenceHours * 60 * 60 * 1_000).toISOString();
 }
 
 interface CreateBatchOptions {
