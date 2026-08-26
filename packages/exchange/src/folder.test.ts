@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import { previewFolder } from "./folder.js";
 
 describe("previewFolder", () => {
-  it("maps Markdown, JSON, CSV, and attachments without claiming canonical truth", async () => {
+  it("maps Markdown, JSON, CSV, SARIF, and attachments without claiming canonical truth", async () => {
     const root = await mkdtemp(join(tmpdir(), "codevault-folder-"));
     await mkdir(join(root, "captures"));
     await writeFile(
@@ -39,6 +39,23 @@ describe("previewFolder", () => {
         '"CSV formula injection in export","Cells begin with executable formula characters",CWE-1236',
       ].join("\n"),
     );
+    await writeFile(
+      join(root, "scanner.sarif"),
+      JSON.stringify({
+        version: "2.1.0",
+        runs: [
+          {
+            tool: { driver: { name: "Example scanner" } },
+            results: [
+              {
+                message: { text: "Unsafe deserialization in worker" },
+                properties: { tags: ["CWE-502"] },
+              },
+            ],
+          },
+        ],
+      }),
+    );
     await writeFile(join(root, "captures", "request.bin"), "request bytes");
 
     const preview = await previewFolder(root);
@@ -47,6 +64,7 @@ describe("previewFolder", () => {
       "Header injection in export",
       "CSV formula injection in export",
       "Path traversal in archive import",
+      "Unsafe deserialization in worker",
     ]);
     expect(preview.attachments).toMatchObject([
       {

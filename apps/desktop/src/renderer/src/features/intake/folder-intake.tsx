@@ -228,8 +228,8 @@ export function FolderIntake({
       {preview === null ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="max-w-[68ch] text-[11px] text-text-muted">
-            Map Markdown, JSON, CSV, captures, images, and attachments into
-            reviewable drafts. Selecting a folder does not change the case.
+            Map Markdown, JSON, CSV, SARIF, captures, images, and attachments
+            into reviewable drafts. Selecting a folder does not change the case.
           </p>
           <Button
             size="sm"

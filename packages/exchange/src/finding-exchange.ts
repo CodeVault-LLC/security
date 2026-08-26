@@ -77,6 +77,139 @@ export function parseFindingsJson(input: string): ExchangeFinding[] {
   return rows.map((row, index) => normalizeFinding(row, index + 1));
 }
 
+/** Export reviewable findings as a SARIF 2.1.0 log. */
+export function exportFindingsSarif(
+  findings: readonly ExchangeFinding[],
+): string {
+  return `${JSON.stringify(
+    {
+      version: "2.1.0",
+      $schema: "https://json.schemastore.org/sarif-2.1.0.json",
+      runs: [
+        {
+          tool: {
+            driver: {
+              name: "CodeVault Security",
+              informationUri: "https://github.com/CodeVault-LLC/security",
+              rules: findings.map((finding, index) => ({
+                id: sarifRuleId(index),
+                name: finding.title,
+                shortDescription: { text: finding.title },
+                properties: { tags: finding.cweIds },
+              })),
+            },
+          },
+          results: findings.map((finding, index) => ({
+            ruleId: sarifRuleId(index),
+            message: { text: finding.title },
+            properties: {
+              codevault: {
+                ...(finding.summaryMarkdown === undefined
+                  ? {}
+                  : { summaryMarkdown: finding.summaryMarkdown }),
+                ...(finding.technicalMarkdown === undefined
+                  ? {}
+                  : { technicalMarkdown: finding.technicalMarkdown }),
+                ...(finding.impactMarkdown === undefined
+                  ? {}
+                  : { impactMarkdown: finding.impactMarkdown }),
+                ...(finding.remediationMarkdown === undefined
+                  ? {}
+                  : { remediationMarkdown: finding.remediationMarkdown }),
+                cweIds: finding.cweIds,
+                visibility: finding.visibility,
+              },
+            },
+          })),
+        },
+      ],
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+/**
+ * Convert SARIF 2.1.0 results into intake findings.
+ *
+ * Scanner output remains a proposal. Imported findings default to internal
+ * visibility unless a CodeVault-produced SARIF log carries an explicit value.
+ */
+export function parseFindingsSarif(input: string): ExchangeFinding[] {
+  let value: unknown;
+  try {
+    value = JSON.parse(input) as unknown;
+  } catch {
+    throw new Error("The SARIF finding exchange is not valid JSON.");
+  }
+
+  if (!isRecord(value) || value.version !== "2.1.0") {
+    throw new Error("The SARIF version is not supported.");
+  }
+  if (!Array.isArray(value.runs)) {
+    throw new Error("The SARIF finding exchange has no runs array.");
+  }
+
+  const findings: ExchangeFinding[] = [];
+  for (const [runIndex, runValue] of value.runs.entries()) {
+    if (!isRecord(runValue)) {
+      throw new Error(`SARIF run ${runIndex + 1} is not an object.`);
+    }
+    const driver = nestedRecord(runValue, "tool", "driver");
+    const rules = Array.isArray(driver?.rules) ? driver.rules : [];
+    const rulesById = new Map<string, Record<string, unknown>>();
+    for (const rule of rules) {
+      if (isRecord(rule) && typeof rule.id === "string") {
+        rulesById.set(rule.id, rule);
+      }
+    }
+    const results = Array.isArray(runValue.results) ? runValue.results : [];
+
+    for (const [resultIndex, resultValue] of results.entries()) {
+      if (!isRecord(resultValue)) {
+        throw new Error(
+          `SARIF run ${runIndex + 1} result ${resultIndex + 1} is not an object.`,
+        );
+      }
+      const rule = sarifRule(resultValue, rules, rulesById);
+      const message = nestedRecord(resultValue, "message");
+      const title =
+        stringField(message, "text") ??
+        stringField(message, "markdown") ??
+        sarifDescription(rule, "shortDescription") ??
+        stringField(rule, "name") ??
+        "";
+      const codevault = nestedRecord(resultValue, "properties", "codevault");
+      const summary =
+        stringField(codevault, "summaryMarkdown") ??
+        distinctText(sarifDescription(rule, "shortDescription"), title);
+      const technical =
+        stringField(codevault, "technicalMarkdown") ??
+        sarifLocations(resultValue);
+      const cweIds = codevaultCwes(codevault, resultValue, rule);
+
+      findings.push(
+        normalizeFinding(
+          {
+            title,
+            ...(summary === undefined ? {} : { summaryMarkdown: summary }),
+            ...(technical === undefined
+              ? {}
+              : { technicalMarkdown: technical }),
+            ...optionalCodeVaultMarkdown(codevault, "impactMarkdown"),
+            ...optionalCodeVaultMarkdown(codevault, "remediationMarkdown"),
+            cweIds,
+            visibility: stringField(codevault, "visibility"),
+          },
+          findings.length + 1,
+        ),
+      );
+    }
+  }
+
+  return findings;
+}
+
 export function exportFindingsCsv(
   findings: readonly ExchangeFinding[],
 ): string {
@@ -321,6 +454,124 @@ function parseCsv(input: string): string[][] {
 
 function normalizeColumn(value: string): string {
   return value.trim().toLowerCase().replaceAll(" ", "_");
+}
+
+function sarifRuleId(index: number): string {
+  return `CV${String(index + 1).padStart(4, "0")}`;
+}
+
+function sarifRule(
+  result: Record<string, unknown>,
+  rules: unknown[],
+  rulesById: ReadonlyMap<string, Record<string, unknown>>,
+): Record<string, unknown> | undefined {
+  if (typeof result.ruleId === "string") return rulesById.get(result.ruleId);
+  if (
+    typeof result.ruleIndex === "number" &&
+    Number.isSafeInteger(result.ruleIndex) &&
+    result.ruleIndex >= 0
+  ) {
+    const candidate = rules[result.ruleIndex];
+    return isRecord(candidate) ? candidate : undefined;
+  }
+  return undefined;
+}
+
+function sarifDescription(
+  value: Record<string, unknown> | undefined,
+  field: "shortDescription" | "fullDescription",
+): string | undefined {
+  return stringField(nestedRecord(value, field), "text");
+}
+
+function sarifLocations(result: Record<string, unknown>): string | undefined {
+  if (!Array.isArray(result.locations)) return undefined;
+  const locations: string[] = [];
+  for (const location of result.locations.slice(0, 25)) {
+    const physical = nestedRecord(location, "physicalLocation");
+    const artifact = nestedRecord(physical, "artifactLocation");
+    const region = nestedRecord(physical, "region");
+    const rawUri = stringField(artifact, "uri");
+    if (rawUri === undefined) continue;
+    const uri = rawUri.replace(/[`\r\n]/gu, "").slice(0, 2_048);
+    if (uri === "") continue;
+    const line = positiveInteger(region?.startLine);
+    const column = positiveInteger(region?.startColumn);
+    const suffix =
+      line === undefined
+        ? ""
+        : `:${line}${column === undefined ? "" : `:${column}`}`;
+    locations.push(`Location: \`${uri}${suffix}\``);
+  }
+  return locations.length === 0 ? undefined : locations.join("\n");
+}
+
+function codevaultCwes(
+  codevault: Record<string, unknown> | undefined,
+  result: Record<string, unknown>,
+  rule: Record<string, unknown> | undefined,
+): string[] {
+  const candidates = [
+    ...(Array.isArray(codevault?.cweIds) ? codevault.cweIds : []),
+    ...sarifTags(result),
+    ...sarifTags(rule),
+  ];
+  return [
+    ...new Set(
+      candidates
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim().toUpperCase())
+        .filter((item) => /^CWE-[1-9][0-9]*$/u.test(item)),
+    ),
+  ];
+}
+
+function sarifTags(value: Record<string, unknown> | undefined): unknown[] {
+  const properties = nestedRecord(value, "properties");
+  return Array.isArray(properties?.tags) ? properties.tags : [];
+}
+
+function optionalCodeVaultMarkdown(
+  codevault: Record<string, unknown> | undefined,
+  field: "impactMarkdown" | "remediationMarkdown",
+): Partial<ExchangeFinding> {
+  const value = stringField(codevault, field);
+  return value === undefined ? {} : { [field]: value };
+}
+
+function distinctText(
+  value: string | undefined,
+  other: string,
+): string | undefined {
+  return value === undefined || value.trim() === other.trim()
+    ? undefined
+    : value;
+}
+
+function positiveInteger(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1
+    ? value
+    : undefined;
+}
+
+function stringField(
+  value: Record<string, unknown> | undefined,
+  field: string,
+): string | undefined {
+  const candidate = value?.[field];
+  return typeof candidate === "string" ? candidate : undefined;
+}
+
+function nestedRecord(
+  value: unknown,
+  ...path: string[]
+): Record<string, unknown> | undefined {
+  let current = value;
+  for (const field of path) {
+    if (!isRecord(current)) return undefined;
+    current = current[field];
+  }
+  return isRecord(current) ? current : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
