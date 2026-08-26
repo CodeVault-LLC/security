@@ -41,6 +41,7 @@ import {
 import { approveScore, normaliseScoreSubmission } from "./scoring.js";
 import { loadFindingDetail, readableCaseIdsSubquery } from "./queries.js";
 import { prepareExternalIdentifier } from "./external-identifiers.js";
+import { collectFindingRevisionChanges } from "./revision-changes.js";
 
 /**
  * Finding routes.
@@ -400,9 +401,9 @@ export async function registerFindingRoutes(app: AppInstance): Promise<void> {
           })
           .where(eq(schema.findings.id, existing.id));
 
-        const stateChanges = collectStateChanges(existing, body);
+        const changes = collectFindingRevisionChanges(existing, body);
 
-        if (Object.keys(stateChanges.after).length > 0) {
+        if (Object.keys(changes.after).length > 0) {
           await app.audit.write(
             tx,
             {
@@ -411,12 +412,14 @@ export async function registerFindingRoutes(app: AppInstance): Promise<void> {
               requestId: request.requestId,
             },
             {
-              action: "finding.state_changed",
+              action: changes.stateOnly
+                ? "finding.state_changed"
+                : "finding.updated",
               entityType: "finding",
               entityId: existing.id,
               caseId: existing.caseId,
-              before: stateChanges.before,
-              after: stateChanges.after,
+              before: changes.before,
+              after: changes.after,
             },
           );
         } else {
@@ -926,36 +929,6 @@ function pickDefined<T extends object, K extends keyof T>(
   }
 
   return result;
-}
-
-const STATE_FIELDS = [
-  "validationState",
-  "remediationState",
-  "disclosureState",
-  "externalIdState",
-  "priorArtState",
-  "visibility",
-] as const;
-
-function collectStateChanges(
-  existing: FindingRow,
-  body: Partial<Record<(typeof STATE_FIELDS)[number], string>>,
-): { before: Record<string, unknown>; after: Record<string, unknown> } {
-  const before: Record<string, unknown> = {};
-  const after: Record<string, unknown> = {};
-
-  for (const field of STATE_FIELDS) {
-    const next = body[field];
-
-    if (next === undefined || next === existing[field]) {
-      continue;
-    }
-
-    before[field] = existing[field];
-    after[field] = next;
-  }
-
-  return { before, after };
 }
 
 /**
