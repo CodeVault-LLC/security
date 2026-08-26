@@ -78,4 +78,26 @@ describe("AI provider preference", () => {
       expect(localStorage.getItem("codevault.ai.default-provider")).toBeNull();
     });
   });
+
+  it("keeps provider selection usable when preference storage is unavailable", async () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("Storage is unavailable", "SecurityError");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Storage is unavailable", "SecurityError");
+    });
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(() => {
+      throw new DOMException("Storage is unavailable", "SecurityError");
+    });
+
+    const { result } = renderHook(() => useAiProviderPreference());
+
+    expect(result.current.providerId).toBeNull();
+
+    act(() => result.current.setProviderId("codex-cli"));
+    await waitFor(() => expect(result.current.providerId).toBe("codex-cli"));
+
+    act(() => result.current.setProviderId(null));
+    await waitFor(() => expect(result.current.providerId).toBeNull());
+  });
 });
