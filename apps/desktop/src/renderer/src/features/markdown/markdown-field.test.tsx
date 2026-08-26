@@ -75,17 +75,12 @@ describe("preview", () => {
   });
 });
 
-describe("counts", () => {
-  it("reports words and characters", () => {
+describe("content-first chrome", () => {
+  it("does not surround the buffer with persistent writing statistics", () => {
     renderField({ value: "three words here" });
 
-    expect(screen.getByText("3 words · 16 characters")).toBeTruthy();
-  });
-
-  it("counts an empty field as no words", () => {
-    renderField({ value: "" });
-
-    expect(screen.getByText("0 words · 0 characters")).toBeTruthy();
+    expect(screen.queryByText(/words ·/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Bold" })).toBeNull();
   });
 });
 
@@ -163,7 +158,7 @@ describe("autosave", () => {
     });
   });
 
-  it("reports the field as saved afterwards", async () => {
+  it("keeps save feedback to a quiet edited state", async () => {
     const user = userEvent.setup();
 
     writeDraft("test:field", "recovered");
@@ -172,7 +167,8 @@ describe("autosave", () => {
     await user.click(screen.getByRole("button", { name: "Restore" }));
 
     await waitFor(() => {
-      expect(screen.getByText("Saved")).toBeTruthy();
+      expect(screen.getByText("Edited")).toBeTruthy();
+      expect(screen.queryByText("Saved")).toBeNull();
     });
   });
 
@@ -223,7 +219,7 @@ describe("autosave", () => {
       expect(screen.queryByText("Saving…")).toBeNull();
     });
 
-    expect(screen.getByText("Unsaved")).toBeTruthy();
+    expect(screen.getByText("Edited")).toBeTruthy();
   });
 
   it("does not autosave a read-only field", () => {
@@ -264,8 +260,12 @@ describe("toolbar", () => {
     expect(screen.getByRole("textbox", { name: "Test Markdown" })).toBeTruthy();
   });
 
-  it("offers the formatting actions a writer reaches for", () => {
+  it("offers formatting actions only when the writer asks for them", async () => {
+    const user = userEvent.setup();
     renderField({ value: "" });
+
+    expect(screen.queryByRole("button", { name: "Bold" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Format" }));
 
     for (const label of ["Bold", "Italic", "Link", "Table", "Insert"]) {
       expect(screen.getByRole("button", { name: label })).toBeTruthy();
@@ -276,6 +276,7 @@ describe("toolbar", () => {
     const user = userEvent.setup();
 
     renderField({ value: "" });
+    await user.click(screen.getByRole("button", { name: "Format" }));
     await user.click(screen.getByRole("button", { name: "Insert" }));
 
     expect(screen.getByLabelText(/search things to insert/i)).toBeTruthy();

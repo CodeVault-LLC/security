@@ -34,7 +34,7 @@ export interface AuthenticatedPrincipal {
     createdAt: string;
     lastSeenAt: string | null;
     mfaVerifiedAt: string;
-    mfaMethod: "TOTP" | "WEBAUTHN";
+    mfaMethod: "PASSWORD" | "TOTP" | "WEBAUTHN";
   };
   organization: {
     id: string;
@@ -44,7 +44,7 @@ export interface AuthenticatedPrincipal {
       sessionIdleMinutes: number;
       sessionAbsoluteHours: number;
       recentMfaMinutes: number;
-      mfaRequired: true;
+      mfaRequired: boolean;
       mcpEnabled: boolean;
     };
   };
@@ -64,7 +64,7 @@ export async function createSession(
   userAgent: string | null,
   mfaVerifiedAt: Date,
   remembered = false,
-  mfaMethod: "TOTP" | "WEBAUTHN" = "TOTP",
+  mfaMethod: "PASSWORD" | "TOTP" | "WEBAUTHN" = "TOTP",
 ): Promise<CreatedSession> {
   const token = generateOpaqueToken();
   const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
@@ -209,7 +209,7 @@ export async function resolveSession(
         sessionIdleMinutes: row.sessionIdleMinutes,
         sessionAbsoluteHours: row.sessionAbsoluteHours,
         recentMfaMinutes: row.recentMfaMinutes,
-        mfaRequired: row.mfaRequired as true,
+        mfaRequired: row.mfaRequired,
         mcpEnabled: row.mcpEnabled,
       },
     },

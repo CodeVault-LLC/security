@@ -282,7 +282,7 @@ export async function registerOrganizationRoutes(
           ),
         );
       return {
-        mfaRequired: true as const,
+        mfaRequired: policy!.mfaRequired,
         inviteTtlHours: policy!.inviteTtlHours,
         sessionIdleMinutes: policy!.sessionIdleMinutes,
         sessionAbsoluteHours: policy!.sessionAbsoluteHours,
@@ -307,7 +307,6 @@ export async function registerOrganizationRoutes(
         .update(schema.organizationSecurityPolicies)
         .set({
           ...request.body,
-          mfaRequired: true,
           updatedBy: admin.id,
           updatedAt: sql`now()`,
         })
@@ -322,8 +321,18 @@ export async function registerOrganizationRoutes(
       UPDATE sessions SET revoked_at = now()
       WHERE revoked_at IS NULL AND created_at < now() - (${policy!.sessionAbsoluteHours}::text || ' hours')::interval
     `);
+      if (request.body.mfaRequired === true) {
+        await app.db.execute(sql`
+          UPDATE sessions AS session SET revoked_at = now()
+          FROM organization_memberships AS membership
+          WHERE session.user_id = membership.user_id
+            AND membership.organization_id = ${admin.organizationId}
+            AND session.revoked_at IS NULL
+            AND session.mfa_method = 'PASSWORD'
+        `);
+      }
       return {
-        mfaRequired: true as const,
+        mfaRequired: policy!.mfaRequired,
         inviteTtlHours: policy!.inviteTtlHours,
         sessionIdleMinutes: policy!.sessionIdleMinutes,
         sessionAbsoluteHours: policy!.sessionAbsoluteHours,

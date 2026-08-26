@@ -120,6 +120,6 @@ describe("theming", () => {
   it("takes its font from the application's own token", () => {
     const font = DECLARATIONS.find((entry) => entry.property === "fontFamily");
 
-    expect(font?.value).toBe("var(--font-mono)");
+    expect(font?.value).toBe("var(--font-editor)");
   });
 });

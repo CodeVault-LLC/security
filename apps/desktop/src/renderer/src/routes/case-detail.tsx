@@ -115,7 +115,7 @@ export function CaseDetailRoute({
   return (
     <div className="flex h-full flex-col">
       <header className="border-b border-border px-4 py-3">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between xl:gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <Mono className="text-text-muted">{data.ref}</Mono>
@@ -140,10 +140,11 @@ export function CaseDetailRoute({
             )}
           </div>
 
-          <div className="flex items-start gap-2">
+          <div className="flex shrink-0 flex-wrap items-start gap-2 self-start">
             <ExportCaseArchiveButton caseId={caseId} />
             {canEdit ? (
               <Button
+                size="sm"
                 variant="primary"
                 onClick={() => setCreateFindingOpen(true)}
               >
@@ -412,37 +413,36 @@ function ReportsPanel({
           return (
             <section
               key={audience}
-              className="grid grid-cols-1 gap-2 p-3 text-[12px] lg:grid-cols-[8rem_minmax(0,1fr)_auto] lg:items-center"
+              className="grid min-h-16 grid-cols-1 gap-2 px-3.5 py-2.5 text-[12px] lg:grid-cols-[8.5rem_minmax(0,1fr)_auto] lg:items-center"
             >
-              <div className="flex items-center gap-2">
+              <div className="flex min-w-0 items-center gap-2">
                 <h2 className="font-semibold">{humanise(audience)}</h2>
                 {report === undefined ? null : <TlpBadge label={report.tlp} />}
               </div>
-              <div>
+              <div className="min-w-0">
                 {report === undefined ? (
-                  <p className="text-text-muted">
+                  <p className="max-w-3xl text-pretty text-text-muted">
                     Not created. Each report is a projection of this case for
                     one audience, and sees only the data that audience may see.
                   </p>
                 ) : (
                   <>
-                    <div className="flex items-center gap-2">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
                       <Mono className="text-text-muted">{report.ref}</Mono>
-                      <span className="text-[11px] text-text-muted">
-                        {report.status.replace("_", " ").toLowerCase()}
-                      </span>
+                      <StateBadge kind="review" state={report.status} />
                     </div>
-                    <p className="text-text-muted">
+                    <p className="mt-1 text-[11px] tabular-nums text-text-muted">
                       {report.approvedSectionCount} of {report.sectionCount}{" "}
                       sections approved
                     </p>
                   </>
                 )}
               </div>
-              <div>
+              <div className="flex justify-start lg:justify-end">
                 {report === undefined ? (
                   canEdit ? (
                     <Button
+                      size="sm"
                       variant="secondary"
                       loading={create.isPending}
                       onClick={() =>
@@ -456,7 +456,7 @@ function ReportsPanel({
                     </Button>
                   ) : null
                 ) : (
-                  <Button asChild variant="secondary">
+                  <Button asChild size="sm" variant="secondary">
                     <Link to={`/reports/${report.id}`}>Open report</Link>
                   </Button>
                 )}

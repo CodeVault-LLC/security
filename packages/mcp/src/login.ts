@@ -28,8 +28,9 @@ interface LoginOptions {
 }
 
 /**
- * Performs MFA once, exchanges the short browser-style session for a revocable
- * MCP grant, and stores the server URL and grant together.
+ * Signs in under the organization's authentication policy, exchanges the
+ * short browser-style session for a revocable MCP grant, and stores the server
+ * URL and grant together.
  */
 export async function login(
   options: LoginOptions,
@@ -42,17 +43,20 @@ export async function login(
     { email: options.email, password: options.password },
   );
 
-  if (started.challenge !== "MFA_REQUIRED") {
-    throw new Error(
-      "This account must finish MFA enrollment in the desktop app before MCP setup.",
-    );
-  }
-
-  const session = await post<LoginResponse>(
-    fetch,
-    `${baseUrl}/v1/auth/login/complete`,
-    { challengeToken: started.challengeToken, totp: options.totp },
-  );
+  const session =
+    "token" in started
+      ? started
+      : started.challenge === "MFA_REQUIRED"
+        ? await post<LoginResponse>(
+            fetch,
+            `${baseUrl}/v1/auth/login/complete`,
+            { challengeToken: started.challengeToken, totp: options.totp },
+          )
+        : (() => {
+            throw new Error(
+              "This account must finish MFA enrollment in the desktop app before MCP setup.",
+            );
+          })();
   const access = await post<CreateMcpAccessTokenResponse>(
     fetch,
     `${baseUrl}/v1/settings/mcp-access`,

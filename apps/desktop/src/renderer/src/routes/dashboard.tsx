@@ -1,4 +1,5 @@
 import { Link } from "@tanstack/react-router";
+import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { formatDistanceToNowStrict } from "../lib/dates.js";
 
@@ -64,6 +65,25 @@ const ATTENTION_LABELS: Record<AttentionItem["kind"], string> = {
   SUBMISSION_SEND_FAILED: "Resolve delivery status",
 };
 
+const ATTENTION_ACTIONS: Record<AttentionItem["kind"], string> = {
+  VENDOR_RESPONSE_DUE: "Open case",
+  DISCLOSURE_DATE_APPROACHING: "Review timeline",
+  CRITICAL_PRIVATE_FINDING: "Review finding",
+  AWAITING_PEER_REVIEW: "Review finding",
+  REPORT_AWAITING_APPROVAL: "Review report",
+  STALE_AFFECTED_VERSIONS: "Verify versions",
+  PRIOR_ART_NOT_RUN: "Check prior art",
+  FAILED_BACKGROUND_JOB: "Inspect failure",
+  PENDING_AI_PROPOSALS: "Review proposals",
+  SUBMISSION_NEEDS_REVIEW: "Review submission",
+  VENDOR_REPLY_NEEDS_REVIEW: "Review reply",
+  VENDOR_INFORMATION_REQUEST_PENDING: "Draft response",
+  VENDOR_ACKNOWLEDGEMENT_OVERDUE: "Draft follow-up",
+  VENDOR_UPDATE_OVERDUE: "Draft follow-up",
+  GMAIL_RECONNECT_REQUIRED: "Reconnect Gmail",
+  SUBMISSION_SEND_FAILED: "Resolve delivery",
+};
+
 const ROUTE_FOR_ENTITY: Record<string, (id: string) => string> = {
   finding: (id) => `/findings/${id}`,
   case: (id) => `/cases/${id}`,
@@ -94,13 +114,10 @@ export function DashboardRoute(): React.JSX.Element {
     <div className="flex h-full flex-col">
       <PageHeader
         title="Home"
-        description="Where the work stands, what needs attention, and what changed."
+        description="Prioritized research work, recent changes, and workspace health."
       />
 
       <PageBody className="space-y-6">
-        {evaluation.data?.available === true ? (
-          <EvaluationChecklist workspace={evaluation.data} />
-        ) : null}
         {dashboard.error !== null ? (
           <ErrorState
             title={errorHeading(dashboard.error)}
@@ -119,8 +136,8 @@ export function DashboardRoute(): React.JSX.Element {
         ) : data === undefined ? (
           <LoadingState label="Loading your workspace…" />
         ) : (
-          <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
-            <Card>
+          <div className="grid grid-cols-1 items-start gap-4 2xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.8fr)]">
+            <Card className="border-border-strong">
               <CardHeader>
                 <CardTitle>Needs attention</CardTitle>
                 <span className="text-[11px] text-text-muted">
@@ -170,7 +187,10 @@ export function DashboardRoute(): React.JSX.Element {
                       </Mono>
                       <div className="min-w-0 flex-1">
                         <span className="block truncate">{item.title}</span>
-                        <span className="text-text-muted">{item.detail}</span>
+                        {item.detail === null ||
+                        item.detail.trim() === item.title.trim() ? null : (
+                          <span className="text-text-muted">{item.detail}</span>
+                        )}
                         {item.actor === null ? null : (
                           <div className="mt-0.5 flex items-center gap-1 text-text-muted">
                             <span>·</span>
@@ -195,6 +215,10 @@ export function DashboardRoute(): React.JSX.Element {
             </Card>
           </div>
         )}
+
+        {evaluation.data?.available === true ? (
+          <EvaluationChecklist workspace={evaluation.data} />
+        ) : null}
 
         <details className="group border-t border-border pt-4">
           <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-(--cv-radius) px-1 text-[13px] font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
@@ -421,25 +445,36 @@ function Metric({
 function AttentionRow({ item }: { item: AttentionItem }): React.JSX.Element {
   const route = ROUTE_FOR_ENTITY[item.entityType];
   const body = (
-    <div className="grid min-h-14 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 px-3 py-2.5 text-[12px] hover:bg-surface-hover lg:grid-cols-[10rem_7rem_minmax(0,1fr)_auto_auto] lg:items-start">
-      <span className="text-[11px] font-medium text-text-muted">
-        {ATTENTION_LABELS[item.kind]}
-      </span>
-      <Mono className="row-start-2 text-text-muted lg:row-start-auto">
-        {item.ref}
-      </Mono>
-      <span className="min-w-0 lg:row-start-auto">
-        <span className="block text-pretty">{item.title}</span>
-        {item.detail === null ? null : (
-          <span className="text-text-muted">{item.detail}</span>
+    <div className="flex min-h-16 items-center gap-3 px-3.5 py-2.5 text-[12px] transition-colors duration-100 group-hover:bg-surface-hover">
+      <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 lg:grid-cols-[10rem_7rem_minmax(0,1fr)_auto_auto] lg:items-center">
+        <span className="text-[11px] font-medium text-text-muted lg:col-start-1">
+          {ATTENTION_LABELS[item.kind]}
+        </span>
+        <Mono className="row-start-2 text-text-muted lg:col-start-2 lg:row-start-1">
+          {item.ref}
+        </Mono>
+        <span className="col-span-2 min-w-0 lg:col-span-1 lg:col-start-3 lg:row-start-1">
+          <span className="block text-pretty font-medium">{item.title}</span>
+          {item.detail === null ? null : (
+            <span className="text-text-muted">{item.detail}</span>
+          )}
+        </span>
+        {item.severity === null ? null : (
+          <SeverityBadge
+            severity={item.severity}
+            className="col-start-2 row-start-1 justify-self-end lg:col-start-4"
+          />
         )}
-      </span>
-      {item.severity === null ? null : (
-        <SeverityBadge severity={item.severity} />
-      )}
-      {item.dueAt === null ? null : (
-        <span className="shrink-0 text-right text-text-muted">
-          {formatDistanceToNowStrict(item.dueAt)}
+        {item.dueAt === null ? null : (
+          <span className="col-start-2 row-start-2 shrink-0 text-right text-text-muted lg:col-start-5 lg:row-start-1">
+            {formatDistanceToNowStrict(item.dueAt)}
+          </span>
+        )}
+      </div>
+      {route === undefined ? null : (
+        <span className="inline-flex h-8 shrink-0 items-center gap-1 rounded-(--cv-radius) bg-accent px-2.5 text-[11px] font-medium leading-none text-accent-contrast shadow-sm transition-colors duration-100 group-hover:bg-accent-hover">
+          {ATTENTION_ACTIONS[item.kind]}
+          <ChevronRight aria-hidden className="size-3.5" />
         </span>
       )}
     </div>
@@ -450,7 +485,10 @@ function AttentionRow({ item }: { item: AttentionItem }): React.JSX.Element {
   }
 
   return (
-    <Link to={route(item.entityId)} className="block">
+    <Link
+      to={route(item.entityId)}
+      className="group block focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
+    >
       {body}
     </Link>
   );

@@ -36,9 +36,9 @@ export const DropdownMenuItem = forwardRef<
     <DropdownMenuPrimitive.Item
       ref={ref}
       className={cn(
-        "flex min-h-10 cursor-default select-none items-center gap-2 rounded-(--cv-radius) px-2 py-2 outline-none",
+        "flex min-h-9 cursor-default select-none items-center gap-2 rounded-(--cv-radius) px-2 py-1.5 outline-none",
         "text-text-muted data-[highlighted]:bg-surface-hover data-[highlighted]:text-text",
-        "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45",
         className,
       )}
       {...props}
@@ -80,9 +80,9 @@ export const DropdownMenuCheckboxItem = forwardRef<
     <DropdownMenuPrimitive.CheckboxItem
       ref={ref}
       className={cn(
-        "relative flex min-h-10 cursor-default select-none items-center rounded-(--cv-radius) py-2 pl-8 pr-2 outline-none",
+        "relative flex min-h-9 cursor-default select-none items-center rounded-(--cv-radius) py-1.5 pl-8 pr-2 outline-none",
         "text-text-muted data-[highlighted]:bg-surface-hover data-[highlighted]:text-text",
-        "data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45",
         className,
       )}
       {...props}
@@ -106,7 +106,7 @@ export const DropdownMenuSubTrigger = forwardRef<
     <DropdownMenuPrimitive.SubTrigger
       ref={ref}
       className={cn(
-        "flex min-h-10 cursor-default select-none items-center gap-2 rounded-(--cv-radius) px-2 py-2 outline-none",
+        "flex min-h-9 cursor-default select-none items-center gap-2 rounded-(--cv-radius) px-2 py-1.5 outline-none",
         "text-text-muted data-[highlighted]:bg-surface-hover data-[highlighted]:text-text data-[state=open]:bg-surface-hover",
         className,
       )}

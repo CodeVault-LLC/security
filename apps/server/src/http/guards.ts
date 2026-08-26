@@ -71,6 +71,10 @@ export const requireAdmin = requireOrganizationAdmin;
 export function requireRecentMfa(request: FastifyRequest): ActingUser {
   const principal = principalOf(request);
 
+  if (!principal.organization.policy.mfaRequired) {
+    return actingUser(request);
+  }
+
   if (
     !hasRecentMfa(
       principal.session.mfaVerifiedAt,

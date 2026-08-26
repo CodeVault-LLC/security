@@ -206,7 +206,7 @@ export interface CodeVaultDesktopApi {
       email: string,
       password: string,
       rememberMe: boolean,
-    ): Promise<ApiOutcome<LoginChallengeResult>>;
+    ): Promise<ApiOutcome<LoginChallengeResult | AuthResult>>;
     loginComplete(totp: string): Promise<ApiOutcome<AuthResult>>;
     loginSecurityKey(): Promise<ApiOutcome<AuthResult>>;
     registerSecurityKey(

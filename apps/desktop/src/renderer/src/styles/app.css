@@ -4,9 +4,11 @@
  * Tailwind and the CodeVault tokens, plus the handful of rules that only make
  * sense for an application window rather than a document.
  */
+@import "@fontsource/lilex/400.css";
 @import "@codevault/ui/tokens.css";
 
 :root {
+  --font-editor: "Lilex", var(--font-mono);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -54,51 +56,9 @@ a {
   -webkit-app-region: no-drag;
 }
 
-/*
- * Product wordmark.
- *
- * This is intentionally not a directional gradient. Uneven radial colour
- * fields sit over a solid accent base, so cyan, blue and indigo surface in
- * scattered parts of the glyphs instead of travelling from one edge to the
- * other. The exact shape scales with the word rather than with the window.
- */
+/* Product wordmark. A single accent keeps the application chrome restrained. */
 .cv-brand-security {
   color: var(--cv-accent);
-  background-color: var(--cv-brand-blue);
-  background-image:
-    radial-gradient(
-      circle at 9% 72%,
-      var(--cv-brand-cyan) 0 5%,
-      transparent 25%
-    ),
-    radial-gradient(
-      ellipse 22% 115% at 38% 115%,
-      var(--cv-brand-indigo) 0 13%,
-      transparent 66%
-    ),
-    radial-gradient(
-      circle at 63% 18%,
-      var(--cv-brand-cyan) 0 7%,
-      transparent 28%
-    ),
-    radial-gradient(
-      ellipse 18% 78% at 92% 56%,
-      var(--cv-brand-indigo) 0 11%,
-      transparent 54%
-    );
-  background-position: center;
-  background-size: 100% 100%;
-  background-clip: text;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-@media (forced-colors: active) {
-  .cv-brand-security {
-    color: CanvasText;
-    background: none;
-    -webkit-text-fill-color: currentColor;
-  }
 }
 
 /* A manual accessibility preference supplements the operating-system setting. */
@@ -119,10 +79,116 @@ a {
  * nothing. They live in `features/markdown/editor-theme.ts` instead, which is
  * the only place they take effect.
  *
- * Font size is safe here: nothing in the base theme sets it.
+ * Zed's buffer defaults are the reference point for long-form report writing:
+ * Lilex at 15px, regular weight, with its comfortable 1.618 line height.
  */
 .cm-editor {
-  font-size: 12.5px;
+  font-size: 15px;
+  font-weight: 400;
+  font-variant-ligatures: contextual common-ligatures;
+  letter-spacing: -0.006em;
+}
+
+/* A narrow visual divider with an intentionally forgiving pointer target. */
+.cv-resizable-panels {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  grid-template-columns: minmax(0, var(--cv-primary-panel)) 9px minmax(0, 1fr);
+}
+
+.cv-resizable-handle {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  min-width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+  align-items: stretch;
+  justify-content: center;
+  outline: none;
+}
+
+.cv-resizable-handle-line {
+  position: relative;
+  width: 1px;
+  background: var(--cv-border);
+  transition:
+    width 120ms ease,
+    background-color 120ms ease;
+}
+
+.cv-resizable-handle-line::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 28px;
+  content: "";
+  transform: translate(-50%, -50%);
+  border-radius: 999px;
+  background: var(--cv-border-strong);
+  box-shadow: 0 0 0 2px var(--cv-surface);
+}
+
+.cv-resizable-handle:hover .cv-resizable-handle-line,
+.cv-resizable-handle:focus-visible .cv-resizable-handle-line {
+  width: 2px;
+  background: var(--cv-accent);
+}
+
+.cv-resizable-handle:hover .cv-resizable-handle-line::after,
+.cv-resizable-handle:focus-visible .cv-resizable-handle-line::after {
+  background: var(--cv-accent);
+}
+
+.cv-resizable-handle:active .cv-resizable-handle-line {
+  width: 3px;
+}
+
+@media (forced-colors: active) {
+  .cv-resizable-handle-line {
+    background: CanvasText;
+  }
+}
+
+/* Compact widths keep the existing single-pane navigation model. */
+@media (max-width: 767px) {
+  .cv-report-sections-layout {
+    display: block;
+  }
+
+  .cv-report-sections-layout > :first-child,
+  .cv-report-sections-layout > .cv-resizable-handle {
+    display: none;
+  }
+
+  .cv-report-sections-layout > :last-child {
+    height: 100%;
+  }
+}
+
+@media (max-width: 1100px) {
+  .cv-app-shell-layout {
+    grid-template-columns: 3.5rem minmax(0, 1fr);
+  }
+
+  .cv-app-shell-layout > .cv-resizable-handle {
+    display: none;
+  }
+
+  .cv-report-preview-layout {
+    display: block;
+  }
+
+  .cv-report-preview-layout > :first-child,
+  .cv-report-preview-layout > .cv-resizable-handle {
+    display: none;
+  }
+
+  .cv-report-preview-layout > :last-child {
+    height: 100%;
+  }
 }
 
 /*

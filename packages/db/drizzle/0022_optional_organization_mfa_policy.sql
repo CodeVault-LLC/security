@@ -1,0 +1,2 @@
+ALTER TABLE organization_security_policies
+  DROP CONSTRAINT organization_security_policy_mfa_check;

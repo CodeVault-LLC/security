@@ -35,12 +35,17 @@ export const EDITOR_THEME_SPEC = {
   // beats anything inherited from the editor element. Without this the app's
   // mono face is never used.
   ".cm-scroller": {
-    fontFamily: "var(--font-mono)",
-    lineHeight: "1.6",
+    fontFamily: "var(--font-editor)",
+    lineHeight: "1.618",
   },
 
   ".cm-content": {
     caretColor: "var(--cv-text)",
+    padding: "20px 24px 34px",
+  },
+
+  ".cm-line": {
+    padding: "0 4px",
   },
 
   ".cm-cursor, .cm-dropCursor": {
@@ -61,9 +66,10 @@ export const EDITOR_THEME_SPEC = {
   },
 
   ".cm-gutters": {
-    backgroundColor: "var(--cv-surface-raised)",
+    backgroundColor: "transparent",
     color: "var(--cv-text-muted)",
     borderRight: "1px solid var(--cv-border)",
+    paddingLeft: "8px",
   },
 
   ".cm-activeLineGutter": {

@@ -21,7 +21,7 @@ export const organizations = pgTable("organizations", {
   updatedAt: updatedAt(),
 });
 
-/** Security policy is deliberately bounded; MFA itself cannot be disabled. */
+/** Organization-wide authentication, session, and integration policy. */
 export const organizationSecurityPolicies = pgTable(
   "organization_security_policies",
   {

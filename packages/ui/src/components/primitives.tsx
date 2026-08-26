@@ -23,8 +23,8 @@ import { cn } from "../lib/cn.js";
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-(--cv-radius) " +
-    "text-[13px] font-medium disabled:pointer-events-none " +
-    "disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-1 " +
+    "select-none text-[13px] font-medium leading-none disabled:cursor-not-allowed " +
+    "disabled:opacity-45 disabled:active:scale-100 focus-visible:outline-2 focus-visible:outline-offset-1 " +
     "focus-visible:outline-focus " +
     // A press has to be visible. `duration-75` on the transform keeps the
     // release snappy; anything slower reads as lag rather than as feedback.
@@ -34,7 +34,7 @@ const buttonVariants = cva(
     variants: {
       variant: {
         primary:
-          "bg-accent text-accent-contrast hover:bg-accent-hover active:bg-accent-hover border border-transparent",
+          "bg-accent text-accent-contrast shadow-sm hover:bg-accent-hover active:bg-accent-hover",
         secondary:
           "bg-surface text-text border border-border-strong hover:bg-surface-hover active:bg-surface-hover",
         ghost:
@@ -43,10 +43,10 @@ const buttonVariants = cva(
           "bg-transparent text-danger border border-danger/40 hover:bg-danger/10 active:bg-danger/20",
       },
       size: {
-        sm: "h-9 px-3 text-[12px]",
-        md: "h-10 px-3",
-        lg: "h-11 px-4",
-        icon: "h-10 w-10 p-0",
+        sm: "h-8 px-2.5 text-[12px] [&>svg]:size-3.5",
+        md: "h-9 px-3 [&>svg]:size-4",
+        lg: "h-10 px-4 [&>svg]:size-4",
+        icon: "size-9 p-0 [&>svg]:size-4",
       },
     },
     defaultVariants: { variant: "secondary", size: "md" },
@@ -105,6 +105,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(buttonVariants({ variant, size }), className)}
         disabled={disabled === true || loading}
         aria-busy={loading || undefined}
+        data-loading={loading || undefined}
         {...props}
       >
         {loading ? (
@@ -158,9 +159,9 @@ export const Input = forwardRef<
     <input
       ref={ref}
       className={cn(
-        "h-10 w-full rounded-(--cv-radius) border border-border bg-surface px-3 text-[13px]",
+        "h-9 w-full rounded-(--cv-radius) border border-border bg-surface px-3 text-[13px]",
         "placeholder:text-text-muted focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
-        "disabled:cursor-not-allowed disabled:opacity-60",
+        "disabled:cursor-not-allowed disabled:bg-surface-raised disabled:opacity-60 aria-invalid:border-danger aria-invalid:outline-danger",
         className,
       )}
       {...props}
@@ -178,6 +179,7 @@ export const Textarea = forwardRef<
       className={cn(
         "w-full rounded-(--cv-radius) border border-border bg-surface px-3 py-2 text-[13px]",
         "placeholder:text-text-muted focus-visible:border-focus focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
+        "disabled:cursor-not-allowed disabled:bg-surface-raised disabled:opacity-60 aria-invalid:border-danger aria-invalid:outline-danger",
         className,
       )}
       {...props}
@@ -192,7 +194,7 @@ export function Card({
   return (
     <div
       className={cn(
-        "rounded-(--cv-radius-lg) border border-border bg-surface",
+        "rounded-(--cv-radius-lg) border border-border bg-surface shadow-[0_1px_2px_oklch(0_0_0/0.025)]",
         className,
       )}
       {...props}
@@ -207,7 +209,7 @@ export function CardHeader({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-2 border-b border-border px-3 py-2",
+        "flex min-h-11 items-center justify-between gap-3 border-b border-border px-3.5 py-2",
         className,
       )}
       {...props}
@@ -254,6 +256,36 @@ export function Label({
   return (
     <label
       className={cn("block text-[12px] font-medium text-text-muted", className)}
+      {...props}
+    />
+  );
+}
+
+/** Supporting copy tied to a field, sized for a dense desktop workspace. */
+export function FieldDescription({
+  className,
+  ...props
+}: HTMLAttributes<HTMLParagraphElement>): React.JSX.Element {
+  return (
+    <p
+      className={cn(
+        "mt-1 text-[11.5px] leading-[1.45] text-text-muted",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+/** Inline validation. Pair its id with the control's aria-describedby. */
+export function FieldError({
+  className,
+  ...props
+}: HTMLAttributes<HTMLParagraphElement>): React.JSX.Element {
+  return (
+    <p
+      role="alert"
+      className={cn("mt-1 text-[11.5px] leading-[1.45] text-danger", className)}
       {...props}
     />
   );
@@ -331,7 +363,7 @@ export function ErrorState({
       )}
     >
       <AlertTriangle aria-hidden className="size-5 text-danger" />
-      <p className="text-[13px] font-medium text-text">{title}</p>
+      <p className="text-[14px] font-medium text-text">{title}</p>
       {description === undefined ? null : (
         <p className="max-w-md text-[12px] text-text-muted">{description}</p>
       )}

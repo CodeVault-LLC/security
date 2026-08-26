@@ -68,8 +68,16 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
       const [user] = await app.db
         .select({
           id: schema.users.id,
+          email: schema.users.email,
+          displayName: schema.users.displayName,
           passwordHash: schema.users.passwordHash,
           disabled: schema.users.disabled,
+          createdAt: schema.users.createdAt,
+          lastLoginAt: schema.users.lastLoginAt,
+          role: schema.organizationMemberships.role,
+          mfaRequired: schema.organizationSecurityPolicies.mfaRequired,
+          sessionAbsoluteHours:
+            schema.organizationSecurityPolicies.sessionAbsoluteHours,
           credentialId: schema.totpCredentials.id,
           webauthnCredentialId: schema.webauthnCredentials.id,
         })
@@ -77,6 +85,13 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
         .innerJoin(
           schema.organizationMemberships,
           eq(schema.organizationMemberships.userId, schema.users.id),
+        )
+        .innerJoin(
+          schema.organizationSecurityPolicies,
+          eq(
+            schema.organizationSecurityPolicies.organizationId,
+            schema.organizationMemberships.organizationId,
+          ),
         )
         .leftJoin(
           schema.totpCredentials,
@@ -107,6 +122,39 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
             requestId: request.requestId,
           },
         });
+      }
+
+      if (!user.mfaRequired) {
+        const remembered = request.body.rememberMe === true;
+        const session = await createSession(
+          app.db,
+          user.id,
+          remembered
+            ? app.config.auth.sessionTtlHours
+            : user.sessionAbsoluteHours,
+          typeof request.headers["user-agent"] === "string"
+            ? request.headers["user-agent"].slice(0, 200)
+            : null,
+          new Date(0),
+          remembered,
+          "PASSWORD",
+        );
+        await app.db
+          .update(schema.users)
+          .set({ lastLoginAt: sql`now()` })
+          .where(eq(schema.users.id, user.id));
+        return {
+          token: session.token,
+          expiresAt: session.expiresAt,
+          user: {
+            id: user.id,
+            email: user.email,
+            displayName: user.displayName,
+            role: user.role,
+            createdAt: user.createdAt,
+            lastLoginAt: user.lastLoginAt,
+          },
+        };
       }
 
       const challengeToken = generateOpaqueToken();

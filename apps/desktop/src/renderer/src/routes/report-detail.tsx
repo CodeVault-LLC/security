@@ -7,6 +7,9 @@ import {
   FileWarning,
   Maximize2,
   MoreHorizontal,
+  PanelLeft,
+  Pilcrow,
+  Sparkles,
 } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 
@@ -22,7 +25,6 @@ import type {
 } from "@codevault/contracts";
 import {
   AiProposalPanel,
-  ApprovalState,
   Button,
   Dialog,
   DialogBody,
@@ -33,16 +35,17 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
   LoadingState,
   Mono,
   ReportSectionStatus,
   Select,
-  TlpBadge,
 } from "@codevault/ui";
 
 import { AiToolbar } from "../features/ai/ai-toolbar.js";
-import { Avatar } from "../components/avatar.js";
+import { ResizablePanels } from "../components/resizable-panels.js";
 import type { Command } from "../features/markdown/commands.js";
 import { InsertMenu } from "../features/markdown/insert-menu.js";
 import {
@@ -64,9 +67,10 @@ import { canWrite, useSession } from "../lib/session.js";
 /**
  * The report workspace.
  *
- * Section tree on the left, Markdown in the middle, rendered preview and lint
- * on the right. The lint panel is not decoration: a BLOCKING finding stops
- * approval and export, and this is where a researcher sees why.
+ * The Markdown buffer is the default surface. Sections, rendering, report
+ * state, exports, formatting, and AI assistance are disclosed only when the
+ * researcher asks for them. Blocking lint remains visible because it changes
+ * what the researcher can do: approval and export stop until it is resolved.
  */
 
 const SECTION_AI_ACTIONS = [
@@ -104,7 +108,9 @@ export function ReportDetailRoute({
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [proposals, setProposals] = useState<AiProposal[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [showPreview, setShowPreview] = useState(true);
+  const [showPreview, setShowPreview] = useState(false);
+  const [showSections, setShowSections] = useState(false);
+  const [showExports, setShowExports] = useState(false);
 
   const report = useApiQuery<ReportDetail>(
     queryKeys.report(reportId),
@@ -245,103 +251,159 @@ export function ReportDetailRoute({
       : (blocking?.length ?? 0) > 0
         ? `Resolve ${blocking?.length ?? 0} blocking issue${blocking?.length === 1 ? "" : "s"} first.`
         : null;
+  const hasUnsettledExport = (exports.data?.items ?? []).some(
+    (item) => item.status !== "COMPLETED",
+  );
+  const sectionNavigation = (
+    <aside className="h-full overflow-y-auto bg-surface px-2 py-3">
+      <p className="px-2 pb-2 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted">
+        Sections
+      </p>
+      {sections.map((section) => (
+        <ReportSectionStatus
+          key={section.id}
+          title={section.title}
+          state={section.reviewState}
+          required={section.required}
+          hasContent={section.contentMarkdown.trim().length > 0}
+          active={activeSection?.id === section.id}
+          onSelect={() => setActiveSectionId(section.id)}
+        />
+      ))}
+    </aside>
+  );
+  const editorWorkspace = (
+    <div className="flex h-full min-w-0 flex-col">
+      {activeSection === null ? null : (
+        <div className="border-b border-border p-2 md:hidden">
+          <Select
+            aria-label="Report section"
+            value={activeSection.id}
+            onValueChange={setActiveSectionId}
+            options={sections.map((section) => ({
+              value: section.id,
+              label: `${section.title}${section.required ? " · required" : ""}`,
+            }))}
+          />
+        </div>
+      )}
+      {activeSection === null ? (
+        <EmptyState title="This report has no sections" />
+      ) : (
+        <SectionWorkspace
+          // Keyed by section and revision so the draft starts from the stored
+          // text whenever either changes, including after accepting AI text.
+          key={`${activeSection.id}:${activeSection.revision}`}
+          reportId={reportId}
+          caseId={data.caseId}
+          reportTitle={data.title}
+          reportReference={data.ref}
+          audience={data.audience}
+          section={activeSection}
+          canEdit={canEdit}
+          showPreview={showPreview}
+          previewHtml={preview.data?.html ?? null}
+          lint={lint.data ?? null}
+          proposals={proposals}
+          onProposals={setProposals}
+          onError={setError}
+          onSave={(content) =>
+            saveSection.mutate(
+              { section: activeSection, content },
+              {
+                onError: (mutationError) => setError(mutationError.message),
+              },
+            )
+          }
+          saving={saveSection.isPending}
+          onApprove={() =>
+            approveSection.mutate(activeSection, {
+              onError: (mutationError) => setError(mutationError.message),
+            })
+          }
+          approving={approveSection.isPending}
+          onAiCompleted={(run: AiRunWithProposals) => {
+            setProposals(run.proposals);
+            void queryClient.invalidateQueries({
+              queryKey: queryKeys.report(reportId),
+            });
+          }}
+        />
+      )}
+    </div>
+  );
+
   return (
     <div className="flex h-full flex-col">
-      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-3 py-3 sm:px-4">
+      <header className="flex min-h-16 items-center gap-3 border-b border-border px-3 sm:px-4">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Mono className="text-text-muted">{data.ref}</Mono>
-            <TlpBadge label={data.tlp} />
-            <span className="rounded border border-border px-1 text-[10px] uppercase text-text-muted">
-              {data.audience}
-            </span>
-            <span className="rounded border border-border px-1 text-[10px] uppercase text-text-muted">
-              {data.status.replace("_", " ").toLowerCase()}
-            </span>
-          </div>
-          <h1 className="mt-1 break-words text-[15px] font-semibold leading-5">
+          <h1 className="truncate text-[15px] font-semibold leading-5">
             {data.title}
           </h1>
-          <p className="text-[11px] text-text-muted">
-            {data.approvedSectionCount} of {data.sectionCount} sections approved
-          </p>
+          <Mono className="text-[10.5px] text-text-muted">{data.ref}</Mono>
         </div>
 
-        <div className="hidden shrink-0 flex-wrap items-center justify-end gap-2 sm:flex">
+        <div className="flex shrink-0 items-center gap-1">
           <Button
-            variant="secondary"
+            variant="ghost"
             size="sm"
+            aria-pressed={showSections}
+            className={`hidden md:inline-flex ${showSections ? "bg-surface-hover text-text" : ""}`}
+            onClick={() => setShowSections((current) => !current)}
+          >
+            <PanelLeft aria-hidden className="size-3.5" />
+            Sections
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-pressed={showPreview}
+            className={showPreview ? "bg-surface-hover text-text" : ""}
             onClick={() => setShowPreview((current) => !current)}
           >
-            {showPreview ? "Hide preview" : "Show preview"}
+            <Eye aria-hidden className="size-3.5" />
+            Preview
           </Button>
-          {canEdit ? (
-            <>
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={
-                  reportBlocked ||
-                  requiredApprovalCount > 0 ||
-                  approveReport.isPending
-                }
-                title={
-                  actionBlockReason ??
-                  (requiredApprovalCount > 0
-                    ? `Approve ${requiredApprovalCount} required section${requiredApprovalCount === 1 ? "" : "s"} first.`
-                    : "Approve the report.")
-                }
-                onClick={() =>
-                  approveReport.mutate(undefined, {
-                    onError: (mutationError) => setError(mutationError.message),
-                  })
-                }
-              >
-                <Check aria-hidden className="size-3" />
-                Approve report
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={reportBlocked || exportReport.isPending}
-                title={actionBlockReason ?? "Export this report as PDF."}
-                onClick={() =>
-                  exportReport.mutate(undefined, {
-                    onError: (mutationError) => setError(mutationError.message),
-                  })
-                }
-              >
-                <Download aria-hidden className="size-3" />
-                Export PDF
-              </Button>
-            </>
-          ) : null}
-        </div>
-        <div className="sm:hidden">
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button
-                variant="secondary"
-                size="icon"
-                aria-label="Report actions"
-              >
+              <Button variant="ghost" size="icon" aria-label="Report details">
                 <MoreHorizontal aria-hidden className="size-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuLabel>Report details</DropdownMenuLabel>
+              <div className="space-y-1 px-2 pb-2 text-[11px] text-text-muted">
+                <p>
+                  {data.tlp} · {data.audience.toLowerCase()} ·{" "}
+                  {titleCase(data.status)}
+                </p>
+                <p>
+                  {data.approvedSectionCount} of {data.sectionCount} sections
+                  approved
+                </p>
+              </div>
+              <DropdownMenuSeparator />
               <DropdownMenuItem
-                onSelect={() => setShowPreview((current) => !current)}
+                onSelect={() => setShowExports((current) => !current)}
               >
-                <Eye aria-hidden className="size-4" />
-                {showPreview ? "Edit section" : "Show preview"}
+                <Download aria-hidden className="size-4" />
+                {showExports ? "Hide exports" : "Show exports"}
               </DropdownMenuItem>
               {canEdit ? (
                 <>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem
                     disabled={
                       reportBlocked ||
                       requiredApprovalCount > 0 ||
                       approveReport.isPending
+                    }
+                    title={
+                      actionBlockReason ??
+                      (requiredApprovalCount > 0
+                        ? `Approve ${requiredApprovalCount} required section${requiredApprovalCount === 1 ? "" : "s"} first.`
+                        : "Approve the report.")
                     }
                     onSelect={() =>
                       approveReport.mutate(undefined, {
@@ -355,6 +417,7 @@ export function ReportDetailRoute({
                   </DropdownMenuItem>
                   <DropdownMenuItem
                     disabled={reportBlocked || exportReport.isPending}
+                    title={actionBlockReason ?? "Export this report as PDF."}
                     onSelect={() =>
                       exportReport.mutate(undefined, {
                         onError: (mutationError) =>
@@ -370,14 +433,6 @@ export function ReportDetailRoute({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        {actionBlockReason === null ? null : (
-          <p
-            id="report-action-blocker"
-            className="w-full text-[11px] text-danger sm:text-right"
-          >
-            {actionBlockReason}
-          </p>
-        )}
       </header>
 
       {error === null ? null : (
@@ -413,86 +468,32 @@ export function ReportDetailRoute({
       <QueryError query={exports} className="mx-4 mt-3" />
       <QueryError query={preview} className="mx-4 mt-3" />
 
-      <ReportExportStrip items={exports.data?.items ?? []} onError={setError} />
+      {showExports || hasUnsettledExport ? (
+        <ReportExportStrip
+          items={exports.data?.items ?? []}
+          onError={setError}
+        />
+      ) : null}
 
-      <div className="flex min-h-0 flex-1">
-        <aside className="hidden w-56 shrink-0 overflow-y-auto border-r border-border p-2 md:block">
-          <p className="px-2 pb-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted">
-            Sections
-          </p>
-          {sections.map((section) => (
-            <ReportSectionStatus
-              key={section.id}
-              title={section.title}
-              state={section.reviewState}
-              required={section.required}
-              hasContent={section.contentMarkdown.trim().length > 0}
-              active={activeSection?.id === section.id}
-              onSelect={() => setActiveSectionId(section.id)}
-            />
-          ))}
-        </aside>
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          {activeSection === null ? null : (
-            <div className="border-b border-border p-2 md:hidden">
-              <Select
-                aria-label="Report section"
-                value={activeSection.id}
-                onValueChange={setActiveSectionId}
-                options={sections.map((section) => ({
-                  value: section.id,
-                  label: `${section.title}${section.required ? " · required" : ""}`,
-                }))}
-              />
-            </div>
-          )}
-          {activeSection === null ? (
-            <EmptyState title="This report has no sections" />
-          ) : (
-            <SectionWorkspace
-              // Keyed by section and revision so the draft starts from the
-              // stored text whenever either changes — including after an AI
-              // proposal is accepted — without an effect writing state back.
-              key={`${activeSection.id}:${activeSection.revision}`}
-              reportId={reportId}
-              caseId={data.caseId}
-              reportTitle={data.title}
-              reportReference={data.ref}
-              audience={data.audience}
-              section={activeSection}
-              canEdit={canEdit}
-              showPreview={showPreview}
-              previewHtml={preview.data?.html ?? null}
-              lint={lint.data ?? null}
-              proposals={proposals}
-              onProposals={setProposals}
-              onError={setError}
-              onSave={(content) =>
-                saveSection.mutate(
-                  { section: activeSection, content },
-                  {
-                    onError: (mutationError) => setError(mutationError.message),
-                  },
-                )
-              }
-              saving={saveSection.isPending}
-              onApprove={() =>
-                approveSection.mutate(activeSection, {
-                  onError: (mutationError) => setError(mutationError.message),
-                })
-              }
-              approving={approveSection.isPending}
-              onAiCompleted={(run: AiRunWithProposals) => {
-                setProposals(run.proposals);
-                void queryClient.invalidateQueries({
-                  queryKey: queryKeys.report(reportId),
-                });
-              }}
-            />
-          )}
-        </div>
-      </div>
+      <main className="min-h-0 flex-1">
+        {showSections ? (
+          <ResizablePanels
+            primary={sectionNavigation}
+            secondary={editorWorkspace}
+            primaryLabel="Report sections"
+            secondaryLabel="Report section editor"
+            resizeLabel="Resize report sections"
+            storageKey="report-sections-split"
+            initialPrimarySize={0.2}
+            minPrimarySize={188}
+            maxPrimarySize={340}
+            minSecondarySize={520}
+            className="cv-report-sections-layout h-full"
+          />
+        ) : (
+          editorWorkspace
+        )}
+      </main>
     </div>
   );
 }
@@ -619,15 +620,64 @@ function SectionWorkspace({
 }: SectionWorkspaceProps): React.JSX.Element {
   const [draft, setDraft] = useState(section.contentMarkdown);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showAssist, setShowAssist] = useState(false);
+  const [showFormatting, setShowFormatting] = useState(false);
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const dirty = draft !== section.contentMarkdown;
   const locked = !canEdit || section.reviewState === "LOCKED";
+  const editorPane = (
+    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-surface">
+      {locked || !showFormatting ? null : (
+        <MarkdownToolbar
+          onCommand={(command: Command) => editorRef.current?.run(command)}
+          onInsertMenu={() => setMenuOpen(true)}
+        />
+      )}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <MarkdownEditor
+          ref={editorRef}
+          ariaLabel={`${section.title} report section`}
+          value={draft}
+          onChange={(next) => {
+            onError(null);
+            setDraft(next);
+          }}
+          readOnly={locked}
+          showLineNumbers
+          placeholder="Markdown. Press / to insert a table, a diagram or a reference to this case's evidence."
+          onSlash={() => setMenuOpen(true)}
+          className="h-full"
+        />
+      </div>
+    </div>
+  );
+  const previewPane = (
+    <div className="flex h-full min-w-0 overflow-y-auto">
+      <PreviewPane
+        html={previewHtml}
+        lint={lint}
+        sectionId={section.id}
+        reportTitle={reportTitle}
+        reportReference={reportReference}
+        audience={audience}
+      />
+    </div>
+  );
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
+      <div className="flex min-h-14 flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2 sm:px-4">
         <div className="min-w-0">
-          <h2 className="truncate text-[13px] font-medium">{section.title}</h2>
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="truncate text-[14px] font-medium">
+              {section.title}
+            </h2>
+            {dirty ? (
+              <span className="shrink-0 text-[10.5px] text-text-muted">
+                Edited
+              </span>
+            ) : null}
+          </div>
           {section.promptPurpose === null ? null : (
             <p className="truncate text-[11px] text-text-muted">
               {section.promptPurpose}
@@ -635,52 +685,83 @@ function SectionWorkspace({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          <ApprovalState
-            state={section.reviewState}
-            approvedBy={
-              section.approvedBy ? (
-                <Avatar
-                  avatarId={null}
-                  userId={section.approvedBy.id}
-                  label={section.approvedBy.displayName}
-                  size="sm"
-                  showLabel
-                  className="gap-1"
-                />
-              ) : null
-            }
-            approvedAt={section.approvedAt}
-          />
+        <div className="flex items-center gap-1">
           {canEdit ? (
-            <>
-              <Button
-                size="sm"
-                variant="secondary"
-                disabled={!dirty || saving}
-                onClick={() => onSave(draft)}
-              >
-                Save
-              </Button>
-              <Button
-                size="sm"
-                variant="primary"
-                disabled={dirty || approving}
-                title={
-                  dirty
-                    ? "Save your changes before approving."
-                    : "Approve this section's current text."
-                }
-                onClick={onApprove}
-              >
-                Approve section
-              </Button>
-            </>
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-pressed={showFormatting}
+              className={showFormatting ? "bg-surface-hover text-text" : ""}
+              onClick={() => setShowFormatting((current) => !current)}
+            >
+              <Pilcrow aria-hidden className="size-3.5" />
+              Format
+            </Button>
           ) : null}
+          {canEdit ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-pressed={showAssist}
+              className={showAssist ? "bg-surface-hover text-text" : ""}
+              onClick={() => setShowAssist((current) => !current)}
+            >
+              <Sparkles aria-hidden className="size-3.5" />
+              Assist
+            </Button>
+          ) : null}
+          {canEdit ? (
+            <Button
+              size="sm"
+              variant={dirty ? "primary" : "ghost"}
+              disabled={!dirty || saving}
+              loading={saving}
+              onClick={() => onSave(draft)}
+            >
+              Save
+            </Button>
+          ) : null}
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Section review">
+                <MoreHorizontal aria-hidden className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-60">
+              <DropdownMenuLabel>Section review</DropdownMenuLabel>
+              <div className="space-y-1 px-2 pb-2 text-[11px] text-text-muted">
+                <p>{titleCase(section.reviewState)}</p>
+                {section.approvedBy === null ? null : (
+                  <p>Approved by {section.approvedBy.displayName}</p>
+                )}
+                {section.approvedAt === null ? null : (
+                  <p>{new Date(section.approvedAt).toLocaleString()}</p>
+                )}
+              </div>
+              {canEdit ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={dirty || approving}
+                    title={
+                      dirty
+                        ? "Save your changes before approving."
+                        : "Approve this section's current text."
+                    }
+                    onSelect={onApprove}
+                  >
+                    <Check aria-hidden className="size-4" />
+                    Approve section
+                  </DropdownMenuItem>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      {canEdit ? (
+      {canEdit && showAssist ? (
         <AiToolbar
           targetType="REPORT_SECTION"
           targetId={section.id}
@@ -708,46 +789,23 @@ function SectionWorkspace({
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1">
-        <div
-          className={`min-w-0 flex-1 flex-col overflow-hidden border-r border-border ${showPreview ? "hidden lg:flex" : "flex"}`}
-        >
-          {locked ? null : (
-            <MarkdownToolbar
-              onCommand={(command: Command) => editorRef.current?.run(command)}
-              onInsertMenu={() => setMenuOpen(true)}
-            />
-          )}
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <MarkdownEditor
-              ref={editorRef}
-              ariaLabel={`${section.title} report section`}
-              value={draft}
-              onChange={(next) => {
-                onError(null);
-                setDraft(next);
-              }}
-              readOnly={locked}
-              showLineNumbers
-              placeholder="Markdown. Press / to insert a table, a diagram or a reference to this case's evidence."
-              onSlash={() => setMenuOpen(true)}
-              className="h-full"
-            />
-          </div>
-        </div>
-
+      <div className="min-h-0 flex-1">
         {showPreview ? (
-          <div className="flex min-w-0 flex-1 overflow-y-auto">
-            <PreviewPane
-              html={previewHtml}
-              lint={lint}
-              sectionId={section.id}
-              reportTitle={reportTitle}
-              reportReference={reportReference}
-              audience={audience}
-            />
-          </div>
-        ) : null}
+          <ResizablePanels
+            primary={editorPane}
+            secondary={previewPane}
+            primaryLabel="Markdown editor"
+            secondaryLabel="Report preview"
+            resizeLabel="Resize editor and preview"
+            storageKey="report-editor-preview-split"
+            initialPrimarySize={0.64}
+            minPrimarySize={420}
+            minSecondarySize={340}
+            className="cv-report-preview-layout h-full"
+          />
+        ) : (
+          editorPane
+        )}
       </div>
 
       <InsertMenu

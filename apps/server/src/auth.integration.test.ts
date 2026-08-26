@@ -51,6 +51,48 @@ describeIntegration("authentication boundary", () => {
     expect(stored[0]?.tokenHash).not.toBe(body.challengeToken);
   });
 
+  it("issues a password-authenticated session when organization MFA is disabled", async () => {
+    const user = await harness.createUser();
+    await harness.dbHandle.db
+      .update(schema.organizationSecurityPolicies)
+      .set({ mfaRequired: false })
+      .where(
+        eq(
+          schema.organizationSecurityPolicies.organizationId,
+          user.organizationId,
+        ),
+      );
+    await clearLoginAttempts(harness);
+    const before = await sessionCount(user.id);
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/login/start",
+      payload: {
+        email: user.email,
+        password: TEST_PASSWORD,
+        rememberMe: false,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(
+      response.json<{ token?: string; challenge?: string }>(),
+    ).toMatchObject({ token: expect.any(String) });
+    expect(response.json<{ challenge?: string }>().challenge).toBeUndefined();
+    expect(await sessionCount(user.id)).toBe(before + 1);
+
+    await harness.dbHandle.db
+      .update(schema.organizationSecurityPolicies)
+      .set({ mfaRequired: true })
+      .where(
+        eq(
+          schema.organizationSecurityPolicies.organizationId,
+          user.organizationId,
+        ),
+      );
+  });
+
   it("uses the same response for unknown users and wrong passwords", async () => {
     await clearLoginAttempts(harness);
     const unknown = await harness.app.inject({

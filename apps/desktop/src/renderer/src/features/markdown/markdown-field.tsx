@@ -1,5 +1,5 @@
 import { Button } from "@codevault/ui";
-import { Maximize2, Minimize2 } from "lucide-react";
+import { Maximize2, Minimize2, Pilcrow } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Command } from "./commands.js";
@@ -41,17 +41,11 @@ export interface MarkdownFieldProps {
   autosaveMs?: number;
   /** Set while the parent's save is in flight. */
   saving?: boolean;
-  /** Shown in place of the saved indicator. */
+  /** Current save error, shown until the next edit. */
   error?: string | null;
 }
 
 type Mode = "write" | "preview";
-
-function countWords(text: string): number {
-  const trimmed = text.trim();
-
-  return trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length;
-}
 
 export function MarkdownField({
   ariaLabel,
@@ -62,7 +56,7 @@ export function MarkdownField({
   draftKey,
   caseId,
   placeholder = "Markdown. Tables, diagrams and callouts all render in the report.",
-  minHeight = "12rem",
+  minHeight = "18rem",
   showLineNumbers = false,
   autosaveMs = 1_200,
   saving = false,
@@ -72,6 +66,7 @@ export function MarkdownField({
   const [mode, setMode] = useState<Mode>("write");
   const [menuOpen, setMenuOpen] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [showFormatting, setShowFormatting] = useState(false);
   // Read while initialising rather than in an effect: the banner is part of
   // the field's first paint, and setting it afterwards renders the page twice.
   const [recovered, setRecovered] = useState<string | null>(() => {
@@ -79,15 +74,6 @@ export function MarkdownField({
 
     return stored !== null && stored.text !== value ? stored.text : null;
   });
-  /**
-   * The exact text last handed to `onSave`.
-   *
-   * Compared against rather than a boolean flag, because the stored `value`
-   * only catches up once the request comes back. Without this the field says
-   * "Unsaved" for a second after it has, in fact, saved.
-   */
-  const [savedText, setSavedText] = useState<string | null>(null);
-
   const editorRef = useRef<MarkdownEditorHandle>(null);
   const onSaveRef = useRef(onSave);
   const dirty = draft !== value;
@@ -120,7 +106,6 @@ export function MarkdownField({
 
   const save = useCallback((text: string): void => {
     onSaveRef.current?.(text);
-    setSavedText(text);
   }, []);
 
   useEffect(() => {
@@ -158,11 +143,9 @@ export function MarkdownField({
       ? { tone: "text-danger", text: error }
       : saving
         ? { tone: "text-text-muted", text: "Saving…" }
-        : draft === savedText
-          ? { tone: "text-success", text: "Saved" }
-          : dirty
-            ? { tone: "text-text-muted", text: "Unsaved" }
-            : null;
+        : dirty
+          ? { tone: "text-text-muted", text: "Edited" }
+          : null;
 
   const body = (
     <div
@@ -170,14 +153,6 @@ export function MarkdownField({
         focusMode ? "h-full" : ""
       } focus-within:border-focus focus-within:ring-1 focus-within:ring-focus/30`}
     >
-      {readOnly ? null : (
-        <MarkdownToolbar
-          onCommand={runCommand}
-          onInsertMenu={() => setMenuOpen(true)}
-          disabled={mode === "preview"}
-        />
-      )}
-
       <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
         {(["write", "preview"] as const).map((item) => (
           <button
@@ -199,9 +174,22 @@ export function MarkdownField({
           {status === null ? null : (
             <span className={`text-[11px] ${status.tone}`}>{status.text}</span>
           )}
-          <span className="text-[10.5px] text-text-muted max-sm:hidden">
-            {countWords(draft)} words · {draft.length} characters
-          </span>
+          {readOnly ? null : (
+            <button
+              type="button"
+              disabled={mode === "preview"}
+              aria-pressed={showFormatting}
+              onClick={() => setShowFormatting((current) => !current)}
+              className={`flex min-h-10 items-center gap-1.5 rounded-(--cv-radius) px-2.5 text-[11px] focus-visible:outline-2 focus-visible:outline-focus disabled:pointer-events-none disabled:opacity-40 ${
+                showFormatting
+                  ? "bg-surface-hover text-text"
+                  : "text-text-muted hover:text-text"
+              }`}
+            >
+              <Pilcrow aria-hidden className="size-3.5" />
+              Format
+            </button>
+          )}
           {readOnly ? null : (
             <button
               type="button"
@@ -219,6 +207,13 @@ export function MarkdownField({
           )}
         </div>
       </div>
+
+      {readOnly || !showFormatting || mode === "preview" ? null : (
+        <MarkdownToolbar
+          onCommand={runCommand}
+          onInsertMenu={() => setMenuOpen(true)}
+        />
+      )}
 
       {recovered === null ? null : (
         <div className="flex flex-wrap items-center gap-2 border-b border-warning/40 bg-warning/10 px-2 py-1.5 text-[11px]">

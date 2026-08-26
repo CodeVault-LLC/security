@@ -116,7 +116,7 @@ function PersonalPage(props: {
             <header className="pb-7 lg:pt-0.5">
               <h2
                 id="settings-page-title"
-                className="text-balance text-[20px] font-semibold tracking-[-0.02em]"
+                className="text-balance text-[19px] font-semibold tracking-[-0.02em]"
               >
                 {props.title}
               </h2>
@@ -899,8 +899,8 @@ function SecuritySummaryView(props: {
   const lowRecoveryCodes = recoveryCodes <= 2;
   const authenticatorDetail = totpActive
     ? security.data.totp.enrolledAt
-      ? `Required at sign-in. Enrolled ${formatDateTime(security.data.totp.enrolledAt)}.`
-      : "Required at sign-in. Enrollment date unavailable."
+      ? `Enrolled ${formatDateTime(security.data.totp.enrolledAt)} and available when organization policy requires it.`
+      : "Enrolled and available when organization policy requires it. Enrollment date unavailable."
     : "No active authenticator was found for this account.";
 
   return (
@@ -917,7 +917,7 @@ function SecuritySummaryView(props: {
             aria-hidden
             className={cn(
               "mt-0.5 size-4 shrink-0",
-              totpActive ? "text-success" : "text-danger",
+              totpActive ? "text-success" : "text-warning",
             )}
           />
           <div className="min-w-0 flex-1">
@@ -929,7 +929,7 @@ function SecuritySummaryView(props: {
           <dd
             className={cn(
               "flex shrink-0 items-center gap-1.5 text-[12px] font-semibold",
-              totpActive ? "text-success" : "text-danger",
+              totpActive ? "text-success" : "text-warning",
             )}
           >
             <span className="size-1.5 rounded-full bg-current" />

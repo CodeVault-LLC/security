@@ -46,9 +46,9 @@ export const DialogContent = forwardRef<
         )}
         {...props}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-border px-4 py-3">
+        <div className="flex min-h-14 items-start justify-between gap-4 border-b border-border px-4 py-3">
           <div className="min-w-0">
-            <DialogPrimitive.Title className="text-[14px] font-semibold">
+            <DialogPrimitive.Title className="text-balance text-[15px] font-semibold leading-5 tracking-[-0.01em]">
               {title}
             </DialogPrimitive.Title>
             {description === undefined ? null : (
@@ -58,7 +58,7 @@ export const DialogContent = forwardRef<
             )}
           </div>
           <DialogPrimitive.Close
-            className="rounded-(--cv-radius) p-1 text-text-muted hover:bg-surface-hover hover:text-text"
+            className="-mr-1 flex size-9 shrink-0 items-center justify-center rounded-(--cv-radius) text-text-muted transition-colors duration-100 hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
             aria-label="Close"
           >
             <X aria-hidden className="size-4" />
@@ -119,14 +119,10 @@ export const TabsList = forwardRef<
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
 >(function TabsList({ className, ...props }, ref) {
   return (
-    <div className="shrink-0 overflow-x-auto border-b border-border px-4 py-2.5">
+    <div className="shrink-0 overflow-x-auto border-b border-border px-4 py-2">
       <TabsPrimitive.List
         ref={ref}
-        className={cn(
-          "inline-flex min-w-max items-center gap-0.5 rounded-(--cv-radius-lg) border border-border",
-          "bg-surface-raised p-0.5",
-          className,
-        )}
+        className={cn("inline-flex min-w-max items-center gap-1", className)}
         {...props}
       />
     </div>
@@ -142,12 +138,11 @@ export const TabsTrigger = forwardRef<
       ref={ref}
       className={cn(
         "relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-(--cv-radius)",
-        "min-h-9 px-3 py-1 text-[12px] font-medium text-text-muted",
+        "min-h-8 px-2.5 py-1 text-[12px] font-medium text-text-muted",
         "transition-[background-color,color] duration-100",
         "hover:bg-surface-hover hover:text-text",
         "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
-        "data-[state=active]:bg-accent/12 data-[state=active]:text-accent",
-        "data-[state=active]:hover:bg-accent/16",
+        "data-[state=active]:bg-surface-hover data-[state=active]:text-text",
         className,
       )}
       {...props}
@@ -281,7 +276,7 @@ export function Select({
       <SelectPrimitive.Trigger
         aria-label={ariaLabel}
         className={cn(
-          "group flex h-10 w-full items-center justify-between gap-1.5",
+          "group flex h-9 w-full items-center justify-between gap-1.5",
           "rounded-(--cv-radius) border border-border bg-surface px-2",
           "text-left text-[13px] text-text",
           "transition-[background-color,border-color] duration-100",

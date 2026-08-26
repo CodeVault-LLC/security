@@ -2,14 +2,17 @@ import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { Command } from "cmdk";
 import {
+  Building2,
   Boxes,
   FilePlus2,
   FileText,
   Search as SearchIcon,
   Settings,
   ShieldAlert,
+  ShieldCheck,
   ShieldQuestion,
   Upload,
+  UsersRound,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -156,39 +159,70 @@ function PaletteContents({
           className="px-1 py-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted"
         >
           <PaletteAction
+            query={query}
             icon={<Boxes aria-hidden className="size-3.5" />}
             label="Create research case"
             onSelect={() => run(onCreateCase)}
           />
           <PaletteAction
+            query={query}
             icon={<ShieldAlert aria-hidden className="size-3.5" />}
             label="Create finding"
             onSelect={() => run(onCreateFinding)}
           />
           <PaletteAction
+            query={query}
             icon={<Upload aria-hidden className="size-3.5" />}
             label="Upload evidence"
             onSelect={() => run(onUploadEvidence)}
           />
           <PaletteAction
+            query={query}
             icon={<ShieldQuestion aria-hidden className="size-3.5" />}
             label="Check prior art"
             onSelect={() => run(onCheckPriorArt)}
           />
           <PaletteAction
+            query={query}
             icon={<FileText aria-hidden className="size-3.5" />}
             label="Open reports"
             onSelect={() => run(() => void navigate({ to: "/reports" }))}
           />
           <PaletteAction
+            query={query}
             icon={<FilePlus2 aria-hidden className="size-3.5" />}
             label="Open activity"
             onSelect={() => run(() => void navigate({ to: "/activity" }))}
           />
           <PaletteAction
+            query={query}
             icon={<Settings aria-hidden className="size-3.5" />}
             label="Open settings"
             onSelect={() => run(() => void navigate({ to: "/settings" }))}
+          />
+          <PaletteAction
+            query={query}
+            icon={<UsersRound aria-hidden className="size-3.5" />}
+            label="Open organization users"
+            onSelect={() =>
+              run(() => void navigate({ to: "/organization/users" }))
+            }
+          />
+          <PaletteAction
+            query={query}
+            icon={<Building2 aria-hidden className="size-3.5" />}
+            label="Open organization settings"
+            onSelect={() =>
+              run(() => void navigate({ to: "/organization/settings" }))
+            }
+          />
+          <PaletteAction
+            query={query}
+            icon={<ShieldCheck aria-hidden className="size-3.5" />}
+            label="Open organization policy"
+            onSelect={() =>
+              run(() => void navigate({ to: "/organization/security" }))
+            }
           />
         </Command.Group>
       </Command.List>
@@ -200,11 +234,19 @@ function PaletteAction({
   icon,
   label,
   onSelect,
+  query,
 }: {
   icon: React.ReactNode;
   label: string;
   onSelect: () => void;
-}): React.JSX.Element {
+  query: string;
+}): React.JSX.Element | null {
+  const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+
+  if (!terms.every((term) => label.toLowerCase().includes(term))) {
+    return null;
+  }
+
   return (
     <Command.Item
       value={label}

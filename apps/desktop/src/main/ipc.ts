@@ -297,11 +297,39 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
         "/v1/auth/login/start",
         {
           method: "POST",
-          body: { email: request.email, password: request.password },
+          body: {
+            email: request.email,
+            password: request.password,
+            rememberMe: request.rememberMe,
+          },
           serverUrl,
           anonymous: true,
         },
       );
+      if ("token" in response) {
+        pendingLogin = null;
+        uploadSelections.clear();
+        const status = await sessionStore.save(
+          {
+            token: response.token,
+            serverUrl,
+            expiresAt: response.expiresAt,
+            userId: response.user.id,
+          },
+          request.rememberMe,
+        );
+        const result: AuthResult = {
+          user: response.user,
+          persistent: request.rememberMe && status.persistent,
+          storageWarning:
+            !request.rememberMe || status.persistent
+              ? null
+              : "reason" in status
+                ? status.reason
+                : null,
+        };
+        return { ok: true as const, data: result };
+      }
       pendingLogin = {
         serverUrl,
         challengeToken: response.challengeToken,

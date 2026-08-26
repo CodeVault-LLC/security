@@ -25,7 +25,7 @@ export const UpdateOrganizationSettings = Type.Object({
   ),
 });
 export const OrganizationSecurityPolicy = Type.Object({
-  mfaRequired: Type.Literal(true),
+  mfaRequired: Type.Boolean(),
   inviteTtlHours: Type.Integer(),
   sessionIdleMinutes: Type.Integer(),
   sessionAbsoluteHours: Type.Integer(),
@@ -34,7 +34,7 @@ export const OrganizationSecurityPolicy = Type.Object({
   updatedAt: Timestamp,
 });
 export const UpdateOrganizationSecurityPolicy = Type.Object({
-  mfaRequired: Type.Optional(Type.Literal(true)),
+  mfaRequired: Type.Optional(Type.Boolean()),
   inviteTtlHours: Type.Optional(Type.Integer({ minimum: 1, maximum: 72 })),
   sessionIdleMinutes: Type.Optional(Type.Integer({ minimum: 5, maximum: 120 })),
   sessionAbsoluteHours: Type.Optional(

@@ -148,6 +148,8 @@ describe("completed report exports", () => {
     const user = userEvent.setup();
     renderReport();
 
+    await user.click(screen.getByRole("button", { name: "Report details" }));
+    await user.click(screen.getByRole("menuitem", { name: "Show exports" }));
     await user.click(screen.getByRole("button", { name: "Download" }));
 
     expect(reportsBridge.downloadPdf).toHaveBeenCalledWith(ARTIFACT_ID);
@@ -157,6 +159,31 @@ describe("completed report exports", () => {
 });
 
 describe("report preview", () => {
+  it("opens on the writing buffer with secondary panels hidden", () => {
+    useSession.getState().signIn(
+      {
+        ...actor,
+        role: "VIEWER",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        lastLoginAt: null,
+      },
+      null,
+    );
+
+    renderReport({
+      ...report,
+      sectionCount: 1,
+      approvedSectionCount: 1,
+      sections: [section],
+    });
+
+    expect(
+      screen.getByRole("textbox", { name: "Summary report section" }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Full screen" })).toBeNull();
+    expect(screen.queryByLabelText("Report sections")).toBeNull();
+  });
+
   it("opens a focused full-screen reading view and closes with Escape", async () => {
     const user = userEvent.setup();
 
@@ -176,6 +203,8 @@ describe("report preview", () => {
       approvedSectionCount: 1,
       sections: [section],
     });
+
+    await user.click(screen.getByRole("button", { name: "Preview" }));
 
     const trigger = screen.getByRole("button", { name: "Full screen" });
 

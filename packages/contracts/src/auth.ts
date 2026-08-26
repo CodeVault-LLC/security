@@ -12,11 +12,12 @@ import { ActorSummary, Timestamp, Uuid, UserRoleSchema } from "./common.js";
 export const LoginRequest = Type.Object({
   email: Type.String({ format: "email", maxLength: 320 }),
   password: Type.String({ minLength: 12, maxLength: 512 }),
+  rememberMe: Type.Optional(Type.Boolean({ default: false })),
 });
 
 export type LoginRequest = Static<typeof LoginRequest>;
 
-export const LoginStartResponse = Type.Object({
+const LoginChallengeResponse = Type.Object({
   challengeToken: Type.String({ minLength: 32 }),
   challenge: Type.Union([
     Type.Literal("MFA_REQUIRED"),
@@ -28,7 +29,6 @@ export const LoginStartResponse = Type.Object({
   ),
   expiresAt: Timestamp,
 });
-export type LoginStartResponse = Static<typeof LoginStartResponse>;
 
 export const LoginCompleteRequest = Type.Object({
   challengeToken: Type.String({ minLength: 32, maxLength: 512 }),
@@ -66,6 +66,12 @@ export const LoginResponse = Type.Object({
 });
 
 export type LoginResponse = Static<typeof LoginResponse>;
+
+export const LoginStartResponse = Type.Union([
+  LoginChallengeResponse,
+  LoginResponse,
+]);
+export type LoginStartResponse = Static<typeof LoginStartResponse>;
 
 const WebAuthnTransport = Type.Union([
   Type.Literal("ble"),

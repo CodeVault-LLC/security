@@ -38,8 +38,8 @@ import { cn } from "../lib/cn.js";
  */
 
 const badgeBase =
-  "inline-flex items-center gap-1 rounded-(--cv-radius) border px-1.5 py-0.5 " +
-  "text-[11px] font-medium leading-4 whitespace-nowrap";
+  "inline-flex min-h-5 items-center gap-1 rounded-full border px-1.5 py-0 " +
+  "text-[11px] font-medium leading-none whitespace-nowrap [&>svg]:size-3";
 
 const severityStyles: Record<SeverityRating, string> = {
   CRITICAL:

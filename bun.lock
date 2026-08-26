@@ -51,6 +51,7 @@
         "@codevault/markdown": "workspace:*",
         "@codevault/standards": "workspace:*",
         "@codevault/ui": "workspace:*",
+        "@fontsource/lilex": "5.3.0",
         "@types/mailparser": "3.4.6",
         "cmdk": "^1.1.1",
         "fflate": "^0.8.2",
@@ -584,6 +585,8 @@
     "@fontsource-variable/geist": ["@fontsource-variable/geist@5.3.0", "", {}, "sha512-j0m+vLQuG5XAYoHtGCVu0spvlGreR3EzpECUVzkFmI1mTVnAO38l/NEPDCFgZ177JxzYJCLSmTQibIiYPilGrA=="],
 
     "@fontsource-variable/geist-mono": ["@fontsource-variable/geist-mono@5.3.0", "", {}, "sha512-vBbuwDEo9AkrqADMXOrlAR3DFcJi4/JxeuU43FoiQERnNwsfXNnvxvReZG02cQKmyk4DZkZdBZX3oTDvy2zBAw=="],
+
+    "@fontsource/lilex": ["@fontsource/lilex@5.3.0", "", {}, "sha512-iSmg+PfNAlXotUVkXvxRhHaHC2OQeFRjWurb3AnJWPTmw+M6JZKIvj0MfwYjkdL5mCw5AiBSE2UxPAhN5Idh/g=="],
 
     "@hexagon/base64": ["@hexagon/base64@1.1.28", "", {}, "sha512-lhqDEAvWixy3bZ+UOYbPwUbBkwBq5C1LAJ/xPC8Oi+lL54oyakv/npbA0aU2hgCsx/1NUd4IBvV03+aUBWxerw=="],
 

@@ -24,7 +24,7 @@ function recoveryCodes(): string[] {
   );
 }
 
-/** One-time MFA enrollment for accounts that predate mandatory MFA. */
+/** One-time MFA enrollment when an organization requires a second factor. */
 export async function registerMigratedEnrollmentRoutes(
   app: AppInstance,
 ): Promise<void> {

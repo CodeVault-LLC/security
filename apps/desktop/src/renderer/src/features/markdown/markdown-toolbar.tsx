@@ -102,13 +102,13 @@ export function MarkdownToolbar({
   disabled = false,
 }: MarkdownToolbarProps): React.JSX.Element {
   return (
-    <div className="flex items-center overflow-x-auto border-b border-border px-1.5 py-1">
+    <div className="flex items-center overflow-x-auto border-b border-border bg-surface-raised/35 px-2 py-1">
       <div className="flex min-w-max flex-1 items-center">
         {GROUPS.map((group, index) => (
           <div key={index} className="flex shrink-0 items-center">
             {index === 2 ? (
               <>
-                <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+                <span aria-hidden className="mx-1 h-4 w-px bg-border" />
                 <button
                   type="button"
                   disabled={disabled}
@@ -116,7 +116,7 @@ export function MarkdownToolbar({
                   aria-label="Insert"
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={onInsertMenu}
-                  className="flex h-10 shrink-0 items-center gap-1 rounded-(--cv-radius) px-2.5 text-[11px] text-text-muted hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-focus disabled:pointer-events-none disabled:opacity-40"
+                  className="flex h-8 shrink-0 items-center gap-1 rounded-(--cv-radius) px-2 text-[11px] text-text-muted hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-focus disabled:pointer-events-none disabled:opacity-40"
                 >
                   <Plus aria-hidden className="size-4" />
                   Insert
@@ -124,7 +124,7 @@ export function MarkdownToolbar({
               </>
             ) : null}
             {index === 0 ? null : (
-              <span aria-hidden className="mx-1 h-5 w-px bg-border" />
+              <span aria-hidden className="mx-1 h-4 w-px bg-border" />
             )}
             {group.map((action) => (
               <button
@@ -141,7 +141,7 @@ export function MarkdownToolbar({
                 // selection the author can still see.
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onCommand(action.command)}
-                className="flex size-10 items-center justify-center rounded-(--cv-radius) text-text-muted hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-focus disabled:pointer-events-none disabled:opacity-40"
+                className="flex size-8 items-center justify-center rounded-(--cv-radius) text-text-muted hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-focus disabled:pointer-events-none disabled:opacity-40"
               >
                 <action.icon aria-hidden className="size-4" />
               </button>

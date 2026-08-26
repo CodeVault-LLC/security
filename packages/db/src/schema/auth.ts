@@ -107,7 +107,7 @@ export const sessions = pgTable(
     remembered: boolean("remembered").notNull().default(false),
     mfaVerifiedAt: timestampColumn("mfa_verified_at").notNull(),
     mfaMethod: text("mfa_method")
-      .$type<"TOTP" | "WEBAUTHN">()
+      .$type<"PASSWORD" | "TOTP" | "WEBAUTHN">()
       .notNull()
       .default("TOTP"),
     createdAt: createdAt(),

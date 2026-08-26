@@ -21,10 +21,10 @@ const RELATIVE_UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
 
 const relativeFormatter = new Intl.RelativeTimeFormat(undefined, {
   numeric: "auto",
-  style: "narrow",
+  style: "long",
 });
 
-/** "3d ago", "in 2 weeks". Past and future both read naturally. */
+/** "3 days ago", "in 2 weeks". Past and future both read naturally. */
 export function formatDistanceToNowStrict(timestamp: string): string {
   const target = new Date(timestamp).getTime();
 

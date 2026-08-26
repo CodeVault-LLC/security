@@ -80,6 +80,63 @@ describe("terminal MCP login", () => {
     );
     expect(JSON.stringify(fetch.mock.calls)).not.toContain(mcpToken);
   });
+
+  it("uses the password-authenticated session when organization MFA is disabled", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "codevault-mcp-login-"));
+    const configFile = join(directory, "mcp.json");
+    const sessionToken = "s".repeat(64);
+    const mcpToken = `cv_mcp_${"m".repeat(48)}`;
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          token: sessionToken,
+          expiresAt: "2026-08-20T10:00:00.000Z",
+          user: {
+            id: "00000000-0000-4000-8000-000000000001",
+            email: "researcher@example.test",
+            displayName: "Researcher",
+            role: "MEMBER",
+            createdAt: "2026-08-19T00:00:00.000Z",
+            lastLoginAt: null,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          access: {
+            id: "00000000-0000-4000-8000-000000000003",
+            name: "MCP on test-host",
+            createdAt: "2026-08-19T10:00:00.000Z",
+            lastUsedAt: null,
+          },
+          token: mcpToken,
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+    await login({
+      baseUrl: "http://127.0.0.1:4310",
+      configFile,
+      email: "researcher@example.test",
+      password: "a password that is not stored",
+      totp: "",
+      fetch,
+    });
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      "http://127.0.0.1:4310/v1/settings/mcp-access",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          authorization: `Bearer ${sessionToken}`,
+        }),
+      }),
+    );
+    expect(JSON.parse(await readFile(configFile, "utf8"))).toMatchObject({
+      token: mcpToken,
+    });
+  });
 });
 
 function jsonResponse(body: unknown): Response {

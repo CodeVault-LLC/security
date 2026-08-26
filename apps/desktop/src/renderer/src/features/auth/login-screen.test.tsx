@@ -1,8 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LoginScreen } from "./login-screen.js";
+import { useSession } from "../../lib/session.js";
 
 const authBridge = vi.hoisted(() => ({
   preflight: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock("../../lib/bridge.js", () => ({
 }));
 
 function resetBridge(): void {
+  useSession.getState().signOut();
   authBridge.preflight.mockReset();
   authBridge.preflight.mockResolvedValue({
     ok: true,
@@ -133,6 +135,40 @@ describe("LoginScreen session persistence", () => {
     expect(
       screen.getByText("Keeps you signed in on this device for up to 7 days."),
     ).toBeTruthy();
+  });
+
+  it("signs in directly when the organization does not require MFA", async () => {
+    const user = userEvent.setup();
+    authBridge.loginStart.mockResolvedValue({
+      ok: true,
+      data: {
+        user: {
+          id: "00000000-0000-4000-8000-000000000001",
+          email: "researcher@example.test",
+          displayName: "Researcher",
+          role: "MEMBER",
+          createdAt: "2026-08-25T08:00:00.000Z",
+          lastLoginAt: null,
+        },
+        persistent: false,
+        storageWarning: null,
+      },
+    });
+    render(<LoginScreen />);
+
+    await user.type(
+      screen.getByRole("textbox", { name: "Organization email" }),
+      "researcher@example.test",
+    );
+    await user.type(screen.getByLabelText("Password"), "long-test-password");
+    await screen.findByText(/Connected to CodeVault Server/u);
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+
+    await waitFor(() => {
+      expect(useSession.getState().status).toBe("SIGNED_IN");
+    });
+    expect(useSession.getState().user?.email).toBe("researcher@example.test");
+    expect(screen.queryByText(/Authenticator code/u)).toBeNull();
   });
 });
 

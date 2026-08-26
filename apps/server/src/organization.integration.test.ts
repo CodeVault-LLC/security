@@ -88,6 +88,34 @@ describeIntegration("organization and personal settings APIs", () => {
     expect(allowed.json<{ recentMfaMinutes: number }>().recentMfaMinutes).toBe(
       12,
     );
+
+    const disabled = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/organization/security",
+      headers: admin.headers,
+      payload: { mfaRequired: false },
+    });
+    expect(disabled.statusCode).toBe(200);
+    expect(disabled.json<{ mfaRequired: boolean }>().mfaRequired).toBe(false);
+
+    await harness.dbHandle.db
+      .update(schema.sessions)
+      .set({ mfaVerifiedAt: new Date(0).toISOString() })
+      .where(eq(schema.sessions.tokenHash, hashToken(admin.token)));
+    const withoutMfaGate = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/organization/security",
+      headers: admin.headers,
+      payload: { mfaRequired: true },
+    });
+    expect(withoutMfaGate.statusCode).toBe(200);
+    expect(withoutMfaGate.json<{ mfaRequired: boolean }>().mfaRequired).toBe(
+      true,
+    );
+    await harness.dbHandle.db
+      .update(schema.sessions)
+      .set({ mfaVerifiedAt: new Date().toISOString() })
+      .where(eq(schema.sessions.tokenHash, hashToken(admin.token)));
   });
 
   it("limits profile changes to the current user's display name", async () => {

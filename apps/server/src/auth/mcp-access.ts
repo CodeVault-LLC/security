@@ -139,7 +139,7 @@ export async function resolveMcpAccess(
         sessionIdleMinutes: row.sessionIdleMinutes,
         sessionAbsoluteHours: row.sessionAbsoluteHours,
         recentMfaMinutes: row.recentMfaMinutes,
-        mfaRequired: row.mfaRequired as true,
+        mfaRequired: row.mfaRequired,
         mcpEnabled: row.mcpEnabled,
       },
     },

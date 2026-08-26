@@ -62,8 +62,8 @@ export function MigratedEnrollment({
       >
         <h1 className="text-[15px] font-semibold">Protect your account</h1>
         <p className="mt-2 text-[12px] text-text-muted">
-          This account predates mandatory MFA. Add the secret below to your
-          authenticator, then enter its six-digit code.
+          Your organization requires multi-factor authentication. Add the secret
+          below to your authenticator, then enter its six-digit code.
         </p>
         <Label htmlFor="migration-secret" className="mt-4 block">
           Authenticator secret

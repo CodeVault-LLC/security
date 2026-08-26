@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-24T22:22:05Z",
+  "title": "Design System: CodeVault Security",
+  "extensions": {
+    "colorMeta": {
+      "action-blue": {
+        "role": "primary",
+        "displayName": "Action Blue",
+        "canonical": "oklch(52% 0.16 255)",
+        "tonalRamp": [
+          "oklch(15% 0.08 255)",
+          "oklch(27% 0.12 255)",
+          "oklch(39% 0.15 255)",
+          "oklch(52% 0.16 255)",
+          "oklch(64% 0.14 255)",
+          "oklch(76% 0.10 255)",
+          "oklch(87% 0.05 255)",
+          "oklch(95% 0.02 255)"
+        ]
+      },
+      "workspace-canvas": {
+        "role": "neutral",
+        "displayName": "Workspace Canvas",
+        "canonical": "oklch(98.2% 0.003 250)",
+        "tonalRamp": [
+          "oklch(15% 0.003 250)",
+          "oklch(27% 0.003 250)",
+          "oklch(39% 0.003 250)",
+          "oklch(52% 0.003 250)",
+          "oklch(64% 0.003 250)",
+          "oklch(76% 0.003 250)",
+          "oklch(88% 0.003 250)",
+          "oklch(98.2% 0.003 250)"
+        ]
+      },
+      "working-surface": {
+        "role": "neutral",
+        "displayName": "Working Surface",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(27% 0 0)",
+          "oklch(39% 0 0)",
+          "oklch(52% 0 0)",
+          "oklch(64% 0 0)",
+          "oklch(76% 0 0)",
+          "oklch(88% 0 0)",
+          "oklch(100% 0 0)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Route Headline",
+        "purpose": "Names the current workspace route."
+      },
+      "body": {
+        "displayName": "Interface Body",
+        "purpose": "Dense operational content and supporting copy."
+      },
+      "editor": {
+        "displayName": "Editor Buffer",
+        "purpose": "Long-form report writing and markdown content."
+      }
+    },
+    "shadows": [
+      {
+        "name": "surface-ambient",
+        "value": "0 1px 2px oklch(0 0 0 / 0.025)",
+        "purpose": "Barely lifts cards from the workspace canvas."
+      },
+      {
+        "name": "action-small",
+        "value": "0 1px 2px oklch(0 0 0 / 0.12)",
+        "purpose": "Separates the current primary action from dense rows."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "100ms ease",
+        "purpose": "Hover, color, and press feedback."
+      },
+      {
+        "name": "popover-enter",
+        "value": "120ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Scale-and-fade entry for transient menus."
+      }
+    ],
+    "breakpoints": [
+      { "name": "compact-workbench", "value": "1100px" },
+      { "name": "single-report-pane", "value": "767px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single clearest executable action in a local decision area.",
+      "html": "<button class=\"ds-btn-primary\">Review finding</button>",
+      "css": ".ds-btn-primary { height: 36px; padding: 0 12px; border: 0; border-radius: var(--cv-radius, 6px); background: var(--cv-accent, oklch(52% 0.16 255)); color: var(--cv-accent-contrast, white); font: 500 13px/1 Geist, sans-serif; box-shadow: 0 1px 2px oklch(0 0 0 / .12); transition: background-color 100ms ease, transform 75ms ease; } .ds-btn-primary:hover { background: var(--cv-accent-hover, oklch(46% 0.17 255)); } .ds-btn-primary:focus-visible { outline: 2px solid var(--cv-focus, oklch(60% 0.18 255)); outline-offset: 1px; } .ds-btn-primary:active { transform: scale(.98); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "A neutral utility or supporting action.",
+      "html": "<button class=\"ds-btn-secondary\">Dismiss</button>",
+      "css": ".ds-btn-secondary { height: 36px; padding: 0 12px; border: 1px solid var(--cv-border-strong, oklch(74% .01 250)); border-radius: var(--cv-radius, 6px); background: var(--cv-surface, white); color: var(--cv-text, oklch(22% .01 250)); font: 500 13px/1 Geist, sans-serif; transition: background-color 100ms ease; } .ds-btn-secondary:hover { background: var(--cv-surface-hover, oklch(94.8% .006 250)); } .ds-btn-secondary:focus-visible { outline: 2px solid var(--cv-focus, oklch(60% .18 255)); outline-offset: 1px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "A compact field with explicit focus and validation states.",
+      "html": "<input class=\"ds-input\" value=\"CVE-2026-0001\" aria-label=\"Identifier\">",
+      "css": ".ds-input { height: 36px; padding: 0 12px; border: 1px solid var(--cv-border, oklch(88.5% .007 250)); border-radius: var(--cv-radius, 6px); background: var(--cv-surface, white); color: var(--cv-text, oklch(22% .01 250)); font: 400 13px/1.5 Geist, sans-serif; } .ds-input:hover { border-color: var(--cv-border-strong, oklch(74% .01 250)); } .ds-input:focus-visible { border-color: var(--cv-focus, oklch(60% .18 255)); outline: 2px solid var(--cv-focus, oklch(60% .18 255)); outline-offset: 1px; }"
+    },
+    {
+      "name": "Severity Badge",
+      "kind": "chip",
+      "refersTo": "status-badge",
+      "description": "A text-and-icon status signal whose meaning survives color loss.",
+      "html": "<span class=\"ds-badge-critical\" role=\"status\">! CRITICAL</span>",
+      "css": ".ds-badge-critical { display: inline-flex; min-height: 20px; align-items: center; padding: 0 6px; border: 1px solid color-mix(in oklab, var(--cv-severity-critical, oklch(44% .21 20)) 40%, transparent); border-radius: 999px; background: color-mix(in oklab, var(--cv-severity-critical, oklch(44% .21 20)) 12%, transparent); color: var(--cv-severity-critical, oklch(44% .21 20)); font: 500 11px/1 Geist, sans-serif; }"
+    },
+    {
+      "name": "Priority Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "A high-priority work region with a stronger structural outline.",
+      "html": "<section class=\"ds-priority-card\"><header>Needs attention</header><p>Awaiting peer review</p></section>",
+      "css": ".ds-priority-card { overflow: hidden; border: 1px solid var(--cv-border-strong, oklch(74% .01 250)); border-radius: var(--cv-radius-lg, 8px); background: var(--cv-surface, white); color: var(--cv-text, oklch(22% .01 250)); box-shadow: 0 1px 2px oklch(0 0 0 / .025); font: 400 13px/1.5 Geist, sans-serif; } .ds-priority-card header { min-height: 44px; padding: 10px 14px; border-bottom: 1px solid var(--cv-border, oklch(88.5% .007 250)); font-weight: 600; } .ds-priority-card p { margin: 0; padding: 12px 14px; }"
+    },
+    {
+      "name": "Selected Navigation Item",
+      "kind": "nav",
+      "description": "A compact active destination using tonal selection and a blue icon cue.",
+      "html": "<a class=\"ds-nav-active\" href=\"#\"><svg viewBox=\"0 0 24 24\" aria-hidden=\"true\"><path d=\"M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"/></svg>Home</a>",
+      "css": ".ds-nav-active { display: flex; min-height: 36px; align-items: center; gap: 8px; padding: 0 8px; border-radius: var(--cv-radius, 6px); background: var(--cv-surface-raised, oklch(96.8% .004 250)); color: var(--cv-text, oklch(22% .01 250)); box-shadow: inset 0 0 0 1px var(--cv-border, oklch(88.5% .007 250)); font: 500 13px/1 Geist, sans-serif; text-decoration: none; } .ds-nav-active svg { width: 16px; height: 16px; color: var(--cv-accent, oklch(52% .16 255)); } .ds-nav-active:focus-visible { outline: 2px solid var(--cv-focus, oklch(60% .18 255)); outline-offset: 1px; }"
+    },
+    {
+      "name": "Resizable Divider",
+      "kind": "custom",
+      "description": "A visible but quiet nine-pixel resize target with a persistent grip.",
+      "html": "<div class=\"ds-resizer\" role=\"separator\" tabindex=\"0\" aria-orientation=\"vertical\"><span></span></div>",
+      "css": ".ds-resizer { display: flex; width: 9px; height: 120px; cursor: col-resize; justify-content: center; outline: none; } .ds-resizer span { position: relative; width: 1px; height: 100%; background: var(--cv-border, oklch(88.5% .007 250)); } .ds-resizer span::after { position: absolute; top: 50%; left: 50%; width: 3px; height: 28px; content: \"\"; transform: translate(-50%, -50%); border-radius: 999px; background: var(--cv-border-strong, oklch(74% .01 250)); box-shadow: 0 0 0 2px var(--cv-surface, white); } .ds-resizer:hover span, .ds-resizer:focus-visible span { width: 2px; background: var(--cv-accent, oklch(52% .16 255)); } .ds-resizer:hover span::after, .ds-resizer:focus-visible span::after { background: var(--cv-accent, oklch(52% .16 255)); }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Research Workbench",
+    "overview": "CodeVault Security is a calm professional editor built around sensitive, high-consequence records. Navigation and utilities remain available at the edges while the active record or action queue receives the clearest surface. Cool neutral layers, thin structural borders, restrained blue actions, compact controls, and exact typography keep decoration subordinate to evidence and workflow state.",
+    "keyCharacteristics": [
+      "Editor-like navigation with persistent, keyboard-accessible resizing and collapse.",
+      "Action-first hierarchy with one explicit primary action in the first viewport.",
+      "Cool neutral surfaces with a rare blue accent and semantic status colors.",
+      "Compact, aligned controls and status signals that remain legible in dense lists.",
+      "Progressive disclosure for secondary analysis and advanced editing controls."
+    ],
+    "rules": [
+      {
+        "name": "The One Action Rule",
+        "body": "Use blue for the single clearest executable action in a local decision area; keep neighboring utilities neutral.",
+        "section": "colors"
+      },
+      {
+        "name": "The Meaning Survives Color Rule",
+        "body": "Severity, connection, validation, and permission states always include text, an icon, or both.",
+        "section": "colors"
+      },
+      {
+        "name": "The Content Owns the Center Rule",
+        "body": "Navigation and utilities may resize or collapse; the active research record must not.",
+        "section": "layout"
+      },
+      {
+        "name": "The Structural Depth Rule",
+        "body": "Use borders and surface changes for persistent hierarchy; reserve stronger shadow for overlays or the current primary action.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do place the next permitted action beside the record that needs it and name the consequence.",
+      "Do keep helper, validation, loading, offline, and disabled states explicit.",
+      "Do use progressive disclosure for secondary metrics and advanced editor controls.",
+      "Do preserve long identifiers, keyboard navigation, and meaning in grayscale."
+    ],
+    "donts": [
+      "Don't use decorative gradients, oversized branding, or competing accent actions in application chrome.",
+      "Don't repeat activity detail when it says the same thing as the title.",
+      "Don't reduce timestamps to cryptic narrow-unit notation.",
+      "Don't place macOS window controls over branding or interactive controls.",
+      "Don't infer permission or executability from color alone."
+    ]
+  }
+}

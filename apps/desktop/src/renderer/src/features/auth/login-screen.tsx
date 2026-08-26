@@ -175,6 +175,12 @@ export function LoginScreen(): React.JSX.Element {
         setError(outcome.message);
         return;
       }
+      if ("user" in outcome.data) {
+        setPassword("");
+        window.localStorage.setItem(DEFAULT_SERVER_KEY, normalizedServer);
+        signIn(outcome.data.user, outcome.data.storageWarning);
+        return;
+      }
       if (outcome.data.challenge === "ENROLLMENT_REQUIRED") {
         const setup = await bridge().auth.enrollmentStart();
         if (!setup.ok) {
