@@ -87,14 +87,14 @@ export function parseCaptureArguments(
   if (sourceTime !== undefined && !isTimestamp(sourceTime)) {
     throw new Error("--source-time must be an ISO 8601 timestamp.");
   }
+  const suppliedName = values.get("--name");
+  const name = suppliedName === undefined ? undefined : safeFilename(suppliedName);
 
   return {
     caseId,
     ...(findingId === undefined ? {} : { findingId }),
     file: values.get("--file") ?? null,
-    ...(values.get("--name") === undefined
-      ? {}
-      : { name: values.get("--name")! }),
+    ...(name === undefined ? {} : { name }),
     ...(values.get("--title") === undefined
       ? {}
       : { title: values.get("--title")! }),
@@ -298,7 +298,7 @@ async function hashFile(path: string): Promise<string> {
 
 function safeFilename(value: string): string {
   const name = basename(value).replace(/[\r\n\0]/gu, "_");
-  if (name === "" || name.length > 300)
+  if (name === "" || name === "." || name === ".." || name.length > 300)
     throw new Error("The capture name must be 1 to 300 characters.");
   return name;
 }

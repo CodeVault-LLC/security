@@ -96,4 +96,15 @@ describe("capture arguments", () => {
       ]).sourceTime,
     ).toBe("2028-02-29T09:30:00+01:00");
   });
+
+  it.each([".", "..", ""])("rejects reserved capture name %j", (name) => {
+    expect(() =>
+      parseCaptureArguments([
+        "--case",
+        "018f2f56-7c9a-7abc-8def-0123456789ab",
+        "--name",
+        name,
+      ]),
+    ).toThrow("The capture name must be 1 to 300 characters");
+  });
 });
