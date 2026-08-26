@@ -23,6 +23,7 @@ import type {
   ReportPreview,
   ReportSection,
 } from "@codevault/contracts";
+import { allowedTlpForAudience, type TlpLabel } from "@codevault/standards";
 import {
   AiProposalPanel,
   Button,
@@ -36,7 +37,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   LoadingState,
   Mono,
@@ -177,6 +183,20 @@ export function ReportDetailRoute({
       body: { expectedRevision: report.data?.revision ?? 1 },
     }),
     () => [queryKeys.report(reportId), queryKeys.dashboard],
+  );
+
+  const updateTlp = useApiMutation<ReportDetail, TlpLabel>(
+    (tlp) => ({
+      path: `/v1/reports/${reportId}`,
+      method: "PATCH",
+      body: { tlp, expectedRevision: report.data?.revision ?? 1 },
+    }),
+    (updated) => [
+      queryKeys.report(reportId),
+      queryKeys.reportLint(reportId),
+      queryKeys.reportPreview(reportId),
+      queryKeys.reports(updated.caseId),
+    ],
   );
 
   const exportReport = useApiMutation<ReportExport>(
@@ -393,6 +413,34 @@ export function ReportDetailRoute({
               {canEdit ? (
                 <>
                   <DropdownMenuSeparator />
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger disabled={updateTlp.isPending}>
+                      TLP marking · {data.tlp}
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                      <DropdownMenuLabel>
+                        Who may receive this report?
+                      </DropdownMenuLabel>
+                      <DropdownMenuRadioGroup value={data.tlp}>
+                        {allowedTlpForAudience(data.audience).map((label) => (
+                          <DropdownMenuRadioItem
+                            key={label}
+                            value={label}
+                            onClick={() => {
+                              if (label !== data.tlp) {
+                                updateTlp.mutate(label, {
+                                  onError: (mutationError) =>
+                                    setError(mutationError.message),
+                                });
+                              }
+                            }}
+                          >
+                            {label}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
                   <DropdownMenuItem
                     disabled={
                       reportBlocked ||

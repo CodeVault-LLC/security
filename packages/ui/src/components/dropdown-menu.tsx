@@ -6,6 +6,7 @@ import { cn } from "../lib/cn.js";
 
 export const DropdownMenu = DropdownMenuPrimitive.Root;
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
+export const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
 export const DropdownMenuContent = forwardRef<
   React.ComponentRef<typeof DropdownMenuPrimitive.Content>,
@@ -94,6 +95,31 @@ export const DropdownMenuCheckboxItem = forwardRef<
       </span>
       {children}
     </DropdownMenuPrimitive.CheckboxItem>
+  );
+});
+
+export const DropdownMenuRadioItem = forwardRef<
+  React.ComponentRef<typeof DropdownMenuPrimitive.RadioItem>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
+>(function DropdownMenuRadioItem({ children, className, ...props }, ref) {
+  return (
+    <DropdownMenuPrimitive.RadioItem
+      ref={ref}
+      className={cn(
+        "relative flex min-h-9 cursor-default select-none items-center rounded-(--cv-radius) py-1.5 pl-8 pr-2 outline-none",
+        "text-text-muted data-[highlighted]:bg-surface-hover data-[highlighted]:text-text",
+        "data-[disabled]:cursor-not-allowed data-[disabled]:opacity-45",
+        className,
+      )}
+      {...props}
+    >
+      <span className="absolute left-2 flex size-3.5 items-center justify-center">
+        <DropdownMenuPrimitive.ItemIndicator>
+          <Check aria-hidden className="size-3.5" />
+        </DropdownMenuPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </DropdownMenuPrimitive.RadioItem>
   );
 });
 
