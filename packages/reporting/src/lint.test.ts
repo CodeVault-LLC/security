@@ -254,6 +254,21 @@ describe("public-report hygiene", () => {
     ).toBe(false);
   });
 
+  it("does not allow a private address by substring", () => {
+    const result = lintReport(
+      input({
+        sections: [section("Reproduced against 192.168.1.50.")],
+        allowedPrivateAddresses: ["192.168.1.5"],
+      }),
+    );
+
+    expect(
+      result.findings.some(
+        (finding) => finding.ruleId === "private-address-in-public",
+      ),
+    ).toBe(true);
+  });
+
   it("flags an internal hostname", () => {
     const result = lintReport(
       input({ sections: [section("Tested on build01.corp.")] }),
