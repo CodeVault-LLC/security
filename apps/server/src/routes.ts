@@ -21,6 +21,7 @@ import { registerReportRoutes } from "./modules/reports/routes.js";
 import { registerRemediationRoutes } from "./modules/remediation/routes.js";
 import { registerSearchRoutes } from "./modules/search/routes.js";
 import { registerSubmissionRoutes } from "./modules/submissions/routes.js";
+import { registerVendorResponseSlaRoutes } from "./modules/submissions/response-sla.js";
 import { registerCorrespondenceRoutes } from "./modules/submissions/correspondence.js";
 import { registerSubmissionLifecycleRoutes } from "./modules/submissions/lifecycle.js";
 import { registerUserRoutes } from "./modules/users/routes.js";
@@ -51,6 +52,7 @@ export async function registerRoutes(app: AppInstance): Promise<void> {
   await registerAssetRegistryRoutes(app);
   await registerVendorRoutes(app);
   await registerSubmissionRoutes(app);
+  await registerVendorResponseSlaRoutes(app);
   await registerCorrespondenceRoutes(app);
   await registerSubmissionLifecycleRoutes(app);
   await registerMailRoutes(app);

@@ -19,6 +19,7 @@ export * from "./organization.js";
 export * from "./prior-art.js";
 export * from "./reports.js";
 export * from "./remediation.js";
+export * from "./response-sla.js";
 export * from "./registries.js";
 export * from "./search.js";
 export * from "./submissions.js";

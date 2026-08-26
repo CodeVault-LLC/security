@@ -131,6 +131,8 @@ export const queryKeys = {
   submission: (id: string) => ["submission", id] as const,
   submissionValidation: (id: string) =>
     ["submission", id, "validation"] as const,
+  vendorResponseSla: (id: string) =>
+    ["submission", id, "vendor-response-sla"] as const,
   correspondence: (id: string) => ["submission", id, "correspondence"] as const,
   priorArt: (findingId: string) => ["prior-art", findingId] as const,
   aiRuns: (filters: Record<string, unknown>) => ["ai-runs", filters] as const,
