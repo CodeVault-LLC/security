@@ -226,6 +226,13 @@ const api: CodeVaultDesktopApi = {
         IPC_CHANNELS.correspondenceDecrypt,
         messageId,
       ) as ReturnType<CodeVaultDesktopApi["correspondence"]["decrypt"]>,
+    exportTranscript: (submissionId: string, markdown: string) =>
+      ipcRenderer.invoke(IPC_CHANNELS.correspondenceExportTranscript, {
+        submissionId,
+        markdown,
+      }) as ReturnType<
+        CodeVaultDesktopApi["correspondence"]["exportTranscript"]
+      >,
   },
 
   ai: {
