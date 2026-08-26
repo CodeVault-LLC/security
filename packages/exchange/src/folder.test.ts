@@ -128,4 +128,24 @@ describe("previewFolder", () => {
     expect(preview.files[0]?.disposition).toBe("MAPPING_ERROR");
     expect(preview.errors[0]).toContain("8 to 200 characters");
   });
+
+  it("rejects invalid CWE identifiers in Markdown front matter", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codevault-folder-"));
+    await writeFile(
+      join(root, "invalid-cwe.md"),
+      [
+        "---",
+        "title: Invalid CWE metadata",
+        "cwe: not-a-cwe",
+        "---",
+        "Body",
+      ].join("\n"),
+    );
+
+    const preview = await previewFolder(root);
+
+    expect(preview.candidates).toEqual([]);
+    expect(preview.files[0]?.disposition).toBe("MAPPING_ERROR");
+    expect(preview.errors[0]).toContain("valid CWE identifier");
+  });
 });
