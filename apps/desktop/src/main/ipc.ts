@@ -1023,8 +1023,16 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
   });
 
-  handle(IPC_CHANNELS.reportsDownloadPdf, async (payload) => {
-    if (typeof payload !== "string" || !/^[0-9a-f-]{36}$/iu.test(payload)) {
+  handle(IPC_CHANNELS.reportsDownloadExport, async (payload) => {
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      !("artifactId" in payload) ||
+      typeof payload.artifactId !== "string" ||
+      !/^[0-9a-f-]{36}$/iu.test(payload.artifactId) ||
+      !("format" in payload) ||
+      (payload.format !== "PDF" && payload.format !== "MARKDOWN")
+    ) {
       return failure(new Error("invalid report download request"));
     }
 
@@ -1033,13 +1041,21 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
 
     try {
       const artifact = await apiClient.request<ArtifactDownload>(
-        `/v1/artifacts/${payload}`,
+        `/v1/artifacts/${payload.artifactId}`,
       );
-      const filename = safePdfFilename(artifact.filename);
+      const filename = safeReportExportFilename(
+        artifact.filename,
+        payload.format,
+      );
+      const markdown = payload.format === "MARKDOWN";
       const destination = await dialog.showSaveDialog(window, {
-        title: "Save report PDF",
+        title: markdown ? "Save report Markdown" : "Save report PDF",
         defaultPath: filename,
-        filters: [{ name: "PDF document", extensions: ["pdf"] }],
+        filters: [
+          markdown
+            ? { name: "Markdown document", extensions: ["md"] }
+            : { name: "PDF document", extensions: ["pdf"] },
+        ],
         properties: ["createDirectory", "showOverwriteConfirmation"],
       });
 
@@ -1689,13 +1705,18 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
   });
 }
 
-function safePdfFilename(filename: string): string {
+function safeReportExportFilename(
+  filename: string,
+  format: "PDF" | "MARKDOWN",
+): string {
   const leaf = filename.replaceAll("\\", "/").split("/").at(-1) ?? "";
   const safe = leaf.replace(/\p{Cc}/gu, "_").trim();
+  const extension = format === "PDF" ? ".pdf" : ".md";
 
-  return safe.toLowerCase().endsWith(".pdf") && safe.length > 4
+  return safe.toLowerCase().endsWith(extension) &&
+    safe.length > extension.length
     ? safe
-    : "report.pdf";
+    : `report${extension}`;
 }
 
 function desktopArchiveManifest(value: unknown): CvcaseManifest {

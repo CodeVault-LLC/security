@@ -161,7 +161,9 @@ export interface CaseArchiveExportResult {
   sha256: string | null;
 }
 
-export interface ReportPdfDownloadResult {
+export type ReportExportFormat = "PDF" | "MARKDOWN";
+
+export interface ReportExportDownloadResult {
   saved: boolean;
   sha256: string | null;
 }
@@ -270,10 +272,11 @@ export interface CodeVaultDesktopApi {
   };
 
   reports: {
-    /** Downloads and verifies a completed PDF export through a native picker. */
-    downloadPdf(
+    /** Downloads and verifies a completed report export through a native picker. */
+    downloadExport(
       artifactId: string,
-    ): Promise<ApiOutcome<ReportPdfDownloadResult>>;
+      format: ReportExportFormat,
+    ): Promise<ApiOutcome<ReportExportDownloadResult>>;
   };
 
   avatars: {
@@ -363,7 +366,7 @@ export const IPC_CHANNELS = {
   intakeSelectFolder: "intake:select-folder",
   caseArchivesExport: "case-archives:export",
   caseArchivesImport: "case-archives:import",
-  reportsDownloadPdf: "reports:download-pdf",
+  reportsDownloadExport: "reports:download-export",
   avatarsSelectAndUpload: "avatars:select-and-upload",
   avatarsLoad: "avatars:load",
   avatarsLoadUser: "avatars:load-user",

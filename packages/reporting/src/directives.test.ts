@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  applyResolvedDirectiveText,
   applyResolvedDirectives,
   isKnownDirectiveKind,
   parseDirectives,
@@ -104,6 +105,12 @@ describe("parseDirectives", () => {
         (item) => item.raw,
       ),
     ).toEqual(["[finding:FIND-1]"]);
+  });
+
+  it("handles long unmatched link and code delimiters in linear time", () => {
+    const markdown = `${"[".repeat(50_000)}${"`".repeat(50_000)}\n[finding:FIND-1]`;
+
+    expect(parseDirectives(markdown).at(-1)?.raw).toBe("[finding:FIND-1]");
   });
 
   it("records the line so a lint message can point at it", () => {
@@ -319,5 +326,19 @@ describe("applyResolvedDirectives", () => {
 
     expect(html).toContain("Literal cvdirective0x then");
     expect(html.match(/cv-evidence/g)).toHaveLength(1);
+  });
+});
+
+describe("applyResolvedDirectiveText", () => {
+  it("substitutes portable text into Markdown without leaking placeholders", async () => {
+    const resolution = await resolveDirectives(
+      "Evidence: [evidence:EVID-000003]",
+      "PUBLIC",
+      RESOLVER,
+    );
+
+    expect(
+      applyResolvedDirectiveText(resolution.markdown, resolution.substitutions),
+    ).toBe("Evidence: EVID-000003");
   });
 });

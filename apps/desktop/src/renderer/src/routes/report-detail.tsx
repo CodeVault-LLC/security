@@ -204,11 +204,11 @@ export function ReportDetailRoute({
     ],
   );
 
-  const exportReport = useApiMutation<ReportExport>(
-    () => ({
+  const exportReport = useApiMutation<ReportExport, ReportExport["format"]>(
+    (format) => ({
       path: `/v1/reports/${reportId}/exports`,
       method: "POST",
-      body: { format: "PDF" },
+      body: { format },
     }),
     () => [
       queryKeys.report(reportId),
@@ -532,7 +532,7 @@ export function ReportDetailRoute({
                     disabled={reportBlocked || exportReport.isPending}
                     title={actionBlockReason ?? "Export this report as PDF."}
                     onSelect={() =>
-                      exportReport.mutate(undefined, {
+                      exportReport.mutate("PDF", {
                         onError: (mutationError) =>
                           setError(mutationError.message),
                       })
@@ -540,6 +540,21 @@ export function ReportDetailRoute({
                   >
                     <Download aria-hidden className="size-4" />
                     Export PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={reportBlocked || exportReport.isPending}
+                    title={
+                      actionBlockReason ?? "Export this report as Markdown."
+                    }
+                    onSelect={() =>
+                      exportReport.mutate("MARKDOWN", {
+                        onError: (mutationError) =>
+                          setError(mutationError.message),
+                      })
+                    }
+                  >
+                    <Download aria-hidden className="size-4" />
+                    Export Markdown
                   </DropdownMenuItem>
                 </>
               ) : null}
@@ -630,9 +645,12 @@ function ReportExportStrip({
     return null;
   }
 
-  const download = (artifactId: string): void => {
+  const download = (
+    artifactId: string,
+    format: ReportExport["format"],
+  ): void => {
     void bridge()
-      .reports.downloadPdf(artifactId)
+      .reports.downloadExport(artifactId, format)
       .then((outcome) => {
         if (!outcome.ok) onError(outcome.message);
       });
@@ -659,7 +677,7 @@ function ReportExportStrip({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => download(item.artifactId as string)}
+                onClick={() => download(item.artifactId as string, item.format)}
               >
                 <Download aria-hidden className="size-3" />
                 Download
