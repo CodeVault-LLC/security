@@ -1,7 +1,12 @@
 import { FileJson2, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import type { Artifact, Evidence } from "@codevault/contracts";
+import {
+  EVIDENCE_CUSTODY_EVENT_TYPES,
+  type Artifact,
+  type Evidence,
+  type EvidenceCustodyEvent,
+} from "@codevault/contracts";
 import { ARTIFACT_KINDS, CONTENT_VISIBILITIES } from "@codevault/core";
 import { buildEvidenceManifest } from "@codevault/exchange/evidence-manifest";
 import {
@@ -27,6 +32,7 @@ import type {
 } from "../../../../preload/contracts.js";
 import { QueryError } from "../../components/query-boundary.js";
 import { bridge } from "../../lib/bridge.js";
+import { formatDateTime } from "../../lib/dates.js";
 import { formatBytesApprox } from "../../lib/format.js";
 import { MarkdownField } from "../markdown/markdown-field.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../../lib/api.js";
@@ -63,6 +69,10 @@ export function EvidencePanel({
     null,
   );
   const [redactionTerms, setRedactionTerms] = useState("");
+  const [custodyEvidence, setCustodyEvidence] = useState<Evidence | null>(null);
+  const [custodyEventType, setCustodyEventType] = useState("VERIFIED");
+  const [custodian, setCustodian] = useState("");
+  const [custodyNote, setCustodyNote] = useState("");
 
   const query =
     findingId === undefined
@@ -88,6 +98,28 @@ export function EvidencePanel({
       },
     }),
     () => [queryKeys.evidence({ caseId, findingId })],
+  );
+  const custodyKey = ["evidence-custody", custodyEvidence?.id ?? "closed"];
+  const custody = useApiQuery<EvidenceCustodyEvent[]>(
+    custodyKey,
+    `/v1/evidence/${custodyEvidence?.id ?? "00000000-0000-4000-8000-000000000000"}/custody`,
+    { enabled: custodyEvidence !== null },
+  );
+  const attestCustody = useApiMutation<
+    EvidenceCustodyEvent,
+    { evidenceId: string }
+  >(
+    ({ evidenceId }) => ({
+      path: `/v1/evidence/${evidenceId}/custody`,
+      body: {
+        eventType: custodyEventType,
+        custodian: custodian.trim(),
+        ...(custodyNote.trim().length === 0
+          ? {}
+          : { note: custodyNote.trim() }),
+      },
+    }),
+    () => [custodyKey],
   );
 
   const manageRedaction = (artifact: Artifact): void => {
@@ -252,6 +284,7 @@ export function EvidencePanel({
               {...(canEdit
                 ? { onManagePreviewRedaction: manageRedaction }
                 : {})}
+              onOpenCustody={() => setCustodyEvidence(item)}
             />
           ))}
         </div>
@@ -308,6 +341,117 @@ export function EvidencePanel({
                 ? "Clear redaction"
                 : "Save redaction"}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={custodyEvidence !== null}
+        onOpenChange={(open) => {
+          if (!open && !attestCustody.isPending) setCustodyEvidence(null);
+        }}
+      >
+        <DialogContent title="Evidence custody log" width="max-w-2xl">
+          <DialogBody>
+            <p className="text-[12px] text-text-muted">
+              Each attestation is append-only and links to the previous event
+              hash. This records handling history without changing the evidence
+              file.
+            </p>
+            <QueryError query={custody} className="mt-3" />
+            <ol className="mt-3 max-h-64 space-y-2 overflow-auto">
+              {(custody.data ?? []).map((event) => (
+                <li
+                  key={event.id}
+                  className="rounded-(--cv-radius) border border-border p-3 text-[12px]"
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <strong>{event.eventType.replaceAll("_", " ")}</strong>
+                    <span className="text-text-muted">
+                      {formatDateTime(event.occurredAt)}
+                    </span>
+                  </div>
+                  <p className="mt-1">Custodian: {event.custodian}</p>
+                  {event.note === null ? null : (
+                    <p className="mt-1 text-text-muted">{event.note}</p>
+                  )}
+                  <p className="mt-2 break-all font-mono text-[10px] text-text-muted">
+                    SHA-256 {event.eventHash}
+                  </p>
+                </li>
+              ))}
+            </ol>
+            {(custody.data?.length ?? 0) === 0 && !custody.isLoading ? (
+              <p className="mt-3 text-[12px] text-text-muted">
+                No custody attestations yet.
+              </p>
+            ) : null}
+            {canEdit ? (
+              <div className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-2">
+                <Label>
+                  Event
+                  <Select
+                    className="mt-1"
+                    value={custodyEventType}
+                    onValueChange={setCustodyEventType}
+                    options={EVIDENCE_CUSTODY_EVENT_TYPES.map((value) => ({
+                      value,
+                      label: value.replaceAll("_", " "),
+                    }))}
+                  />
+                </Label>
+                <Label>
+                  Custodian
+                  <Input
+                    className="mt-1"
+                    value={custodian}
+                    placeholder="Person, team, or secure location"
+                    onChange={(event) => setCustodian(event.target.value)}
+                  />
+                </Label>
+                <Label className="sm:col-span-2">
+                  Note
+                  <Textarea
+                    className="mt-1 min-h-20"
+                    value={custodyNote}
+                    onChange={(event) => setCustodyNote(event.target.value)}
+                  />
+                </Label>
+              </div>
+            ) : null}
+            {attestCustody.error === null ? null : (
+              <p role="alert" className="mt-2 text-[12px] text-danger">
+                {attestCustody.error.message}
+              </p>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              disabled={attestCustody.isPending}
+              onClick={() => setCustodyEvidence(null)}
+            >
+              Close
+            </Button>
+            {!canEdit || custodyEvidence === null ? null : (
+              <Button
+                variant="primary"
+                loading={attestCustody.isPending}
+                disabled={custodian.trim().length === 0}
+                onClick={() =>
+                  attestCustody.mutate(
+                    { evidenceId: custodyEvidence.id },
+                    {
+                      onSuccess: () => {
+                        setCustodyNote("");
+                        setCustodian("");
+                      },
+                    },
+                  )
+                }
+              >
+                Add attestation
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

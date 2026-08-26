@@ -184,6 +184,46 @@ export const UpdateEvidenceRequest = Type.Object({
 
 export type UpdateEvidenceRequest = Static<typeof UpdateEvidenceRequest>;
 
+export const EVIDENCE_CUSTODY_EVENT_TYPES = [
+  "COLLECTED",
+  "TRANSFERRED",
+  "VERIFIED",
+  "SEALED",
+  "RELEASED",
+] as const;
+const EvidenceCustodyEventType = Type.Union(
+  EVIDENCE_CUSTODY_EVENT_TYPES.map((value) => Type.Literal(value)),
+);
+
+export const EvidenceCustodyEvent = Type.Object({
+  id: Uuid,
+  evidenceId: Uuid,
+  artifactId: Type.Union([Uuid, Type.Null()]),
+  eventType: EvidenceCustodyEventType,
+  custodian: Type.String({ minLength: 1, maxLength: 200 }),
+  note: Type.Union([Type.String({ maxLength: 2_000 }), Type.Null()]),
+  occurredAt: Timestamp,
+  previousEventHash: Type.Union([Sha256, Type.Null()]),
+  eventHash: Sha256,
+  attestedBy: ActorSummary,
+  createdAt: Timestamp,
+});
+export type EvidenceCustodyEvent = Static<typeof EvidenceCustodyEvent>;
+
+export const CreateEvidenceCustodyEventRequest = Type.Object(
+  {
+    artifactId: Type.Optional(Uuid),
+    eventType: EvidenceCustodyEventType,
+    custodian: Type.String({ minLength: 1, maxLength: 200 }),
+    note: Type.Optional(Type.String({ maxLength: 2_000 })),
+    occurredAt: Type.Optional(Timestamp),
+  },
+  { additionalProperties: false },
+);
+export type CreateEvidenceCustodyEventRequest = Static<
+  typeof CreateEvidenceCustodyEventRequest
+>;
+
 export const ListEvidenceQuery = Type.Object({
   ...PaginationQuery.properties,
   caseId: Type.Optional(Uuid),
