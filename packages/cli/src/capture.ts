@@ -14,12 +14,10 @@ import type {
 } from "@codevault/contracts";
 import {
   ARTIFACT_KINDS,
+  isUuid,
   type ArtifactKind,
   type ContentVisibility,
 } from "@codevault/core";
-
-const UUID =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
 export interface CaptureArguments {
   caseId: string;
@@ -72,9 +70,9 @@ export function parseCaptureArguments(
   }
 
   const caseId = values.get("--case") ?? "";
-  if (!UUID.test(caseId)) throw new Error("--case must be a CodeVault UUID.");
+  if (!isUuid(caseId)) throw new Error("--case must be a CodeVault UUID.");
   const findingId = values.get("--finding");
-  if (findingId !== undefined && !UUID.test(findingId)) {
+  if (findingId !== undefined && !isUuid(findingId)) {
     throw new Error("--finding must be a CodeVault UUID.");
   }
   const artifactKind = values.get("--type") ?? "OTHER";

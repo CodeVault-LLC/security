@@ -39,6 +39,20 @@ describe("capture arguments", () => {
     });
   });
 
+  it("accepts CodeVault UUIDv7 case and finding identifiers", () => {
+    expect(
+      parseCaptureArguments([
+        "--case",
+        "018f2f56-7c9a-7abc-8def-0123456789ab",
+        "--finding",
+        "018f2f56-7c9a-7abc-8def-0123456789ac",
+      ]),
+    ).toMatchObject({
+      caseId: "018f2f56-7c9a-7abc-8def-0123456789ab",
+      findingId: "018f2f56-7c9a-7abc-8def-0123456789ac",
+    });
+  });
+
   it("rejects an unknown artifact kind", () => {
     expect(() =>
       parseCaptureArguments([
