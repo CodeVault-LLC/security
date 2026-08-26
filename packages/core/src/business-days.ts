@@ -17,13 +17,29 @@ export function addBusinessDays(iso: string, count: number): string {
   }
 
   const date = parseIsoInstant(iso);
+  let remaining = count;
 
-  for (let added = 0; added < count;) {
+  if (remaining > 0 && date.getUTCDay() === 6) {
+    date.setUTCDate(date.getUTCDate() + 2);
+    remaining -= 1;
+  } else if (remaining > 0 && date.getUTCDay() === 0) {
+    date.setUTCDate(date.getUTCDate() + 1);
+    remaining -= 1;
+  }
+
+  const wholeWeeks = Math.floor(remaining / 5);
+
+  if (wholeWeeks > 0) {
+    date.setUTCDate(date.getUTCDate() + wholeWeeks * 7);
+    remaining -= wholeWeeks * 5;
+  }
+
+  while (remaining > 0) {
     date.setUTCDate(date.getUTCDate() + 1);
     const day = date.getUTCDay();
 
     if (day !== 0 && day !== 6) {
-      added += 1;
+      remaining -= 1;
     }
   }
 

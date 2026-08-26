@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { addBusinessDays } from "./business-days.js";
 import {
@@ -6,6 +6,8 @@ import {
   canTransitionSubmission,
   computeNextAction,
 } from "./submissions.js";
+
+afterEach(() => vi.restoreAllMocks());
 
 describe("submission state transitions", () => {
   it("allows self approval but never skips review or sealing", () => {
@@ -44,6 +46,15 @@ describe("business-day arithmetic", () => {
     expect(addBusinessDays("2026-08-21T23:30:00.000Z", 1)).toBe(
       "2026-08-24T23:30:00.000Z",
     );
+    expect(addBusinessDays("2026-08-22T10:00:00.000Z", 1)).toBe(
+      "2026-08-24T10:00:00.000Z",
+    );
+    expect(addBusinessDays("2026-08-23T10:00:00.000Z", 5)).toBe(
+      "2026-08-28T10:00:00.000Z",
+    );
+    expect(addBusinessDays("2026-08-18T10:00:00.000Z", 4)).toBe(
+      "2026-08-24T10:00:00.000Z",
+    );
   });
 
   it("rejects invalid dates and unsafe day counts instead of guessing", () => {
@@ -54,6 +65,14 @@ describe("business-day arithmetic", () => {
     expect(() => addBusinessDays("2026-08-17T10:00:00.000Z", 1.5)).toThrow(
       /non-negative integer/,
     );
+  });
+
+  it("jumps whole work weeks instead of visiting every calendar day", () => {
+    const setDate = vi.spyOn(Date.prototype, "setUTCDate");
+
+    addBusinessDays("2026-08-17T10:00:00.000Z", 10_000);
+
+    expect(setDate.mock.calls.length).toBeLessThanOrEqual(6);
   });
 });
 
