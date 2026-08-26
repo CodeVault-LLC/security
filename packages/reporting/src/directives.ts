@@ -136,6 +136,14 @@ function lineNumberAt(markdown: string, offset: number): number {
   return line;
 }
 
+function isEscaped(markdown: string, offset: number): boolean {
+  let backslashes = 0;
+  for (let index = offset - 1; index >= 0 && markdown[index] === "\\"; index -= 1) {
+    backslashes += 1;
+  }
+  return backslashes % 2 === 1;
+}
+
 export function parseDirectives(markdown: string): ParsedDirective[] {
   const ignoredRanges = [
     ...linkRanges(markdown),
@@ -150,6 +158,8 @@ export function parseDirectives(markdown: string): ParsedDirective[] {
     if (start === undefined) {
       continue;
     }
+
+    if (isEscaped(markdown, start)) continue;
 
     const ignored = ignoredRanges.some(
       ([from, to]) => start >= from && start < to,
