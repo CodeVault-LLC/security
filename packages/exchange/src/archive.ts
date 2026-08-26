@@ -164,9 +164,10 @@ export async function readCvcase(
 ): Promise<ExtractedCvcase> {
   const staging = `${destination}.partial-${randomUUID()}`;
   await mkdir(staging, { recursive: false, mode: 0o700 });
-  const input = await open(archive, "r");
+  let input: Awaited<ReturnType<typeof open>> | undefined;
   let position = 0;
   try {
+    input = await open(archive, "r");
     const magic = Buffer.alloc(MAGIC.length);
     await readExact(input, magic, position);
     position += magic.length;
@@ -247,7 +248,7 @@ export async function readCvcase(
       cleanup: () => rm(destination, { recursive: true, force: true }),
     };
   } catch (error: unknown) {
-    await input.close().catch(() => undefined);
+    await input?.close().catch(() => undefined);
     await rm(staging, { recursive: true, force: true }).catch(() => undefined);
     throw error;
   }
