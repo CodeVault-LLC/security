@@ -259,6 +259,7 @@ function parseCsv(input: string): string[][] {
   let row: string[] = [];
   let cell = "";
   let quoted = false;
+  let quotedFieldClosed = false;
 
   for (let index = 0; index < input.length; index += 1) {
     const character = input[index]!;
@@ -268,21 +269,34 @@ function parseCsv(input: string): string[][] {
         index += 1;
       } else if (character === '"') {
         quoted = false;
+        quotedFieldClosed = true;
       } else {
         cell += character;
       }
       continue;
+    }
+    if (
+      quotedFieldClosed &&
+      character !== "," &&
+      character !== "\r" &&
+      character !== "\n"
+    ) {
+      throw new Error(
+        "The CSV finding exchange has an unexpected character after a closing quote.",
+      );
     }
     if (character === '"' && cell === "") {
       quoted = true;
     } else if (character === ",") {
       row.push(cell);
       cell = "";
+      quotedFieldClosed = false;
     } else if (character === "\n") {
       row.push(cell);
       rows.push(row);
       row = [];
       cell = "";
+      quotedFieldClosed = false;
     } else if (character !== "\r") {
       cell += character;
     }
