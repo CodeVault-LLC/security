@@ -207,6 +207,25 @@ describe("resolveDirectives", () => {
     expect(result.resolved).toHaveLength(3);
   });
 
+  it("resolves a repeated directive only once per render", async () => {
+    let calls = 0;
+    const counting: DirectiveResolver = {
+      async resolve(kind, argument) {
+        calls += 1;
+        return RESOLVER.resolve(kind, argument);
+      },
+    };
+
+    const result = await resolveDirectives(
+      "[evidence:EVID-000003] then [evidence:EVID-000003]",
+      "PUBLIC",
+      counting,
+    );
+
+    expect(calls).toBe(1);
+    expect(result.resolved).toHaveLength(2);
+  });
+
   it("survives a resolver that throws", async () => {
     const throwing: DirectiveResolver = {
       async resolve() {
