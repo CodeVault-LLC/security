@@ -7,6 +7,7 @@ import type { FindingSummary } from "@codevault/contracts";
 import {
   DISCLOSURE_STATES,
   PRIOR_ART_STATES,
+  REMEDIATION_STATES,
   VALIDATION_STATES,
 } from "@codevault/core";
 import { SEVERITY_RATINGS } from "@codevault/standards";
@@ -28,6 +29,13 @@ import {
 
 import { PageHeader } from "../components/app-shell.js";
 import { CreateFindingDialog } from "../features/findings/create-finding-dialog.js";
+import {
+  applyFindingView,
+  FINDING_FILTER_VIEWS,
+  matchingFindingView,
+  type FindingFilterState,
+  type FindingViewId,
+} from "../features/findings/finding-filter-views.js";
 import { useDebouncedValue } from "../hooks/use-debounced-value.js";
 import { formatDistanceToNowStrict } from "../lib/dates.js";
 import { errorHeading, queryKeys, useApiQuery } from "../lib/api.js";
@@ -56,6 +64,7 @@ const ROW_HEIGHT = 72;
  * severities" than as an empty box anyway.
  */
 const ALL = "__all";
+const CUSTOM = "__custom";
 
 export function FindingsRoute(): React.JSX.Element {
   const routeSearch = useSearch({ from: "/findings" });
@@ -63,10 +72,15 @@ export function FindingsRoute(): React.JSX.Element {
   const user = useSession((state) => state.user);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const [validationState, setValidationState] = useState<string>("");
-  const [disclosureState, setDisclosureState] = useState<string>("");
-  const [priorArtState, setPriorArtState] = useState<string>("");
-  const [severity, setSeverity] = useState<string>("");
+  const [validationState, setValidationState] =
+    useState<FindingFilterState["validationState"]>("");
+  const [remediationState, setRemediationState] =
+    useState<FindingFilterState["remediationState"]>("");
+  const [disclosureState, setDisclosureState] =
+    useState<FindingFilterState["disclosureState"]>("");
+  const [priorArtState, setPriorArtState] =
+    useState<FindingFilterState["priorArtState"]>("");
+  const [severity, setSeverity] = useState<FindingFilterState["severity"]>("");
   const [limit, setLimit] = useState(200);
 
   const debouncedSearch = useDebouncedValue(search, 220);
@@ -86,6 +100,10 @@ export function FindingsRoute(): React.JSX.Element {
       params.set("disclosureState", disclosureState);
     }
 
+    if (remediationState.length > 0) {
+      params.set("remediationState", remediationState);
+    }
+
     if (priorArtState.length > 0) {
       params.set("priorArtState", priorArtState);
     }
@@ -102,6 +120,7 @@ export function FindingsRoute(): React.JSX.Element {
   }, [
     debouncedSearch,
     validationState,
+    remediationState,
     disclosureState,
     priorArtState,
     severity,
@@ -115,22 +134,53 @@ export function FindingsRoute(): React.JSX.Element {
   );
 
   const items = findings.data?.items ?? [];
-  const hasFilters =
-    search.trim().length > 0 ||
+  const hasStateFilters =
     validationState.length > 0 ||
+    remediationState.length > 0 ||
     disclosureState.length > 0 ||
     priorArtState.length > 0 ||
-    severity.length > 0 ||
+    severity.length > 0;
+  const hasFilters =
+    search.trim().length > 0 ||
+    hasStateFilters ||
     routeSearch.assetId !== undefined;
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const clearFilters = (): void => {
     setSearch("");
     setValidationState("");
+    setRemediationState("");
     setDisclosureState("");
     setPriorArtState("");
     setSeverity("");
     void navigate({ to: "/findings", search: {} });
+  };
+
+  const filterState: FindingFilterState = {
+    validationState,
+    remediationState,
+    disclosureState,
+    priorArtState,
+    severity,
+  };
+  const activeView = matchingFindingView(filterState);
+
+  const applyView = (value: string): void => {
+    const next =
+      value === ALL
+        ? {
+            validationState: "" as const,
+            remediationState: "" as const,
+            disclosureState: "" as const,
+            priorArtState: "" as const,
+            severity: "" as const,
+          }
+        : applyFindingView(value as FindingViewId);
+    setValidationState(next.validationState);
+    setRemediationState(next.remediationState);
+    setDisclosureState(next.disclosureState);
+    setPriorArtState(next.priorArtState);
+    setSeverity(next.severity);
   };
 
   // TanStack Virtual exposes imperative methods that React Compiler cannot
@@ -170,6 +220,31 @@ export function FindingsRoute(): React.JSX.Element {
           className="min-w-56 flex-1 sm:max-w-md"
           aria-label="Filter findings"
         />
+        <Select
+          aria-label="Triage view"
+          value={activeView ?? (hasStateFilters ? CUSTOM : ALL)}
+          onValueChange={applyView}
+          className="w-52"
+          options={[
+            {
+              value: ALL,
+              label: "All findings",
+              description: "No lifecycle or severity filters.",
+              icon: <ListFilter className="size-3.5" />,
+            },
+            {
+              value: CUSTOM,
+              label: "Custom view",
+              description: "A manually adjusted filter combination.",
+              disabled: true,
+            },
+            ...FINDING_FILTER_VIEWS.map((view) => ({
+              value: view.id,
+              label: view.label,
+              description: view.description,
+            })),
+          ]}
+        />
         <details className="group relative">
           <summary className="flex h-10 cursor-pointer list-none items-center gap-2 rounded-(--cv-radius) border border-border bg-surface px-3 text-[13px] font-medium hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus">
             <SlidersHorizontal aria-hidden className="size-4" />
@@ -180,25 +255,47 @@ export function FindingsRoute(): React.JSX.Element {
             <FilterSelect
               label="Validation"
               value={validationState}
-              onChange={setValidationState}
+              onChange={(value) =>
+                setValidationState(
+                  value as FindingFilterState["validationState"],
+                )
+              }
               options={stateSelectOptions("validation", VALIDATION_STATES)}
+            />
+            <FilterSelect
+              label="Remediation"
+              value={remediationState}
+              onChange={(value) =>
+                setRemediationState(
+                  value as FindingFilterState["remediationState"],
+                )
+              }
+              options={stateSelectOptions("remediation", REMEDIATION_STATES)}
             />
             <FilterSelect
               label="Disclosure"
               value={disclosureState}
-              onChange={setDisclosureState}
+              onChange={(value) =>
+                setDisclosureState(
+                  value as FindingFilterState["disclosureState"],
+                )
+              }
               options={stateSelectOptions("disclosure", DISCLOSURE_STATES)}
             />
             <FilterSelect
               label="Prior art"
               value={priorArtState}
-              onChange={setPriorArtState}
+              onChange={(value) =>
+                setPriorArtState(value as FindingFilterState["priorArtState"])
+              }
               options={stateSelectOptions("priorArt", PRIOR_ART_STATES)}
             />
             <FilterSelect
               label="Severity"
               value={severity}
-              onChange={setSeverity}
+              onChange={(value) =>
+                setSeverity(value as FindingFilterState["severity"])
+              }
               options={severitySelectOptions(SEVERITY_RATINGS)}
             />
           </div>
