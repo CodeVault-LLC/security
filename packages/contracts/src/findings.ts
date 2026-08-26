@@ -211,6 +211,27 @@ export const UpdateFindingRequest = Type.Object({
 
 export type UpdateFindingRequest = Static<typeof UpdateFindingRequest>;
 
+export const BulkSetRemediationStateRequest = Type.Object({
+  caseId: Uuid,
+  remediationState: RemediationStateSchema,
+  items: Type.Array(
+    Type.Object({ id: Uuid, expectedRevision: RevisionField }),
+    { minItems: 1, maxItems: 50 },
+  ),
+});
+
+export type BulkSetRemediationStateRequest = Static<
+  typeof BulkSetRemediationStateRequest
+>;
+
+export const BulkSetRemediationStateResponse = Type.Object({
+  updatedIds: Type.Array(Uuid, { maxItems: 50 }),
+});
+
+export type BulkSetRemediationStateResponse = Static<
+  typeof BulkSetRemediationStateResponse
+>;
+
 export const LinkFindingAssetRequest = Type.Object({
   assetId: Uuid,
   primary: Type.Optional(Type.Boolean()),

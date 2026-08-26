@@ -5,6 +5,8 @@ import {
   AddAffectedRangeRequest,
   AddFindingIdentifierRequest,
   AddFindingScoreRequest,
+  BulkSetRemediationStateRequest,
+  BulkSetRemediationStateResponse,
   Claim,
   CreateClaimRequest,
   CreateFindingRequest,
@@ -23,6 +25,7 @@ import {
   type ActingUser,
   canTransitionDisclosure,
   canTransitionValidation,
+  conflict,
   DomainError,
   isValidCweId,
   notFound,
@@ -325,6 +328,106 @@ export async function registerFindingRoutes(app: AppInstance): Promise<void> {
       const finding = await requireFindingRead(app, user, request.params.id);
 
       return loadFindingDetail(app.db, finding.id);
+    },
+  );
+
+  app.post(
+    "/v1/findings/bulk-remediation",
+    {
+      schema: {
+        body: BulkSetRemediationStateRequest,
+        response: {
+          200: BulkSetRemediationStateResponse,
+          409: ErrorResponse,
+        },
+      },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const principal = principalOf(request);
+      const body = request.body;
+      const ids = body.items.map((item) => item.id);
+
+      if (new Set(ids).size !== ids.length) {
+        throw validationError("Each finding may appear only once in a batch.");
+      }
+
+      await requireCaseWrite(app.db, user, body.caseId);
+      const existing = await app.db
+        .select()
+        .from(schema.findings)
+        .where(inArray(schema.findings.id, ids));
+
+      if (
+        existing.length !== ids.length ||
+        existing.some((finding) => finding.caseId !== body.caseId)
+      ) {
+        throw notFound("One or more findings could not be found in this case.");
+      }
+
+      const byId = new Map(existing.map((finding) => [finding.id, finding]));
+      for (const item of body.items) {
+        assertRevision(byId.get(item.id)!, item.expectedRevision, "finding");
+      }
+
+      const changes = body.items.filter(
+        (item) => byId.get(item.id)!.remediationState !== body.remediationState,
+      );
+
+      await app.db.transaction(async (tx) => {
+        for (const item of changes) {
+          const finding = byId.get(item.id)!;
+          const updated = await tx
+            .update(schema.findings)
+            .set({
+              remediationState: body.remediationState,
+              revision: finding.revision + 1,
+              updatedAt: sql`now()`,
+            })
+            .where(
+              and(
+                eq(schema.findings.id, finding.id),
+                eq(schema.findings.revision, item.expectedRevision),
+              ),
+            )
+            .returning({ id: schema.findings.id });
+
+          if (updated.length !== 1) {
+            throw conflict(
+              "A finding changed while the batch was being saved.",
+            );
+          }
+
+          await app.audit.write(
+            tx,
+            {
+              actorId: user.id,
+              sessionId: principal.session.id,
+              requestId: request.requestId,
+            },
+            {
+              action: "finding.state_changed",
+              entityType: "finding",
+              entityId: finding.id,
+              caseId: finding.caseId,
+              before: { remediationState: finding.remediationState },
+              after: { remediationState: body.remediationState },
+            },
+          );
+        }
+      });
+
+      for (const item of changes) {
+        await invalidateDependentSections(app, item.id);
+        app.events.publish({
+          type: "entity.changed",
+          entityType: "finding",
+          entityId: item.id,
+          caseId: body.caseId,
+        });
+      }
+
+      return { updatedIds: changes.map((item) => item.id) };
     },
   );
 
