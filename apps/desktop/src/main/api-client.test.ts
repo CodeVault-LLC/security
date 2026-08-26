@@ -142,4 +142,17 @@ describe("API client response validation", () => {
       message: "The server returned invalid JSON.",
     });
   });
+
+  it("rejects an empty non-204 success body", async () => {
+    const client = createApiClient({
+      sessionStore: storedSession(),
+      fetchImpl: vi.fn().mockResolvedValue(new Response(null, { status: 200 })),
+    });
+
+    await expect(client.request("/v1/dashboard")).rejects.toMatchObject({
+      status: 200,
+      category: "SERVER_ERROR",
+      message: "The server returned an empty response.",
+    });
+  });
 });
