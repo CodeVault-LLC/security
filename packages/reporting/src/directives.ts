@@ -297,6 +297,15 @@ export async function resolveDirectives(
   >();
 
   let placeholderIndex = 0;
+  const nextPlaceholder = (): string => {
+    let placeholder = placeholderFor(placeholderIndex);
+    while (markdown.includes(placeholder)) {
+      placeholderIndex += 1;
+      placeholder = placeholderFor(placeholderIndex);
+    }
+    placeholderIndex += 1;
+    return placeholder;
+  };
 
   /**
    * Replaces a failed directive with a visible error marker.
@@ -317,9 +326,7 @@ export async function resolveDirectives(
       message,
     });
 
-    const placeholder = placeholderFor(placeholderIndex);
-
-    placeholderIndex += 1;
+    const placeholder = nextPlaceholder();
     substitutions.push({
       placeholder,
       html: `<span class="cv-directive-error">${escapeForError(message)}</span>`,
@@ -381,9 +388,7 @@ export async function resolveDirectives(
       continue;
     }
 
-    const placeholder = placeholderFor(placeholderIndex);
-
-    placeholderIndex += 1;
+    const placeholder = nextPlaceholder();
     substitutions.push({ placeholder, html: item.html });
     replacements.push({
       start: directive.start,
