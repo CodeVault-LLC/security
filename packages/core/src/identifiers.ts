@@ -57,6 +57,10 @@ export function formatReference(
   sequence: number,
   year?: number,
 ): string {
+  if (!Number.isSafeInteger(sequence) || sequence <= 0) {
+    throw new RangeError("Reference sequence must be a positive safe integer.");
+  }
+
   const prefix = REFERENCE_PREFIXES[kind];
 
   if (isYearScopedReference(kind)) {
