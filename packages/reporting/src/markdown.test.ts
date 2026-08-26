@@ -165,4 +165,14 @@ describe("markdownToPlainText", () => {
       ),
     ).toBe("An attacker can exploit this.");
   });
+
+  it("preserves URL and email autolinks as visible text", () => {
+    expect(
+      markdownToPlainText(
+        "See <https://example.test/advisory> or email <security@example.test>.",
+      ),
+    ).toBe(
+      "See https://example.test/advisory or email security@example.test.",
+    );
+  });
 });

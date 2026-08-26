@@ -14,6 +14,8 @@ export function markdownToPlainText(markdown: string): string {
     markdown
       .replace(/```[\s\S]*?```/g, " ")
       .replace(/~~~[\s\S]*?~~~/g, " ")
+      .replace(/<((?:https?:\/\/|mailto:)[^<>\s]+)>/gi, "$1")
+      .replace(/<([^<>\s@]+@[^<>\s@]+)>/g, "$1")
       .replace(/<!--[\s\S]*?-->/g, " ")
       .replace(/<\/?[A-Za-z][^>\n]*>/g, " ")
       .replace(/`([^`]*)`/g, "$1")
