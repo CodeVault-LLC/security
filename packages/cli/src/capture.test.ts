@@ -135,4 +135,15 @@ describe("capture arguments", () => {
       ).toThrow("--title must contain 1 to 200 characters");
     },
   );
+
+  it("rejects an evidence description above the Markdown limit", () => {
+    expect(() =>
+      parseCaptureArguments([
+        "--case",
+        "018f2f56-7c9a-7abc-8def-0123456789ab",
+        "--description",
+        "x".repeat(200_001),
+      ]),
+    ).toThrow("--description cannot exceed 200000 characters");
+  });
 });
