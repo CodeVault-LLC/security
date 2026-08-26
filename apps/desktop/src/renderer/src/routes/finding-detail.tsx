@@ -46,6 +46,7 @@ import {
   findingRevisionChanges,
 } from "../features/findings/finding-revision-diff.js";
 import { ScoringPanel } from "../features/findings/scoring-panel.js";
+import { AffectedVersionMatrix } from "../features/findings/affected-version-matrix.js";
 import { EvidencePanel } from "../features/evidence/evidence-panel.js";
 import { formatDateTime } from "../lib/dates.js";
 import {
@@ -380,24 +381,13 @@ function FindingContextColumn({
             </div>
           )}
 
-          {finding.affectedRanges.length === 0 ? (
-            <p className="text-text-muted">
-              No affected-version conclusion recorded.
-            </p>
-          ) : (
-            <ul className="space-y-1 border-t border-border pt-2">
-              {finding.affectedRanges.map((range) => (
-                <li key={range.id}>
-                  <Mono>{range.expression}</Mono>{" "}
-                  <span className="text-text-muted">
-                    {range.status.replace(/_/g, " ").toLowerCase()}
-                  </span>
-                  {range.verifiedAt === null ? (
-                    <span className="ml-1 text-warning">(not verified)</span>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
+          {finding.assets.length === 0 ? null : (
+            <div className="border-t border-border pt-2">
+              <AffectedVersionMatrix
+                assets={finding.assets}
+                ranges={finding.affectedRanges}
+              />
+            </div>
           )}
         </CardBody>
       </Card>
