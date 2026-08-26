@@ -198,6 +198,11 @@ export interface EvidenceManifestExportResult {
   sha256: string | null;
 }
 
+export interface DisclosureCalendarExportResult {
+  saved: boolean;
+  sha256: string | null;
+}
+
 /**
  * What the renderer may say about a run.
  *
@@ -311,6 +316,14 @@ export interface CodeVaultDesktopApi {
     ): Promise<ApiOutcome<EvidenceManifestExportResult>>;
   };
 
+  disclosure: {
+    /** Saves explicit case coordination dates as a private iCalendar file. */
+    saveCalendar(
+      caseId: string,
+      ics: string,
+    ): Promise<ApiOutcome<DisclosureCalendarExportResult>>;
+  };
+
   avatars: {
     selectAndUpload(
       target: "USER" | "ORGANIZATION",
@@ -406,6 +419,7 @@ export const IPC_CHANNELS = {
   reportsDownloadExport: "reports:download-export",
   auditSaveCsv: "audit:save-csv",
   evidenceSaveManifest: "evidence:save-manifest",
+  disclosureSaveCalendar: "disclosure:save-calendar",
   avatarsSelectAndUpload: "avatars:select-and-upload",
   avatarsLoad: "avatars:load",
   avatarsLoadUser: "avatars:load-user",

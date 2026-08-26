@@ -308,7 +308,12 @@ export function CaseDetailRoute({
 
         {data.disclosureEnabled ? (
           <TabsContent value="disclosure">
-            <DisclosurePanel caseId={caseId} canEdit={canEdit} />
+            <DisclosurePanel
+              caseId={caseId}
+              caseRef={data.ref}
+              caseTitle={data.title}
+              canEdit={canEdit}
+            />
           </TabsContent>
         ) : null}
 

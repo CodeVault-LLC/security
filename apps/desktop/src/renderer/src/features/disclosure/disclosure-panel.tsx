@@ -47,6 +47,7 @@ import { MarkdownPreview } from "../markdown/markdown-preview.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../../lib/api.js";
 import { QueryError } from "../../components/query-boundary.js";
 import { CreateSubmissionDialog } from "../submissions/create-submission-dialog.js";
+import { DisclosureCalendarButton } from "./disclosure-calendar-button.js";
 
 /**
  * Disclosure coordination.
@@ -100,11 +101,15 @@ const STAKEHOLDER_ROLES = [
 
 export interface DisclosurePanelProps {
   caseId: string;
+  caseRef: string;
+  caseTitle: string;
   canEdit: boolean;
 }
 
 export function DisclosurePanel({
   caseId,
+  caseRef,
+  caseTitle,
   canEdit,
 }: DisclosurePanelProps): React.JSX.Element {
   const [eventOpen, setEventOpen] = useState(false);
@@ -347,6 +352,12 @@ export function DisclosurePanel({
           <Card>
             <CardHeader>
               <CardTitle>Dates</CardTitle>
+              <DisclosureCalendarButton
+                caseId={caseId}
+                caseRef={caseRef}
+                caseTitle={caseTitle}
+                embargo={data?.embargo ?? null}
+              />
             </CardHeader>
             <CardBody className="space-y-2">
               <DateField
