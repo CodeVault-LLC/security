@@ -107,4 +107,18 @@ describe("capture arguments", () => {
       ]),
     ).toThrow("The capture name must be 1 to 300 characters");
   });
+
+  it.each(["", "x".repeat(201), "text/plain\r\nX-Test: injected"])(
+    "rejects invalid MIME type %j",
+    (mimeType) => {
+      expect(() =>
+        parseCaptureArguments([
+          "--case",
+          "018f2f56-7c9a-7abc-8def-0123456789ab",
+          "--mime",
+          mimeType,
+        ]),
+      ).toThrow("--mime must be 1 to 200 characters without controls");
+    },
+  );
 });
