@@ -111,6 +111,23 @@ describe(".cvcase archive", () => {
     ).rejects.toThrow("does not match its manifest");
   });
 
+  it("rejects manifests that repeat an artifact archive path", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codevault-archive-"));
+    const repeated = manifest();
+    repeated.artifacts.push({
+      ...repeated.artifacts[0]!,
+      sourceId: "00000000-0000-4000-8000-000000000003",
+    });
+
+    await expect(
+      writeCvcase(join(root, "bad.cvcase"), {
+        manifest: repeated,
+        records: {},
+        artifacts: [],
+      }),
+    ).rejects.toThrow("repeats an artifact archive path");
+  });
+
   it("does not overwrite an existing archive without caller confirmation", async () => {
     const root = await mkdtemp(join(tmpdir(), "codevault-archive-"));
     const artifact = join(root, "request.txt");
