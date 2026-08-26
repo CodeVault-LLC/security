@@ -143,4 +143,10 @@ describe("markdownToPlainText", () => {
       "Before After",
     );
   });
+
+  it("removes tilde-fenced code blocks from metadata and snippets", () => {
+    expect(markdownToPlainText("Before\n~~~http\nsecret payload\n~~~\nAfter")).toBe(
+      "Before After",
+    );
+  });
 });
