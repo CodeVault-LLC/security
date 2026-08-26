@@ -179,6 +179,72 @@ describeIntegration("finding intake", () => {
     expect(second.statusCode).toBe(409);
   });
 
+  it("accepts selected intake drafts atomically", async () => {
+    const first = await createManual();
+    const second = await createManual();
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/intake/bulk-accept",
+      headers: owner.headers,
+      payload: {
+        caseId: researchCase.id,
+        items: [
+          { id: first.id, expectedRevision: first.revision },
+          { id: second.id, expectedRevision: second.revision },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const accepted = response.json<{ items: IntakeItem[] }>().items;
+    expect(accepted).toHaveLength(2);
+    expect(accepted.every((item) => item.status === "ACCEPTED")).toBe(true);
+    expect(accepted.every((item) => item.createdFindingId !== null)).toBe(true);
+  });
+
+  it("rolls back every bulk acceptance when one revision is stale", async () => {
+    const first = await createManual();
+    const second = await createManual();
+    const edited = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/intake/items/${second.id}`,
+      headers: owner.headers,
+      payload: {
+        expectedRevision: second.revision,
+        draft: second.draft,
+      },
+    });
+    expect(edited.statusCode).toBe(200);
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/intake/bulk-accept",
+      headers: owner.headers,
+      payload: {
+        caseId: researchCase.id,
+        items: [
+          { id: first.id, expectedRevision: first.revision },
+          { id: second.id, expectedRevision: second.revision },
+        ],
+      },
+    });
+    expect(response.statusCode).toBe(409);
+
+    const list = await harness.app.inject({
+      method: "GET",
+      url: `/v1/intake?caseId=${researchCase.id}`,
+      headers: owner.headers,
+    });
+    const unchanged = list
+      .json<{ items: IntakeItem[] }>()
+      .items.find((item) => item.id === first.id);
+    expect(unchanged).toMatchObject({
+      status: "PENDING",
+      createdFindingId: null,
+      revision: first.revision,
+    });
+  });
+
   it("rejects with a reason and never creates a finding", async () => {
     const item = await createManual();
     const response = await harness.app.inject({

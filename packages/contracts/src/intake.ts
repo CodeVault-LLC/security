@@ -141,6 +141,30 @@ export const DecideIntakeItemRequest = Type.Object(
 );
 export type DecideIntakeItemRequest = Static<typeof DecideIntakeItemRequest>;
 
+export const BulkAcceptIntakeItemsRequest = Type.Object(
+  {
+    caseId: Uuid,
+    items: Type.Array(
+      Type.Object(
+        { id: Uuid, expectedRevision: RevisionField },
+        { additionalProperties: false },
+      ),
+      { minItems: 1, maxItems: 50 },
+    ),
+  },
+  { additionalProperties: false },
+);
+export type BulkAcceptIntakeItemsRequest = Static<
+  typeof BulkAcceptIntakeItemsRequest
+>;
+
+export const BulkAcceptIntakeItemsResult = Type.Object({
+  items: Type.Array(IntakeItem, { minItems: 1, maxItems: 50 }),
+});
+export type BulkAcceptIntakeItemsResult = Static<
+  typeof BulkAcceptIntakeItemsResult
+>;
+
 export const RejectIntakeItemRequest = Type.Object(
   {
     expectedRevision: RevisionField,
