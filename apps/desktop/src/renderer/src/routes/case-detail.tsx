@@ -32,6 +32,7 @@ import { CreateFindingDialog } from "../features/findings/create-finding-dialog.
 import { BulkRemediationControls } from "../features/findings/bulk-remediation-controls.js";
 import { ExportCaseArchiveButton } from "../features/cases/case-archive-actions.js";
 import { CaseActivityPanel } from "../features/cases/case-activity-panel.js";
+import { CaseHandoffBriefButton } from "../features/cases/case-handoff-brief-button.js";
 import { DuplicateCaseButton } from "../features/cases/duplicate-case-dialog.js";
 import { Avatar } from "../components/avatar.js";
 import { DisclosurePanel } from "../features/disclosure/disclosure-panel.js";
@@ -144,6 +145,11 @@ export function CaseDetailRoute({
           </div>
 
           <div className="flex shrink-0 flex-wrap items-start gap-2 self-start">
+            <CaseHandoffBriefButton
+              researchCase={data}
+              findings={findings.data?.items}
+              readiness={readiness.data}
+            />
             <ExportCaseArchiveButton caseId={caseId} />
             {canEdit ? (
               <>
