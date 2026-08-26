@@ -15,8 +15,24 @@ const THEME_STORAGE_KEY = "codevault.theme";
 const ACCENT_STORAGE_KEY = "codevault.accent";
 const MOTION_STORAGE_KEY = "codevault.reduce-motion";
 
+function readPreference(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function storePreference(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Preferences still apply for the current session when storage is blocked.
+  }
+}
+
 function readStoredPreference(): ThemePreference {
-  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  const stored = readPreference(THEME_STORAGE_KEY);
 
   return stored === "dark" || stored === "light" || stored === "system"
     ? stored
@@ -24,7 +40,7 @@ function readStoredPreference(): ThemePreference {
 }
 
 function readStoredAccent(): AccentPreference {
-  const stored = window.localStorage.getItem(ACCENT_STORAGE_KEY);
+  const stored = readPreference(ACCENT_STORAGE_KEY);
 
   return stored === "ocean" || stored === "ember" || stored === "iris"
     ? stored
@@ -32,7 +48,7 @@ function readStoredAccent(): AccentPreference {
 }
 
 function readStoredMotionPreference(): boolean {
-  return window.localStorage.getItem(MOTION_STORAGE_KEY) === "true";
+  return readPreference(MOTION_STORAGE_KEY) === "true";
 }
 
 export function useTheme(): {
@@ -64,7 +80,7 @@ export function useTheme(): {
       root.setAttribute("data-theme", preference);
     }
 
-    window.localStorage.setItem(THEME_STORAGE_KEY, preference);
+    storePreference(THEME_STORAGE_KEY, preference);
   }, [preference]);
 
   useEffect(() => {
@@ -76,7 +92,7 @@ export function useTheme(): {
       root.setAttribute("data-accent", accent);
     }
 
-    window.localStorage.setItem(ACCENT_STORAGE_KEY, accent);
+    storePreference(ACCENT_STORAGE_KEY, accent);
   }, [accent]);
 
   useEffect(() => {
@@ -88,7 +104,7 @@ export function useTheme(): {
       root.removeAttribute("data-motion");
     }
 
-    window.localStorage.setItem(MOTION_STORAGE_KEY, String(reduceMotion));
+    storePreference(MOTION_STORAGE_KEY, String(reduceMotion));
   }, [reduceMotion]);
 
   return {
