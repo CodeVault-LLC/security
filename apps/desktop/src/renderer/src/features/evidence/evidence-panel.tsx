@@ -1,7 +1,7 @@
 import { FileJson2, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import type { Evidence } from "@codevault/contracts";
+import type { Artifact, Evidence } from "@codevault/contracts";
 import { ARTIFACT_KINDS, CONTENT_VISIBILITIES } from "@codevault/core";
 import { buildEvidenceManifest } from "@codevault/exchange/evidence-manifest";
 import {
@@ -17,6 +17,7 @@ import {
   Label,
   LoadingState,
   Select,
+  Textarea,
   visibilitySelectOptions,
 } from "@codevault/ui";
 
@@ -58,6 +59,10 @@ export function EvidencePanel({
   const [uploadOpen, setUploadOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
+  const [redactionArtifact, setRedactionArtifact] = useState<Artifact | null>(
+    null,
+  );
+  const [redactionTerms, setRedactionTerms] = useState("");
 
   const query =
     findingId === undefined
@@ -70,6 +75,44 @@ export function EvidencePanel({
   );
 
   const items = evidence.data?.items ?? [];
+  const saveRedaction = useApiMutation<
+    Artifact,
+    { artifact: Artifact; terms: string[] }
+  >(
+    ({ artifact, terms }) => ({
+      path: `/v1/artifacts/${artifact.id}/preview-redaction`,
+      method: "PATCH",
+      body: {
+        rules: terms.map((match) => ({ match, replacement: "[REDACTED]" })),
+        expectedRevision: artifact.previewRedaction?.revision ?? null,
+      },
+    }),
+    () => [queryKeys.evidence({ caseId, findingId })],
+  );
+
+  const manageRedaction = (artifact: Artifact): void => {
+    setRedactionArtifact(artifact);
+    setRedactionTerms(
+      artifact.previewRedaction?.rules.map((rule) => rule.match).join("\n") ??
+        "",
+    );
+  };
+
+  const submitRedaction = (): void => {
+    if (redactionArtifact === null) return;
+    const terms = [
+      ...new Set(
+        redactionTerms
+          .split("\n")
+          .map((term) => term.trim())
+          .filter((term) => term.length > 0),
+      ),
+    ];
+    saveRedaction.mutate(
+      { artifact: redactionArtifact, terms },
+      { onSuccess: () => setRedactionArtifact(null) },
+    );
+  };
 
   const openArtifact = (artifactId: string): void => {
     void bridge()
@@ -206,6 +249,9 @@ export function EvidencePanel({
               capturedAt={item.capturedAt}
               onOpenArtifact={openArtifact}
               onLoadArtifact={loadArtifact}
+              {...(canEdit
+                ? { onManagePreviewRedaction: manageRedaction }
+                : {})}
             />
           ))}
         </div>
@@ -217,6 +263,54 @@ export function EvidencePanel({
         caseId={caseId}
         {...(findingId === undefined ? {} : { findingId })}
       />
+      <Dialog
+        open={redactionArtifact !== null}
+        onOpenChange={(open) => {
+          if (!open && !saveRedaction.isPending) setRedactionArtifact(null);
+        }}
+      >
+        <DialogContent title="Manage preview redaction">
+          <DialogBody>
+            <p className="text-[12px] text-text-muted">
+              Enter one exact value per line. Every occurrence is replaced with
+              [REDACTED] in previews and AI context. The original file and
+              generated source excerpt stay unchanged.
+            </p>
+            <Label className="mt-4 block">
+              Sensitive values
+              <Textarea
+                className="mt-1 min-h-32 font-mono"
+                value={redactionTerms}
+                placeholder={"api-key-value\ninternal.example.test"}
+                onChange={(event) => setRedactionTerms(event.target.value)}
+              />
+            </Label>
+            {saveRedaction.error === null ? null : (
+              <p role="alert" className="mt-2 text-[12px] text-danger">
+                {saveRedaction.error.message}
+              </p>
+            )}
+          </DialogBody>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              disabled={saveRedaction.isPending}
+              onClick={() => setRedactionArtifact(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              loading={saveRedaction.isPending}
+              onClick={submitRedaction}
+            >
+              {redactionTerms.trim().length === 0
+                ? "Clear redaction"
+                : "Save redaction"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }

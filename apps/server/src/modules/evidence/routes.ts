@@ -14,6 +14,7 @@ import {
   OkResponse,
   PaginatedResponse,
   UpdateEvidenceRequest,
+  UpdatePreviewRedactionRequest,
   UploadInstructions,
 } from "@codevault/contracts";
 import {
@@ -350,6 +351,117 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
         filename: artifact.filename,
         sha256: artifact.sha256,
       };
+    },
+  );
+
+  app.patch(
+    "/v1/artifacts/:id/preview-redaction",
+    {
+      schema: {
+        params: IdParam,
+        body: UpdatePreviewRedactionRequest,
+        response: {
+          200: Artifact,
+          400: ErrorResponse,
+          404: ErrorResponse,
+          409: ErrorResponse,
+        },
+      },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const principal = principalOf(request);
+      const [artifact] = await app.db
+        .select()
+        .from(schema.artifacts)
+        .where(eq(schema.artifacts.id, request.params.id))
+        .limit(1);
+      if (artifact === undefined) throw notFound("Artifact");
+      await requireCaseWrite(app.db, user, artifact.caseId);
+      if (
+        artifact.previewKind !== "TEXT_EXCERPT" ||
+        artifact.previewText === null
+      ) {
+        throw validationError("Only a generated text preview can be redacted.");
+      }
+      if (
+        request.body.rules.some((rule) => rule.match.trim().length === 0) ||
+        new Set(request.body.rules.map((rule) => rule.match)).size !==
+          request.body.rules.length
+      ) {
+        throw validationError(
+          "Preview redaction matches must be unique, non-blank text.",
+        );
+      }
+      const [existing] = await app.db
+        .select()
+        .from(schema.artifactPreviewRedactions)
+        .where(eq(schema.artifactPreviewRedactions.artifactId, artifact.id))
+        .limit(1);
+      if (existing === undefined) {
+        if (request.body.expectedRevision !== null) {
+          throw validationError(
+            "This preview does not have a saved redaction revision.",
+          );
+        }
+      } else {
+        if (request.body.expectedRevision === null) {
+          throw validationError("The preview redaction already exists.");
+        }
+        assertRevision(
+          existing,
+          request.body.expectedRevision,
+          "preview redaction",
+        );
+      }
+
+      if (request.body.rules.length === 0) {
+        if (existing !== undefined) {
+          await app.db
+            .delete(schema.artifactPreviewRedactions)
+            .where(
+              eq(schema.artifactPreviewRedactions.artifactId, artifact.id),
+            );
+        }
+      } else if (existing === undefined) {
+        await app.db.insert(schema.artifactPreviewRedactions).values({
+          artifactId: artifact.id,
+          rules: request.body.rules,
+          createdBy: user.id,
+          updatedBy: user.id,
+        });
+      } else {
+        await app.db
+          .update(schema.artifactPreviewRedactions)
+          .set({
+            rules: request.body.rules,
+            updatedBy: user.id,
+            revision: sql`${schema.artifactPreviewRedactions.revision} + 1`,
+            updatedAt: sql`now()`,
+          })
+          .where(eq(schema.artifactPreviewRedactions.artifactId, artifact.id));
+      }
+      await app.audit.write(
+        app.db,
+        {
+          actorId: user.id,
+          sessionId: principal.session.id,
+          requestId: request.requestId,
+        },
+        {
+          action:
+            request.body.rules.length === 0
+              ? "artifact.preview_redaction_cleared"
+              : "artifact.preview_redaction_saved",
+          entityType: "artifact",
+          entityId: artifact.id,
+          caseId: artifact.caseId,
+          after: { ruleCount: request.body.rules.length },
+        },
+      );
+      const [result] = await loadArtifacts(app.db, [artifact.id]);
+      if (result === undefined) throw notFound("Artifact");
+      return result;
     },
   );
 

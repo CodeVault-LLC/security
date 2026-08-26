@@ -36,6 +36,7 @@ const evidence = {
       metadata: { z: 1, a: { y: true, x: false } },
       previewKind: "TEXT_EXCERPT",
       previewText: null,
+      previewRedaction: null,
       createdAt: "2026-08-25T10:01:00.000Z",
     },
   ],

@@ -14,6 +14,7 @@ import {
   PrepareCaseArchiveImportResult,
 } from "@codevault/contracts";
 import {
+  applyPreviewRedactions,
   defaultPolicyPackForProfile,
   notFound,
   validationError,
@@ -443,6 +444,18 @@ async function exportRecords(
       ),
     );
   const artifactIds = artifacts.map((item) => item.id);
+  const previewRedactions =
+    artifactIds.length === 0
+      ? []
+      : await app.db
+          .select()
+          .from(schema.artifactPreviewRedactions)
+          .where(
+            inArray(schema.artifactPreviewRedactions.artifactId, artifactIds),
+          );
+  const previewRedactionsByArtifact = new Map(
+    previewRedactions.map((item) => [item.artifactId, item.rules]),
+  );
   const evidence = await app.db
     .select()
     .from(schema.evidence)
@@ -531,7 +544,12 @@ async function exportRecords(
             .select()
             .from(schema.externalReferences)
             .where(inArray(schema.externalReferences.findingId, findingIds)),
-    artifacts: artifacts.map(redactArtifactRecord),
+    artifacts: artifacts.map((artifact) =>
+      redactArtifactRecord(
+        artifact,
+        previewRedactionsByArtifact.get(artifact.id) ?? [],
+      ),
+    ),
     evidence,
     evidenceArtifacts:
       evidenceIds.length === 0 || artifactIds.length === 0
@@ -1573,6 +1591,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function redactArtifactRecord(
   artifact: typeof schema.artifacts.$inferSelect,
+  previewRedactionRules: Array<{ match: string; replacement: string }>,
 ): Record<string, unknown> {
   const {
     objectKey: _objectKey,
@@ -1580,7 +1599,13 @@ function redactArtifactRecord(
     previewObjectKey: _previewObjectKey,
     ...record
   } = artifact;
-  return record;
+  return {
+    ...record,
+    previewText:
+      record.previewText === null
+        ? null
+        : applyPreviewRedactions(record.previewText, previewRedactionRules),
+  };
 }
 
 function portableVendorRecord(

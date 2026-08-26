@@ -31,6 +31,7 @@ import {
 const describeIntegration = process.env.DATABASE_URL ? describe : describe.skip;
 
 const SENTINEL = "INTERNAL_SECRET_SENTINEL";
+const PREVIEW_SENTINEL = "PREVIEW_ONLY_SECRET";
 
 describeIntegration("AI context filtering", () => {
   let harness: TestHarness;
@@ -39,6 +40,7 @@ describeIntegration("AI context filtering", () => {
   let finding: FindingDetail;
   let report: ReportDetail;
   let submission: SubmissionDetail;
+  let artifactId: string;
 
   beforeAll(async () => {
     harness = await createHarness();
@@ -98,7 +100,7 @@ describeIntegration("AI context filtering", () => {
     finding = createdFinding.json<FindingDetail>();
 
     // Internal evidence carrying the sentinel, attached to the case.
-    const artifactId = uuidv7();
+    artifactId = uuidv7();
 
     await harness.dbHandle.db.insert(schema.artifacts).values({
       id: artifactId,
@@ -112,7 +114,7 @@ describeIntegration("AI context filtering", () => {
       visibility: "INTERNAL",
       status: "STORED",
       previewKind: "TEXT_EXCERPT",
-      previewText: `Working chain. Key material: ${SENTINEL}`,
+      previewText: `Working chain. Key material: ${SENTINEL} ${PREVIEW_SENTINEL}`,
       uploadedBy: user.id,
     });
 
@@ -300,6 +302,33 @@ describeIntegration("AI context filtering", () => {
 
     expect(preview.audience).toBe("INTERNAL");
     expect(preview.promptText).toContain(SENTINEL);
+  });
+
+  it("uses the redacted artifact preview in AI context", async () => {
+    const redacted = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/artifacts/${artifactId}/preview-redaction`,
+      headers: user.headers,
+      payload: {
+        rules: [{ match: PREVIEW_SENTINEL, replacement: "[REDACTED]" }],
+        expectedRevision: null,
+      },
+    });
+    expect(redacted.statusCode).toBe(200);
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/ai/context-preview",
+      headers: user.headers,
+      payload: {
+        action: "FINDING_DRAFT_TECHNICAL",
+        targetType: "FINDING",
+        targetId: finding.id,
+      },
+    });
+    const preview = response.json<AiContextPreview>();
+    expect(preview.promptText).not.toContain(PREVIEW_SENTINEL);
+    expect(preview.promptText).toContain("[REDACTED]");
   });
 
   it("refuses a run when the provider is disabled", async () => {
