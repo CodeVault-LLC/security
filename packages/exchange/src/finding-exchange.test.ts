@@ -45,6 +45,14 @@ describe("finding exchange", () => {
     ).toThrow("unexpected character after a closing quote");
   });
 
+  it("rejects duplicate normalized CSV columns", () => {
+    expect(() =>
+      parseFindingsCsv(
+        "title, visibility ,Visibility\nAmbiguous finding,INTERNAL,PUBLIC",
+      ),
+    ).toThrow('repeats the "visibility" column');
+  });
+
   it("rejects a declared incompatible JSON version", () => {
     expect(() =>
       parseFindingsJson(

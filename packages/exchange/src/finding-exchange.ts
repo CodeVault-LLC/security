@@ -103,6 +103,13 @@ export function parseFindingsCsv(input: string): ExchangeFinding[] {
   if (header === undefined) return [];
 
   const columns = header.map(normalizeColumn);
+  const seenColumns = new Set<string>();
+  for (const column of columns) {
+    if (column !== "" && seenColumns.has(column)) {
+      throw new Error(`The CSV finding exchange repeats the "${column}" column.`);
+    }
+    seenColumns.add(column);
+  }
   const titleIndex = columns.indexOf("title");
   if (titleIndex === -1) {
     throw new Error("The CSV finding exchange has no title column.");
