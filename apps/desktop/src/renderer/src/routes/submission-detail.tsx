@@ -25,6 +25,7 @@ import { PackageReview } from "../features/submissions/package-review.js";
 import { SubmissionComposer } from "../features/submissions/submission-composer.js";
 import { SubmissionValidator } from "../features/submissions/submission-validator.js";
 import { CorrespondenceThread } from "../features/submissions/correspondence-thread.js";
+import { VendorResponseSlaCard } from "../features/submissions/vendor-response-sla-card.js";
 import { bridge } from "../lib/bridge.js";
 import {
   errorHeading,
@@ -53,6 +54,7 @@ export function SubmissionDetailRoute({
     [
       queryKeys.submission(submissionId),
       queryKeys.submissionValidation(submissionId),
+      queryKeys.vendorResponseSla(submissionId),
       queryKeys.dashboard,
     ] as const;
 
@@ -236,6 +238,7 @@ export function SubmissionDetailRoute({
               )
             }
           />
+          <VendorResponseSlaCard submissionId={submission.id} />
           <AttachmentSelector
             key={`attachments:${submission.revision}`}
             submission={submission}
