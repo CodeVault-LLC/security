@@ -316,5 +316,9 @@ function isVisibility(value: string): value is ContentVisibility {
 }
 
 function isTimestamp(value: string): boolean {
-  return !Number.isNaN(Date.parse(value)) && value.includes("T");
+  return (
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/iu.test(
+      value,
+    ) && !Number.isNaN(Date.parse(value))
+  );
 }

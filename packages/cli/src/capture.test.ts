@@ -63,4 +63,15 @@ describe("capture arguments", () => {
       ]),
     ).toThrow("Unknown artifact kind");
   });
+
+  it("rejects a source time without an explicit timezone", () => {
+    expect(() =>
+      parseCaptureArguments([
+        "--case",
+        "018f2f56-7c9a-7abc-8def-0123456789ab",
+        "--source-time",
+        "2026-08-21T09:30:00",
+      ]),
+    ).toThrow("--source-time must be an ISO 8601 timestamp");
+  });
 });
