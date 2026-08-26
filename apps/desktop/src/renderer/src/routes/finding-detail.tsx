@@ -41,6 +41,10 @@ import { AiToolbar } from "../features/ai/ai-toolbar.js";
 import { Avatar } from "../components/avatar.js";
 import { MarkdownField } from "../features/markdown/markdown-field.js";
 import { PriorArtPanel } from "../features/findings/prior-art-panel.js";
+import {
+  FindingRevisionDiff,
+  findingRevisionChanges,
+} from "../features/findings/finding-revision-diff.js";
 import { ScoringPanel } from "../features/findings/scoring-panel.js";
 import { EvidencePanel } from "../features/evidence/evidence-panel.js";
 import { formatDateTime } from "../lib/dates.js";
@@ -815,10 +819,18 @@ function FindingHistory({
 
   return (
     <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
-      {items.map((event) => (
-        <li key={event.id} className="px-3 py-2.5 text-[12px]">
-          <div className="grid grid-cols-1 gap-1 sm:grid-cols-[14rem_1fr_auto] sm:items-center sm:gap-2">
-            <Mono className="text-text-muted">{event.action}</Mono>
+      {items.map((event) => {
+        const changes = findingRevisionChanges(event.before, event.after);
+        const metadata = (
+          <div className="grid min-w-0 flex-1 grid-cols-1 gap-1 text-left sm:grid-cols-[14rem_1fr_auto] sm:items-center sm:gap-2">
+            <span className="flex min-w-0 items-center gap-2">
+              <Mono className="text-text-muted">{event.action}</Mono>
+              {changes.length === 0 ? null : (
+                <span className="rounded-full bg-surface-raised px-1.5 py-0.5 text-[10px] font-medium text-text-muted">
+                  {changes.length} {changes.length === 1 ? "change" : "changes"}
+                </span>
+              )}
+            </span>
             <div className="flex-1">
               {event.actor ? (
                 <Avatar
@@ -837,13 +849,29 @@ function FindingHistory({
               {formatDateTime(event.occurredAt)}
             </span>
           </div>
-          {event.after === null ? null : (
-            <pre className="mt-1 overflow-x-auto rounded-(--cv-radius) bg-surface-raised p-1.5 font-mono text-[10.5px] text-text-muted">
-              {JSON.stringify(event.after)}
-            </pre>
-          )}
-        </li>
-      ))}
+        );
+
+        return (
+          <li key={event.id} className="px-3 py-2.5 text-[12px]">
+            {changes.length === 0 ? (
+              metadata
+            ) : (
+              <details className="group">
+                <summary className="flex cursor-pointer list-none items-center gap-2 rounded-(--cv-radius) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+                  {metadata}
+                  <span
+                    aria-hidden
+                    className="text-text-muted transition-transform group-open:rotate-90"
+                  >
+                    ›
+                  </span>
+                </summary>
+                <FindingRevisionDiff changes={changes} />
+              </details>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }
