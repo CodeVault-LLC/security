@@ -45,6 +45,15 @@ describe("formatReference", () => {
     expect(() => formatReference("case", 1)).toThrow(/requires a year/);
   });
 
+  it.each([0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1])(
+    "rejects invalid sequence %s",
+    (sequence) => {
+      expect(() => formatReference("asset", sequence)).toThrow(
+        /positive safe integer/,
+      );
+    },
+  );
+
   it("never produces a CVE-shaped reference", () => {
     const references = [
       formatReference("case", 1, 2026),
