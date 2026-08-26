@@ -50,6 +50,34 @@ describe("API client session invalidation", () => {
     expect(sessionStore.clear).toHaveBeenCalledOnce();
     expect(onSessionExpired).toHaveBeenCalledOnce();
   });
+
+  it("reports the original 401 when persisted-session cleanup fails", async () => {
+    const sessionStore = storedSession();
+    vi.mocked(sessionStore.clear).mockRejectedValue(new Error("keychain locked"));
+    const onSessionExpired = vi.fn();
+    const client = createApiClient({
+      sessionStore,
+      onSessionExpired,
+      fetchImpl: vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            error: {
+              category: "SESSION_EXPIRED",
+              message: "Your session has expired. Sign in again.",
+              requestId: "request-2",
+            },
+          }),
+          { status: 401 },
+        ),
+      ),
+    });
+
+    await expect(client.request("/v1/dashboard")).rejects.toMatchObject({
+      status: 401,
+      category: "SESSION_EXPIRED",
+    });
+    expect(onSessionExpired).toHaveBeenCalledOnce();
+  });
 });
 
 describe("API client origin boundary", () => {
