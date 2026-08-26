@@ -183,7 +183,12 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
           const error = toApiError(response.status, payload);
 
           if (response.status === 401 && request.anonymous !== true) {
-            await options.sessionStore.clear();
+            try {
+              await options.sessionStore.clear();
+            } catch {
+              // The renderer still has to leave authenticated screens even if
+              // the OS credential store cannot be updated.
+            }
             options.onSessionExpired?.();
           }
 
