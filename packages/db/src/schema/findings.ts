@@ -335,6 +335,12 @@ export const priorArtChecks = pgTable(
       .default([]),
     /** Advisory AI synthesis; never the recorded conclusion by itself. */
     analysis: jsonb("analysis").$type<Record<string, unknown> | null>(),
+    requestOptions: jsonb("request_options")
+      .$type<{ keywords: string[]; skipAiSynthesis: boolean }>()
+      .notNull()
+      .default({ keywords: [], skipAiSynthesis: false }),
+    // The SQL migration owns this self-reference to keep the table declaration acyclic.
+    retryOfCheckId: uuid("retry_of_check_id"),
     humanConclusion: text("human_conclusion").$type<PriorArtState>(),
     concludedBy: uuid("concluded_by").references(() => users.id),
     concludedAt: timestampColumn("concluded_at"),
@@ -348,6 +354,7 @@ export const priorArtChecks = pgTable(
   },
   (table) => [
     index("prior_art_checks_finding_idx").on(table.findingId, table.startedAt),
+    index("prior_art_checks_retry_idx").on(table.retryOfCheckId),
   ],
 );
 

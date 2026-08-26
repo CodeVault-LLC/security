@@ -60,6 +60,10 @@ export async function registerPriorArtRoutes(app: AppInstance): Promise<void> {
           findingId: finding.id,
           status: "QUEUED",
           startedBy: user.id,
+          requestOptions: {
+            keywords: request.body.keywords ?? [],
+            skipAiSynthesis: request.body.skipAiSynthesis ?? false,
+          },
         })
         .returning({ id: schema.priorArtChecks.id });
 
@@ -101,6 +105,77 @@ export async function registerPriorArtRoutes(app: AppInstance): Promise<void> {
         throw notFound("Prior-art check");
       }
 
+      return result;
+    },
+  );
+
+  app.post(
+    "/v1/prior-art-checks/:id/retry",
+    {
+      schema: {
+        params: IdParam,
+        response: {
+          200: PriorArtCheck,
+          400: ErrorResponse,
+          404: ErrorResponse,
+        },
+      },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const principal = principalOf(request);
+      const previous = await loadCheck(app.db, request.params.id);
+      if (previous === null) throw notFound("Prior-art check");
+      const finding = await requireFinding(app, previous.findingId);
+      await requireCaseWrite(app.db, user, finding.caseId);
+
+      const providerFailed = previous.sourcesChecked.some(
+        (source) => source.error !== null && source.retrievedAt !== null,
+      );
+      if (previous.status !== "FAILED" && !providerFailed) {
+        throw validationError(
+          "Only a failed or partially failed check can be retried.",
+        );
+      }
+
+      const [created] = await app.db
+        .insert(schema.priorArtChecks)
+        .values({
+          findingId: finding.id,
+          status: "QUEUED",
+          startedBy: user.id,
+          requestOptions: previous.requestOptions,
+          retryOfCheckId: previous.id,
+        })
+        .returning({ id: schema.priorArtChecks.id });
+      if (created === undefined) {
+        throw new DomainError("SERVER_ERROR", "Could not retry the check.");
+      }
+
+      await app.jobs.send(JOB_QUEUES.priorArt, {
+        checkId: created.id,
+        findingId: finding.id,
+        caseId: finding.caseId,
+        ...previous.requestOptions,
+      });
+      await app.audit.write(
+        app.db,
+        {
+          actorId: user.id,
+          sessionId: principal.session.id,
+          requestId: request.requestId,
+        },
+        {
+          action: "prior_art.check_retried",
+          entityType: "prior_art_check",
+          entityId: created.id,
+          caseId: finding.caseId,
+          after: { findingId: finding.id, retryOfCheckId: previous.id },
+        },
+      );
+
+      const result = await loadCheck(app.db, created.id);
+      if (result === null) throw notFound("Prior-art check");
       return result;
     },
   );
@@ -373,6 +448,8 @@ export async function loadCheck(
       analysis === null || analysis === undefined
         ? null
         : (analysis as PriorArtCheck["analysis"]),
+    requestOptions: row.check.requestOptions,
+    retryOfCheckId: row.check.retryOfCheckId,
     humanConclusion: row.check.humanConclusion,
     concludedBy: concluder,
     concludedAt: row.check.concludedAt,
