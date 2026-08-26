@@ -69,6 +69,7 @@ export async function previewFolder(
   const existingTitles = new Set(
     (options.existingTitles ?? []).map(normalizeTitle),
   );
+  const selectedTitles = new Set<string>();
   const existingDigests = new Set(options.existingDigests ?? []);
   let totalBytes = 0;
 
@@ -116,9 +117,15 @@ export async function previewFolder(
       const mapped = mapText(extension, text);
       for (const item of mapped) {
         const duplicateReasons: string[] = [];
-        if (existingTitles.has(normalizeTitle(item.title))) {
+        const normalizedTitle = normalizeTitle(item.title);
+        if (existingTitles.has(normalizedTitle)) {
           duplicateReasons.push(
             "A finding with this normalized title already exists in the case.",
+          );
+        }
+        if (selectedTitles.has(normalizedTitle)) {
+          duplicateReasons.push(
+            "Another selected finding has the same normalized title.",
           );
         }
         if (existingDigests.has(sha256)) {
@@ -139,6 +146,7 @@ export async function previewFolder(
           status: duplicateReasons.length === 0 ? "READY" : "DUPLICATE",
           duplicateReasons,
         });
+        selectedTitles.add(normalizedTitle);
       }
       files.push({
         relativePath,
