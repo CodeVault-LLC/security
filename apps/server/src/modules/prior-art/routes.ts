@@ -87,7 +87,11 @@ export async function registerPriorArtRoutes(app: AppInstance): Promise<void> {
           entityType: "prior_art_check",
           entityId: check.id,
           caseId: finding.caseId,
-          after: { findingId: finding.id },
+          after: {
+            findingId: finding.id,
+            keywords: request.body.keywords ?? [],
+            aiSynthesis: !(request.body.skipAiSynthesis ?? false),
+          },
         },
       );
 
