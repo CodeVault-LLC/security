@@ -267,6 +267,10 @@ export async function resolveDirectives(
   const errors: DirectiveError[] = [];
   const substitutions: DirectiveSubstitution[] = [];
   const replacements: Array<{ start: number; end: number; text: string }> = [];
+  const resolutionCache = new Map<
+    string,
+    Promise<ResolvedDirective | null>
+  >();
 
   let placeholderIndex = 0;
 
@@ -316,7 +320,13 @@ export async function resolveDirectives(
     let item: ResolvedDirective | null;
 
     try {
-      item = await resolver.resolve(directive.kind, directive.argument);
+      const cacheKey = `${directive.kind}\0${directive.argument}`;
+      let resolution = resolutionCache.get(cacheKey);
+      if (resolution === undefined) {
+        resolution = resolver.resolve(directive.kind, directive.argument);
+        resolutionCache.set(cacheKey, resolution);
+      }
+      item = await resolution;
     } catch {
       fail(
         directive,
