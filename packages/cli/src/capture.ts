@@ -101,6 +101,10 @@ export function parseCaptureArguments(
   if (title !== undefined && (title.trim().length === 0 || title.length > 200)) {
     throw new Error("--title must contain 1 to 200 characters.");
   }
+  const descriptionMarkdown = values.get("--description");
+  if (descriptionMarkdown !== undefined && descriptionMarkdown.length > 200_000) {
+    throw new Error("--description cannot exceed 200000 characters.");
+  }
 
   return {
     caseId,
@@ -108,9 +112,7 @@ export function parseCaptureArguments(
     file: values.get("--file") ?? null,
     ...(name === undefined ? {} : { name }),
     ...(title === undefined ? {} : { title }),
-    ...(values.get("--description") === undefined
-      ? {}
-      : { descriptionMarkdown: values.get("--description")! }),
+    ...(descriptionMarkdown === undefined ? {} : { descriptionMarkdown }),
     mimeType,
     artifactKind: artifactKind as ArtifactKind,
     visibility,
