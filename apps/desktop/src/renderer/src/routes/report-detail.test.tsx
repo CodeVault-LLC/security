@@ -120,6 +120,24 @@ function renderReport(detail: ReportDetail = report): void {
   );
 }
 
+function mockReportRequests(): void {
+  apiBridge.request.mockReset();
+  apiBridge.request.mockImplementation((path: string, options?: unknown) => {
+    if (options !== undefined)
+      return Promise.resolve({ ok: true, data: report });
+    if (path.endsWith("/lint"))
+      return Promise.resolve({ ok: true, data: lint });
+    if (path.endsWith("/preview")) {
+      return Promise.resolve({ ok: true, data: preview });
+    }
+    if (path.endsWith("/exports")) {
+      return Promise.resolve({ ok: true, data: { items: [completedExport] } });
+    }
+
+    return Promise.resolve({ ok: true, data: report });
+  });
+}
+
 describe("completed report exports", () => {
   beforeEach(() => {
     apiBridge.request.mockReset();
@@ -226,24 +244,7 @@ describe("report preview", () => {
 
 describe("report TLP marking", () => {
   beforeEach(() => {
-    apiBridge.request.mockReset();
-    apiBridge.request.mockImplementation((path: string, options?: unknown) => {
-      if (options !== undefined)
-        return Promise.resolve({ ok: true, data: report });
-      if (path.endsWith("/lint"))
-        return Promise.resolve({ ok: true, data: lint });
-      if (path.endsWith("/preview")) {
-        return Promise.resolve({ ok: true, data: preview });
-      }
-      if (path.endsWith("/exports")) {
-        return Promise.resolve({
-          ok: true,
-          data: { items: [completedExport] },
-        });
-      }
-
-      return Promise.resolve({ ok: true, data: report });
-    });
+    mockReportRequests();
     useSession.getState().signIn(
       {
         ...actor,
@@ -283,5 +284,72 @@ describe("report TLP marking", () => {
         },
       ),
     );
+  });
+});
+
+describe("report renaming", () => {
+  beforeEach(() => {
+    mockReportRequests();
+    useSession.getState().signIn(
+      {
+        ...actor,
+        role: "MEMBER",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        lastLoginAt: null,
+      },
+      null,
+    );
+  });
+
+  it("renames the report inline with concurrency protection", async () => {
+    const user = userEvent.setup();
+    renderReport();
+
+    await user.click(screen.getByRole("button", { name: "Report details" }));
+    await user.click(screen.getByRole("menuitem", { name: "Rename report" }));
+
+    const input = screen.getByRole("textbox", { name: "Report title" });
+    await user.clear(input);
+    await user.type(input, "Vendor-ready report");
+    await user.click(screen.getByRole("button", { name: "Save title" }));
+
+    await waitFor(() =>
+      expect(apiBridge.request).toHaveBeenCalledWith(
+        `/v1/reports/${REPORT_ID}`,
+        {
+          method: "PATCH",
+          body: {
+            title: "Vendor-ready report",
+            expectedRevision: report.revision,
+          },
+        },
+      ),
+    );
+  });
+
+  it("keeps the title draft when saving fails", async () => {
+    const user = userEvent.setup();
+    renderReport();
+    apiBridge.request.mockResolvedValueOnce({
+      ok: false,
+      category: "VALIDATION",
+      message: "That report title cannot be used.",
+      requestId: null,
+      details: null,
+    });
+
+    await user.click(screen.getByRole("button", { name: "Report details" }));
+    await user.click(screen.getByRole("menuitem", { name: "Rename report" }));
+    const input = screen.getByRole<HTMLInputElement>("textbox", {
+      name: "Report title",
+    });
+    await user.clear(input);
+    await user.type(input, "Preserved report title");
+    await user.click(screen.getByRole("button", { name: "Save title" }));
+
+    expect(
+      await screen.findByText("That report title cannot be used."),
+    ).toBeTruthy();
+    expect(input.value).toBe("Preserved report title");
   });
 });
