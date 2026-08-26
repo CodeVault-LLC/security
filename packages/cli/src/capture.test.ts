@@ -74,4 +74,26 @@ describe("capture arguments", () => {
       ]),
     ).toThrow("--source-time must be an ISO 8601 timestamp");
   });
+
+  it("rejects an impossible source calendar date", () => {
+    expect(() =>
+      parseCaptureArguments([
+        "--case",
+        "018f2f56-7c9a-7abc-8def-0123456789ab",
+        "--source-time",
+        "2026-02-30T09:30:00.000Z",
+      ]),
+    ).toThrow("--source-time must be an ISO 8601 timestamp");
+  });
+
+  it("accepts a leap-day source date", () => {
+    expect(
+      parseCaptureArguments([
+        "--case",
+        "018f2f56-7c9a-7abc-8def-0123456789ab",
+        "--source-time",
+        "2028-02-29T09:30:00+01:00",
+      ]).sourceTime,
+    ).toBe("2028-02-29T09:30:00+01:00");
+  });
 });
