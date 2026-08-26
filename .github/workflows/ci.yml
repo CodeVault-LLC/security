@@ -1,44 +1,54 @@
 # CodeVault continuous integration.
 #
-# The gates run in the order a contributor would want them to fail: lint and
-# formatting first because they are instant, then types, then tests, then the
-# build. Integration tests run against a real PostgreSQL, because the access
-# control this product depends on is partly SQL and a mocked database would
-# prove nothing about it.
+# Pull requests get one fast feedback job. The same required check runs the
+# complete test and security gate against the merge queue commit, so master
+# never receives code that only passed against an out-of-date base branch.
 
 name: CI
 
 on:
-  push:
-    branches: [master]
   pull_request:
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: validate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-permissions:
-  contents: read
+permissions: {}
 
 env:
   BUN_VERSION: 1.3.14
+  DATABASE_URL: postgres://codevault:codevault_ci@127.0.0.1:5432/codevault
 
 jobs:
-  quality:
-    name: Lint, types and unit tests
+  validate:
+    name: Validate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
+      - name: Review dependency changes
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+          fail-on-scopes: runtime, development
+
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
-      - name: Install
+      - name: Install frozen dependencies
         run: bun install --frozen-lockfile
 
       - name: Lint
@@ -50,137 +60,83 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
-      - name: Check generated MCP inventory
+      - name: Check generated repository files
         run: |
           bun run mcp:inventory:check
           bun run features:check
 
-      - name: Unit tests
+      - name: Run unit tests
         run: bunx vitest --run --project node --project dom
 
       - name: Build
         run: bun run build
 
-  integration:
-    name: Integration tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+      - name: Validate workflow syntax
+        if: github.event_name != 'pull_request'
+        run: >-
+          docker run --rm
+          --volume "$PWD:/repo:ro"
+          --workdir /repo
+          rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
 
-    services:
-      postgres:
-        image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
-        env:
-          POSTGRES_USER: codevault
-          POSTGRES_PASSWORD: codevault_ci
-          POSTGRES_DB: codevault
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U codevault"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-
-    env:
-      DATABASE_URL: postgres://codevault:codevault_ci@127.0.0.1:5432/codevault
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Install
-        run: bun install --frozen-lockfile
-
-      - name: Migrate
-        run: bun run db:migrate
-
-      - name: Integration tests
-        run: bunx vitest --run --project node-integration
-
-  end-to-end:
-    name: Existing end-to-end acceptance tests
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    services:
-      postgres:
-        image: postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
-        env:
-          POSTGRES_USER: codevault
-          POSTGRES_PASSWORD: codevault_ci
-          POSTGRES_DB: codevault
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U codevault"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-
-    env:
-      DATABASE_URL: postgres://codevault:codevault_ci@127.0.0.1:5432/codevault
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Install
-        run: bun install --frozen-lockfile
-
-      - name: Migrate
-        run: bun run db:migrate
-
-      - name: End-to-end tests
-        run: bun run e2e
-
-  audit:
-    name: Dependency advisories
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: ${{ env.BUN_VERSION }}
-
-      - name: Install
-        run: bun install --frozen-lockfile
-
-      # A known-vulnerable dependency in a security tool is not an irony worth
-      # shipping. Advisories fail the build; the fix is an upgrade, not a
-      # suppression file.
-      - name: Audit
+      - name: Audit dependencies
+        if: github.event_name != 'pull_request'
         run: bun audit --audit-level=moderate
 
       - name: Verify reviewed image-decoder versions
+        if: github.event_name != 'pull_request'
         run: bun run --cwd apps/media-worker verify:runtime
 
       - name: Run adversarial image fixtures with a deadline
+        if: github.event_name != 'pull_request'
         run: timeout 30s bunx vitest --run apps/media-worker/src/sanitize-image.test.ts
 
+      - name: Start PostgreSQL
+        if: github.event_name != 'pull_request'
+        run: |
+          docker run --detach --rm --name codevault-ci-postgres \
+            --publish 5432:5432 \
+            --env POSTGRES_USER=codevault \
+            --env POSTGRES_PASSWORD=codevault_ci \
+            --env POSTGRES_DB=codevault \
+            postgres:18-alpine@sha256:d3e1620b530c944afa6e887d22eb899824da68e19c52024bf98f5220c88a65b2
+          for _attempt in {1..20}; do
+            if docker exec codevault-ci-postgres pg_isready -U codevault; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs codevault-ci-postgres
+          exit 1
+
+      - name: Migrate the integration database
+        if: github.event_name != 'pull_request'
+        run: bun run db:migrate
+
+      - name: Run integration tests
+        if: github.event_name != 'pull_request'
+        run: bunx vitest --run --project node-integration
+
+      - name: Reset the end-to-end database
+        if: github.event_name != 'pull_request'
+        run: bun run db:reset -- --yes
+
+      - name: Run end-to-end acceptance tests
+        if: github.event_name != 'pull_request'
+        run: bun run e2e
+
       - name: Build isolated media image
+        if: github.event_name != 'pull_request'
         run: docker build -f infra/media-worker.Dockerfile -t codevault-media-worker:ci .
 
       - name: Build API and worker images
+        if: github.event_name != 'pull_request'
         run: |
           docker build -f infra/server.Dockerfile -t codevault-server:ci .
           docker build -f infra/worker.Dockerfile -t codevault-worker:ci .
 
       - name: Verify isolated media image identity and native runtime
+        if: github.event_name != 'pull_request'
         run: |
           test "$(docker image inspect codevault-media-worker:ci --format '{{.Config.User}}')" = "10002:10002"
           docker run --rm --read-only --cap-drop ALL --security-opt no-new-privileges \
@@ -188,6 +144,7 @@ jobs:
             -e 'import("sharp").then((m) => { if (m.default.versions.sharp !== "0.35.3" || m.default.versions.vips !== "8.18.3" || process.getuid() !== 10002 || process.env.VIPS_BLOCK_UNTRUSTED !== "1") process.exit(1); })'
 
       - name: Refuse broad media credentials
+        if: github.event_name != 'pull_request'
         run: |
           if docker run --rm \
             -e DATABASE_URL=postgres://broad \
@@ -200,3 +157,49 @@ jobs:
             exit 1
           fi
           grep -q "Required media-worker setting MEDIA_DATABASE_URL is missing" "$RUNNER_TEMP/media-credential-check.log"
+
+      - name: Initialize CodeQL
+        if: github.event_name != 'pull_request'
+        uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-extended
+
+      - name: Analyze source with CodeQL
+        if: github.event_name != 'pull_request'
+        uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        with:
+          category: codevault-merge-gate
+
+      - name: Scan source, secrets, and configuration
+        if: github.event_name != 'pull_request'
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,secret,misconfig
+          severity: MEDIUM,HIGH,CRITICAL
+          ignore-unfixed: false
+          format: sarif
+          limit-severities-for-sarif: true
+          output: trivy-results.sarif
+          exit-code: 1
+
+      - name: Upload repository scan results
+        if: always() && github.event_name != 'pull_request' && hashFiles('trivy-results.sarif') != ''
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-merge-gate
+
+      - name: Audit workflow security
+        if: github.event_name != 'pull_request'
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          advanced-security: false
+          annotations: true
+          min-severity: medium
+          min-confidence: medium
+          persona: pedantic
+          version: 1.29.0
