@@ -4,7 +4,7 @@ This queue tracks the user-requested product extension run. Each feature is
 implemented on its own branch, reviewed by CI in its own pull request, and
 squash-merged into `master` before the next feature starts.
 
-## Merged features 1-20
+## Merged features 1-21
 
 1. TLP report controls and export labels, PR #68.
 2. SARIF finding exchange, PR #70.
@@ -26,10 +26,10 @@ squash-merged into `master` before the next feature starts.
 18. Recurring scanner synchronization profiles, PR #86.
 19. Prior-art retry and run history, PR #87.
 20. Intelligence refresh scheduling controls, PR #88.
+21. Case archive version 2 with correspondence, PR #89.
 
-## Continuation queue 21-50
+## Continuation queue 22-50
 
-21. Case archive version 2 with correspondence.
 22. Evidence preview redaction workflow.
 23. Evidence chain-of-custody attestations.
 24. Affected-version comparison matrix.

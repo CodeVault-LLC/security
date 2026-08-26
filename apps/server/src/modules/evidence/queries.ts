@@ -1,6 +1,7 @@
 import { desc, eq, inArray } from "drizzle-orm";
 
 import type { Artifact, Evidence, Poc } from "@codevault/contracts";
+import { applyPreviewRedactions } from "@codevault/core";
 import type { Database } from "@codevault/db";
 import { schema } from "@codevault/db";
 
@@ -25,33 +26,60 @@ export async function loadArtifacts(
       uploaderId: schema.users.id,
       uploaderName: schema.users.displayName,
       uploaderEmail: schema.users.email,
+      previewRedaction: schema.artifactPreviewRedactions,
     })
     .from(schema.artifacts)
     .innerJoin(schema.users, eq(schema.users.id, schema.artifacts.uploadedBy))
+    .leftJoin(
+      schema.artifactPreviewRedactions,
+      eq(schema.artifactPreviewRedactions.artifactId, schema.artifacts.id),
+    )
     .where(inArray(schema.artifacts.id, [...artifactIds]));
 
-  return rows.map(({ artifact, uploaderId, uploaderName, uploaderEmail }) => ({
-    id: artifact.id,
-    caseId: artifact.caseId,
-    findingId: artifact.findingId,
-    filename: artifact.filename,
-    mimeType: artifact.mimeType,
-    sizeBytes: artifact.sizeBytes,
-    sha256: artifact.sha256,
-    artifactKind: artifact.artifactKind,
-    visibility: artifact.visibility,
-    status: artifact.status,
-    uploadedBy: {
-      id: uploaderId,
-      displayName: uploaderName,
-      email: uploaderEmail,
-    },
-    capturedAt: artifact.capturedAt,
-    metadata: artifact.metadata,
-    previewKind: artifact.previewKind,
-    previewText: artifact.previewText,
-    createdAt: artifact.createdAt,
-  }));
+  return rows.map(
+    ({
+      artifact,
+      uploaderId,
+      uploaderName,
+      uploaderEmail,
+      previewRedaction,
+    }) => ({
+      id: artifact.id,
+      caseId: artifact.caseId,
+      findingId: artifact.findingId,
+      filename: artifact.filename,
+      mimeType: artifact.mimeType,
+      sizeBytes: artifact.sizeBytes,
+      sha256: artifact.sha256,
+      artifactKind: artifact.artifactKind,
+      visibility: artifact.visibility,
+      status: artifact.status,
+      uploadedBy: {
+        id: uploaderId,
+        displayName: uploaderName,
+        email: uploaderEmail,
+      },
+      capturedAt: artifact.capturedAt,
+      metadata: artifact.metadata,
+      previewKind: artifact.previewKind,
+      previewText:
+        artifact.previewText === null || previewRedaction === null
+          ? artifact.previewText
+          : applyPreviewRedactions(
+              artifact.previewText,
+              previewRedaction.rules,
+            ),
+      previewRedaction:
+        previewRedaction === null
+          ? null
+          : {
+              rules: previewRedaction.rules,
+              revision: previewRedaction.revision,
+              updatedAt: previewRedaction.updatedAt,
+            },
+      createdAt: artifact.createdAt,
+    }),
+  );
 }
 
 export async function loadEvidence(

@@ -11,7 +11,12 @@ import {
   type ContextCandidate,
   type ContextPolicy,
 } from "@codevault/ai";
-import { notFound, type ReportAudience } from "@codevault/core";
+import {
+  applyPreviewRedactions,
+  notFound,
+  type PreviewRedactionRule,
+  type ReportAudience,
+} from "@codevault/core";
 import type { Database } from "@codevault/db";
 import { schema } from "@codevault/db";
 
@@ -37,6 +42,17 @@ export interface PrepareInput {
   targetId: string;
   policy: Omit<ContextPolicy, "caseIsRestricted">;
   researcherInstruction?: string | null;
+}
+
+function previewSuffix(
+  previewText: string | null,
+  rules: PreviewRedactionRule[] | null,
+  prefix: string,
+): string {
+  if (previewText === null) return "";
+  const effective =
+    rules === null ? previewText : applyPreviewRedactions(previewText, rules);
+  return `${prefix}${effective.slice(0, 2_000)}`;
 }
 
 export async function prepareRun(input: PrepareInput): Promise<PreparedRun> {
@@ -160,11 +176,16 @@ async function prepareSubmissionRun(
         sha256: schema.artifacts.sha256,
         visibility: schema.artifacts.visibility,
         previewText: schema.artifacts.previewText,
+        redactionRules: schema.artifactPreviewRedactions.rules,
       })
       .from(schema.evidenceArtifacts)
       .innerJoin(
         schema.artifacts,
         eq(schema.artifacts.id, schema.evidenceArtifacts.artifactId),
+      )
+      .leftJoin(
+        schema.artifactPreviewRedactions,
+        eq(schema.artifactPreviewRedactions.artifactId, schema.artifacts.id),
       )
       .where(eq(schema.evidenceArtifacts.evidenceId, item.id));
     candidates.push({
@@ -181,7 +202,7 @@ async function prepareSubmissionRun(
         artifacts
           .map(
             (artifact) =>
-              `${artifact.filename} sha256=${artifact.sha256}${artifact.previewText === null ? "" : `\nPreview: ${artifact.previewText.slice(0, 2_000)}`}`,
+              `${artifact.filename} sha256=${artifact.sha256}${previewSuffix(artifact.previewText, artifact.redactionRules, "\nPreview: ")}`,
           )
           .join("\n"),
     });
@@ -401,11 +422,16 @@ async function prepareFindingRun(input: PrepareInput): Promise<PreparedRun> {
         artifactKind: schema.artifacts.artifactKind,
         visibility: schema.artifacts.visibility,
         previewText: schema.artifacts.previewText,
+        redactionRules: schema.artifactPreviewRedactions.rules,
       })
       .from(schema.evidenceArtifacts)
       .innerJoin(
         schema.artifacts,
         eq(schema.artifacts.id, schema.evidenceArtifacts.artifactId),
+      )
+      .leftJoin(
+        schema.artifactPreviewRedactions,
+        eq(schema.artifactPreviewRedactions.artifactId, schema.artifacts.id),
       )
       .where(eq(schema.evidenceArtifacts.evidenceId, item.id));
 
@@ -426,7 +452,7 @@ async function prepareFindingRun(input: PrepareInput): Promise<PreparedRun> {
           .map(
             (artifact) =>
               `- ${artifact.filename} (${artifact.artifactKind}, sha256 ${artifact.sha256})` +
-              `${artifact.previewText === null ? "" : `\n  Preview: ${artifact.previewText.slice(0, 2_000)}`}`,
+              `${previewSuffix(artifact.previewText, artifact.redactionRules, "\n  Preview: ")}`,
           )
           .join("\n"),
     });

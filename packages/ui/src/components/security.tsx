@@ -21,6 +21,7 @@ import {
   Network,
   Package,
   ScrollText,
+  ScanText,
   Server,
   Sparkles,
   Terminal,
@@ -278,6 +279,7 @@ export interface EvidenceCardProps {
   capturedAt?: string | null;
   onOpenArtifact?: (artifactId: string) => void;
   onLoadArtifact?: (artifactId: string) => Promise<string>;
+  onManagePreviewRedaction?: (artifact: Artifact) => void;
   className?: string;
 }
 
@@ -290,6 +292,7 @@ export function EvidenceCard({
   capturedAt,
   onOpenArtifact,
   onLoadArtifact,
+  onManagePreviewRedaction,
   className,
 }: EvidenceCardProps): React.JSX.Element {
   return (
@@ -321,6 +324,7 @@ export function EvidenceCard({
             artifact={artifact}
             onOpenArtifact={onOpenArtifact}
             onLoadArtifact={onLoadArtifact}
+            onManagePreviewRedaction={onManagePreviewRedaction}
           />
         ))}
       </ul>
@@ -338,10 +342,12 @@ function EvidenceArtifact({
   artifact,
   onOpenArtifact,
   onLoadArtifact,
+  onManagePreviewRedaction,
 }: {
   artifact: Artifact;
   onOpenArtifact?: ((artifactId: string) => void) | undefined;
   onLoadArtifact?: ((artifactId: string) => Promise<string>) | undefined;
+  onManagePreviewRedaction?: ((artifact: Artifact) => void) | undefined;
 }): React.JSX.Element {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -400,6 +406,23 @@ function EvidenceArtifact({
           value={artifact.sha256}
           className="hidden shrink-0 lg:inline-flex"
         />
+        {artifact.previewRedaction === null ? null : (
+          <span className="hidden text-[10px] text-accent sm:inline">
+            {artifact.previewRedaction.rules.length} redaction
+            {artifact.previewRedaction.rules.length === 1 ? "" : "s"}
+          </span>
+        )}
+        {textPreviewable && onManagePreviewRedaction !== undefined ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="shrink-0"
+            aria-label={`Manage preview redaction for ${artifact.filename}`}
+            onClick={() => onManagePreviewRedaction(artifact)}
+          >
+            <ScanText aria-hidden className="size-4" strokeWidth={1.5} />
+          </Button>
+        ) : null}
         {previewable ? (
           <Button
             variant="ghost"

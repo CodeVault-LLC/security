@@ -2,6 +2,8 @@ import { relations } from "drizzle-orm";
 import {
   bigint,
   index,
+  integer,
+  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -93,6 +95,28 @@ export const artifacts = pgTable(
     index("artifacts_finding_idx").on(table.findingId),
     index("artifacts_sha256_idx").on(table.sha256),
   ],
+);
+
+export const artifactPreviewRedactions = pgTable(
+  "artifact_preview_redactions",
+  {
+    artifactId: uuid("artifact_id")
+      .primaryKey()
+      .references(() => artifacts.id, { onDelete: "cascade" }),
+    rules: jsonb("rules")
+      .$type<Array<{ match: string; replacement: string }>>()
+      .notNull()
+      .default([]),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    updatedBy: uuid("updated_by")
+      .notNull()
+      .references(() => users.id),
+    revision: integer("revision").notNull().default(1),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
 );
 
 export const evidence = pgTable(

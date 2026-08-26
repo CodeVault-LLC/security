@@ -25,6 +25,7 @@ const artifact: Artifact = {
   metadata: {},
   previewKind: null,
   previewText: null,
+  previewRedaction: null,
   createdAt: "2026-08-20T10:00:00.000Z",
 };
 

@@ -72,6 +72,25 @@ export const CompleteUploadRequest = Type.Object({
 
 export type CompleteUploadRequest = Static<typeof CompleteUploadRequest>;
 
+export const PreviewRedactionRule = Type.Object(
+  {
+    match: Type.String({ minLength: 1, maxLength: 200 }),
+    replacement: Type.String({ maxLength: 200 }),
+  },
+  { additionalProperties: false },
+);
+
+export const UpdatePreviewRedactionRequest = Type.Object(
+  {
+    rules: Type.Array(PreviewRedactionRule, { maxItems: 50 }),
+    expectedRevision: Type.Union([Type.Integer({ minimum: 1 }), Type.Null()]),
+  },
+  { additionalProperties: false },
+);
+export type UpdatePreviewRedactionRequest = Static<
+  typeof UpdatePreviewRedactionRequest
+>;
+
 export const Artifact = Type.Object({
   id: Uuid,
   caseId: Uuid,
@@ -101,6 +120,14 @@ export const Artifact = Type.Object({
     Type.Null(),
   ]),
   previewText: Type.Union([Type.String(), Type.Null()]),
+  previewRedaction: Type.Union([
+    Type.Object({
+      rules: Type.Array(PreviewRedactionRule),
+      revision: RevisionField,
+      updatedAt: Timestamp,
+    }),
+    Type.Null(),
+  ]),
   createdAt: Timestamp,
 });
 
