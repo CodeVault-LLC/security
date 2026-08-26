@@ -183,6 +183,11 @@ export interface DecryptedCorrespondence {
   attachmentCount: number;
 }
 
+export interface CorrespondenceTranscriptExportResult {
+  saved: boolean;
+  sha256: string | null;
+}
+
 /**
  * What the renderer may say about a run.
  *
@@ -307,6 +312,11 @@ export interface CodeVaultDesktopApi {
   correspondence: {
     /** Decrypts only after native confirmation; plaintext is memory-only. */
     decrypt(messageId: string): Promise<ApiOutcome<DecryptedCorrespondence>>;
+    /** Saves a locally assembled transcript through a native picker. */
+    exportTranscript(
+      submissionId: string,
+      markdown: string,
+    ): Promise<ApiOutcome<CorrespondenceTranscriptExportResult>>;
   };
 
   ai: {
@@ -377,6 +387,7 @@ export const IPC_CHANNELS = {
   signingKeysImport: "signing-keys:import",
   signingKeysRemove: "signing-keys:remove",
   correspondenceDecrypt: "correspondence:decrypt",
+  correspondenceExportTranscript: "correspondence:export-transcript",
   aiProviders: "ai:providers",
   aiPreviewContext: "ai:preview-context",
   aiRun: "ai:run",

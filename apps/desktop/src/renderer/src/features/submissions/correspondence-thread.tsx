@@ -1,4 +1,4 @@
-import { Download, KeyRound, Save } from "lucide-react";
+import { Download, FileDown, KeyRound, Save } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -28,6 +28,7 @@ import {
 import { bridge } from "../../lib/bridge.js";
 import { formatDateTime } from "../../lib/dates.js";
 import { humanise } from "../../lib/format.js";
+import { buildCorrespondenceTranscript } from "./correspondence-transcript.js";
 
 export function CorrespondenceThread({
   submissionId,
@@ -40,6 +41,7 @@ export function CorrespondenceThread({
 }): React.JSX.Element {
   const [plaintext, setPlaintext] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const thread = useApiQuery<CorrespondenceThreadData>(
     queryKeys.correspondence(submissionId),
     `/v1/submissions/${submissionId}/correspondence`,
@@ -106,6 +108,29 @@ export function CorrespondenceThread({
     }
   };
 
+  const exportTranscript = async (): Promise<void> => {
+    if (thread.data === undefined || thread.data.items.length === 0) return;
+    setError(null);
+    setExporting(true);
+    const markdown = buildCorrespondenceTranscript({
+      submissionId,
+      generatedAt: new Date().toISOString(),
+      messages: thread.data.items,
+      localPlaintext: plaintext,
+    });
+    try {
+      const outcome = await bridge().correspondence.exportTranscript(
+        submissionId,
+        markdown,
+      );
+      if (!outcome.ok) setError(outcome.message);
+    } catch {
+      setError("The correspondence transcript could not be saved.");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -125,6 +150,17 @@ export function CorrespondenceThread({
               : ` · synced ${formatDateTime(thread.data.sync.lastSuccessfulSyncAt)}`}
           </span>
         )}
+        <Button
+          size="sm"
+          variant="secondary"
+          className="ml-auto"
+          loading={exporting}
+          disabled={(thread.data?.items.length ?? 0) === 0}
+          onClick={() => void exportTranscript()}
+        >
+          <FileDown aria-hidden className="size-3" />
+          Export transcript
+        </Button>
       </CardHeader>
       <CardBody className="space-y-3">
         <QueryError query={thread} />
