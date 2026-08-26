@@ -94,6 +94,17 @@ const PREFIX_TO_KIND = new Map<string, ReferenceKind>(
   ]),
 );
 
+function parseCanonicalSequence(value: string, minimumWidth: number): number | null {
+  const hasCanonicalDigits =
+    (value.length === minimumWidth && /^\d+$/u.test(value)) ||
+    (value.length > minimumWidth && /^[1-9]\d+$/u.test(value));
+
+  if (!hasCanonicalDigits) return null;
+
+  const sequence = Number(value);
+  return Number.isSafeInteger(sequence) && sequence > 0 ? sequence : null;
+}
+
 /** Parses a reference such as `FIND-2026-0012`, returning null if malformed. */
 export function parseReference(value: string): ParsedReference | null {
   const parts = value.trim().toUpperCase().split("-");
@@ -114,12 +125,20 @@ export function parseReference(value: string): ParsedReference | null {
       return null;
     }
 
-    const year = Number(parts[1]);
-    const sequence = Number(parts[2]);
+    const yearPart = parts[1] ?? "";
+    const sequencePart = parts[2] ?? "";
 
-    if (!Number.isInteger(year) || !Number.isInteger(sequence)) {
+    if (!/^\d{4}$/u.test(yearPart)) {
       return null;
     }
+
+    const year = Number(yearPart);
+    const sequence = parseCanonicalSequence(
+      sequencePart,
+      YEAR_SCOPED_SEQUENCE_WIDTH,
+    );
+
+    if (year < 1000 || sequence === null) return null;
 
     return { kind, year, sequence };
   }
@@ -128,11 +147,9 @@ export function parseReference(value: string): ParsedReference | null {
     return null;
   }
 
-  const sequence = Number(parts[1]);
+  const sequence = parseCanonicalSequence(parts[1] ?? "", FLAT_SEQUENCE_WIDTH);
 
-  if (!Number.isInteger(sequence)) {
-    return null;
-  }
+  if (sequence === null) return null;
 
   return { kind, year: null, sequence };
 }

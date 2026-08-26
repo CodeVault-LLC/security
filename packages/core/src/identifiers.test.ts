@@ -103,6 +103,19 @@ describe("parseReference", () => {
     });
   });
 
+  it("round-trips sequences that outgrow their minimum padding", () => {
+    expect(parseReference(formatReference("finding", 10_000, 2026))).toEqual({
+      kind: "finding",
+      year: 2026,
+      sequence: 10_000,
+    });
+    expect(parseReference(formatReference("asset", 1_000_000))).toEqual({
+      kind: "asset",
+      year: null,
+      sequence: 1_000_000,
+    });
+  });
+
   it("is case-insensitive and tolerates surrounding whitespace", () => {
     expect(parseReference("  ast-000007 ")?.sequence).toBe(7);
   });
@@ -112,6 +125,18 @@ describe("parseReference", () => {
     expect(parseReference("FIND-2026")).toBeNull();
     expect(parseReference("AST-000001-2")).toBeNull();
     expect(parseReference("nonsense")).toBeNull();
+  });
+
+  it.each([
+    "FIND-2026-1",
+    "FIND-26-0001",
+    "FIND-2026-0000",
+    "AST-1",
+    "AST-+00001",
+    "AST-000000",
+    "AST-99999999999999999999",
+  ])("rejects noncanonical reference %s", (reference) => {
+    expect(parseReference(reference)).toBeNull();
   });
 });
 
