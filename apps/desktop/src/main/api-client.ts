@@ -120,16 +120,28 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
       }
 
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      let timedOut = false;
+      const timer = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+      }, timeoutMs);
       const abortFromCaller = (): void => controller.abort();
 
       if (request.signal !== undefined) {
-        request.signal.addEventListener("abort", abortFromCaller, {
-          once: true,
-        });
+        if (request.signal.aborted) {
+          controller.abort();
+        } else {
+          request.signal.addEventListener("abort", abortFromCaller, {
+            once: true,
+          });
+        }
       }
 
       try {
+        if (controller.signal.aborted) {
+          throw new DOMException("The request was cancelled.", "AbortError");
+        }
+
         const response = await doFetch(target.toString(), {
           method: request.method ?? "GET",
           headers,
@@ -167,7 +179,9 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
           throw new ApiError(
             0,
             "PROVIDER_UNAVAILABLE",
-            "The request to the CodeVault Security server timed out.",
+            timedOut
+              ? "The request to the CodeVault Security server timed out."
+              : "The request was cancelled.",
             null,
             null,
           );

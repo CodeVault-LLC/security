@@ -87,4 +87,42 @@ describe("API client cancellation", () => {
 
     expect(removeListener).toHaveBeenCalledWith("abort", expect.any(Function));
   });
+
+  it("does not fetch when the caller signal is already aborted", async () => {
+    const caller = new AbortController();
+    const fetchImpl = vi.fn();
+    const client = createApiClient({
+      sessionStore: storedSession(),
+      fetchImpl,
+    });
+    caller.abort();
+
+    await expect(
+      client.request("/v1/dashboard", { signal: caller.signal }),
+    ).rejects.toMatchObject({
+      category: "PROVIDER_UNAVAILABLE",
+      message: "The request was cancelled.",
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it("keeps client deadlines distinct from caller cancellation", async () => {
+    const fetchImpl = vi.fn(
+      (_url: string | URL | Request, init?: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => {
+            reject(new DOMException("Timed out", "AbortError"));
+          });
+        }),
+    );
+    const client = createApiClient({
+      sessionStore: storedSession(),
+      fetchImpl,
+      timeoutMs: 1,
+    });
+
+    await expect(client.request("/v1/dashboard")).rejects.toMatchObject({
+      message: "The request to the CodeVault Security server timed out.",
+    });
+  });
 });
