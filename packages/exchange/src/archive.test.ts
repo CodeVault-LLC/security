@@ -142,6 +142,20 @@ describe(".cvcase archive", () => {
     ).rejects.toThrow("record counts are invalid");
   });
 
+  it("rejects unsupported artifact visibility values", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codevault-archive-"));
+    const invalid = manifest();
+    Object.assign(invalid.artifacts[0]!, { visibility: "SECRET" });
+
+    await expect(
+      writeCvcase(join(root, "bad.cvcase"), {
+        manifest: invalid,
+        records: {},
+        artifacts: [],
+      }),
+    ).rejects.toThrow("artifact manifest is invalid");
+  });
+
   it("does not overwrite an existing archive without caller confirmation", async () => {
     const root = await mkdtemp(join(tmpdir(), "codevault-archive-"));
     const artifact = join(root, "request.txt");
