@@ -91,6 +91,7 @@ export const queryKeys = {
   finding: (id: string) => ["finding", id] as const,
   intelligenceRefresh: (id: string) =>
     ["finding", id, "intelligence-refresh"] as const,
+  remediationSla: (id: string) => ["finding", id, "remediation-sla"] as const,
   intake: (caseId: string) => ["intake", caseId] as const,
   scannerSyncProfiles: (caseId: string) =>
     ["intake", caseId, "scanner-sync-profiles"] as const,

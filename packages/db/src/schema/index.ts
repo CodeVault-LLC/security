@@ -14,5 +14,6 @@ export * from "./media.js";
 export * from "./organizations.js";
 export * from "./mail.js";
 export * from "./reports.js";
+export * from "./remediation.js";
 export * from "./submissions.js";
 export * from "./vendors.js";
