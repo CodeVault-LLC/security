@@ -16,6 +16,7 @@ import { DashboardRoute } from "./routes/dashboard.js";
 import { FindingDetailRoute } from "./routes/finding-detail.js";
 import { FindingsRoute } from "./routes/findings.js";
 import { MetricsRoute } from "./routes/metrics.js";
+import { NotificationsRoute } from "./routes/notifications.js";
 import {
   ActivityRoute,
   DisclosureIndexRoute,
@@ -179,6 +180,12 @@ const metricsRoute = createRoute({
   component: MetricsRoute,
 });
 
+const notificationsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/notifications",
+  component: NotificationsRoute,
+});
+
 const settingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/settings",
@@ -265,6 +272,7 @@ const routeTree = rootRoute.addChildren([
   disclosureRoute,
   activityRoute,
   metricsRoute,
+  notificationsRoute,
   settingsRoute,
   profileSettingsRoute,
   appearanceSettingsRoute,

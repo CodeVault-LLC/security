@@ -59,6 +59,7 @@ function workspaceLabel(pathname: string): string {
   if (pathname.startsWith("/disclosure")) return "Disclosure";
   if (pathname.startsWith("/activity")) return "Activity";
   if (pathname.startsWith("/metrics")) return "Metrics";
+  if (pathname.startsWith("/notifications")) return "Notifications";
   return "Workspace";
 }
 
