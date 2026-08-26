@@ -37,6 +37,31 @@ export interface CaptureResult {
   evidence: Evidence;
 }
 
+export function normalizeCaptureServerUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    const loopback = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(
+      url.hostname,
+    );
+    const transportAllowed =
+      url.protocol === "https:" || (url.protocol === "http:" && loopback);
+    const canonical =
+      url.username.length === 0 &&
+      url.password.length === 0 &&
+      url.pathname === "/" &&
+      url.search.length === 0 &&
+      url.hash.length === 0;
+
+    if (!transportAllowed || !canonical) throw new Error("invalid origin");
+
+    return url.origin;
+  } catch {
+    throw new Error(
+      "CODEVAULT_URL must be a canonical HTTPS origin, or loopback HTTP.",
+    );
+  }
+}
+
 export function parseCaptureArguments(
   args: readonly string[],
 ): CaptureArguments {
@@ -188,16 +213,9 @@ class CaptureClient {
   readonly #token: string;
 
   constructor(config: { baseUrl: string; token: string }) {
-    const url = new URL(config.baseUrl);
-    const loopback = ["localhost", "127.0.0.1", "::1", "[::1]"].includes(
-      url.hostname,
-    );
-    if (url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) {
-      throw new Error("CODEVAULT_URL must use HTTPS unless it is loopback.");
-    }
     if (config.token.trim().length < 32)
       throw new Error("CODEVAULT_TOKEN is missing or too short.");
-    this.#baseUrl = url.origin;
+    this.#baseUrl = normalizeCaptureServerUrl(config.baseUrl);
     this.#token = config.token.trim();
   }
 
