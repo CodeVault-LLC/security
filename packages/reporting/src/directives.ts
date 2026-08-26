@@ -124,21 +124,6 @@ function fencedCodeRanges(markdown: string): Array<[number, number]> {
   return ranges;
 }
 
-function lineNumberAt(markdown: string, offset: number): number {
-  let line = 1;
-
-  for (let index = 0; index < offset && index < markdown.length; index += 1) {
-    if (
-      markdown[index] === "\r" ||
-      (markdown[index] === "\n" && markdown[index - 1] !== "\r")
-    ) {
-      line += 1;
-    }
-  }
-
-  return line;
-}
-
 function isEscaped(markdown: string, offset: number): boolean {
   let backslashes = 0;
   for (let index = offset - 1; index >= 0 && markdown[index] === "\\"; index -= 1) {
@@ -154,12 +139,25 @@ export function parseDirectives(markdown: string): ParsedDirective[] {
     ...fencedCodeRanges(markdown),
   ];
   const directives: ParsedDirective[] = [];
+  let line = 1;
+  let lineCursor = 0;
 
   for (const match of markdown.matchAll(DIRECTIVE_PATTERN)) {
     const start = match.index;
 
     if (start === undefined) {
       continue;
+    }
+
+    while (lineCursor < start) {
+      if (
+        markdown[lineCursor] === "\r" ||
+        (markdown[lineCursor] === "\n" &&
+          markdown[lineCursor - 1] !== "\r")
+      ) {
+        line += 1;
+      }
+      lineCursor += 1;
     }
 
     if (isEscaped(markdown, start)) continue;
@@ -180,7 +178,7 @@ export function parseDirectives(markdown: string): ParsedDirective[] {
       start,
       end: start + raw.length,
       raw,
-      line: lineNumberAt(markdown, start),
+      line,
     });
   }
 
