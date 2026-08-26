@@ -64,6 +64,12 @@ describe("parseDirectives", () => {
     );
   });
 
+  it("ignores directive-shaped text inside inline code", () => {
+    expect(
+      parseDirectives("Run `[asset:AST-000001]` to illustrate the syntax."),
+    ).toHaveLength(0);
+  });
+
   it("records the line so a lint message can point at it", () => {
     const directives = parseDirectives("line one\nline two\n[evidence:EVID-1]");
 

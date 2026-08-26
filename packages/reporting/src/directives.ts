@@ -53,11 +53,24 @@ const DIRECTIVE_PATTERN = /\[([a-z][a-z-]*)(?::([A-Za-z0-9:_.-]+))?\]/g;
  * would be parsed as one.
  */
 const LINK_PATTERN = /\[[^\]]*\]\([^)]*\)/g;
+const INLINE_CODE_PATTERN = /(`+)(.*?)\1/g;
 
 function linkRanges(markdown: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
 
   for (const match of markdown.matchAll(LINK_PATTERN)) {
+    if (match.index !== undefined) {
+      ranges.push([match.index, match.index + match[0].length]);
+    }
+  }
+
+  return ranges;
+}
+
+function inlineCodeRanges(markdown: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+
+  for (const match of markdown.matchAll(INLINE_CODE_PATTERN)) {
     if (match.index !== undefined) {
       ranges.push([match.index, match.index + match[0].length]);
     }
@@ -79,7 +92,10 @@ function lineNumberAt(markdown: string, offset: number): number {
 }
 
 export function parseDirectives(markdown: string): ParsedDirective[] {
-  const links = linkRanges(markdown);
+  const ignoredRanges = [
+    ...linkRanges(markdown),
+    ...inlineCodeRanges(markdown),
+  ];
   const directives: ParsedDirective[] = [];
 
   for (const match of markdown.matchAll(DIRECTIVE_PATTERN)) {
@@ -89,9 +105,11 @@ export function parseDirectives(markdown: string): ParsedDirective[] {
       continue;
     }
 
-    const insideLink = links.some(([from, to]) => start >= from && start < to);
+    const ignored = ignoredRanges.some(
+      ([from, to]) => start >= from && start < to,
+    );
 
-    if (insideLink) {
+    if (ignored) {
       continue;
     }
 
