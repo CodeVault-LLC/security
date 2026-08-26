@@ -157,6 +157,16 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         const text = await response.text();
         let payload: unknown = null;
 
+        if (text.length === 0 && response.ok) {
+          throw new ApiError(
+            response.status,
+            "SERVER_ERROR",
+            "The server returned an empty response.",
+            null,
+            null,
+          );
+        }
+
         if (text.length > 0) {
           try {
             payload = JSON.parse(text) as unknown;
