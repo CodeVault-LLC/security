@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { parseCaptureArguments } from "./capture.js";
+import {
+  normalizeCaptureServerUrl,
+  parseCaptureArguments,
+} from "./capture.js";
 
 describe("capture arguments", () => {
   it("parses a file capture with explicit provenance", () => {
@@ -145,5 +148,28 @@ describe("capture arguments", () => {
         "x".repeat(200_001),
       ]),
     ).toThrow("--description cannot exceed 200000 characters");
+  });
+});
+
+describe("capture server URL", () => {
+  it("accepts HTTPS origins and loopback HTTP", () => {
+    expect(normalizeCaptureServerUrl("https://vault.example.test/")).toBe(
+      "https://vault.example.test",
+    );
+    expect(normalizeCaptureServerUrl("http://127.0.0.1:4310")).toBe(
+      "http://127.0.0.1:4310",
+    );
+  });
+
+  it.each([
+    "http://vault.example.test",
+    "https://user:pass@vault.example.test",
+    "https://vault.example.test/api",
+    "https://vault.example.test?token=secret",
+    "https://vault.example.test/#fragment",
+  ])("rejects noncanonical server URL %s", (url) => {
+    expect(() => normalizeCaptureServerUrl(url)).toThrow(
+      "CODEVAULT_URL must be a canonical HTTPS origin",
+    );
   });
 });
