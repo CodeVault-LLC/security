@@ -100,15 +100,13 @@ function scan(markdown: string, pattern: RegExp): SectionMatch[] {
   const lines = markdown.split("\n");
 
   for (const [index, line] of lines.entries()) {
-    // Each line is tested independently, so a global regex would carry its
-    // lastIndex between lines and skip matches.
+    // Construct a fresh global regex for each line so every occurrence is
+    // inspected without carrying lastIndex between lines.
     const linePattern = new RegExp(
       pattern.source,
-      pattern.flags.replace("g", ""),
+      pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`,
     );
-    const match = linePattern.exec(line);
-
-    if (match !== null) {
+    for (const match of line.matchAll(linePattern)) {
       matches.push({
         line: index + 1,
         excerpt: line.trim().slice(0, 160),
