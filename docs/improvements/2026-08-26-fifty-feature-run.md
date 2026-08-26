@@ -4,7 +4,7 @@ This queue tracks the user-requested product extension run. Each feature is
 implemented on its own branch, reviewed by CI in its own pull request, and
 squash-merged into `master` before the next feature starts.
 
-## Merged features 1-15
+## Merged features 1-20
 
 1. TLP report controls and export labels, PR #68.
 2. SARIF finding exchange, PR #70.
@@ -21,14 +21,14 @@ squash-merged into `master` before the next feature starts.
 13. Readable finding revision comparison, PR #81.
 14. Private disclosure calendar export, PR #82.
 15. Atomic bulk remediation workflow, PR #83.
+16. Security notification inbox with unread state, PR #84.
+17. Case handoff brief export, PR #85.
+18. Recurring scanner synchronization profiles, PR #86.
+19. Prior-art retry and run history, PR #87.
+20. Intelligence refresh scheduling controls, PR #88.
 
-## Continuation queue 16-50
+## Continuation queue 21-50
 
-16. Security notification inbox with unread state.
-17. Case handoff brief export.
-18. Recurring scanner synchronization profiles.
-19. Prior-art retry and run history.
-20. Intelligence refresh scheduling controls.
 21. Case archive version 2 with correspondence.
 22. Evidence preview redaction workflow.
 23. Evidence chain-of-custody attestations.

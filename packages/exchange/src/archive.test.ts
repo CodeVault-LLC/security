@@ -50,6 +50,32 @@ function manifest(): CvcaseManifest {
 }
 
 describe(".cvcase archive", () => {
+  it("round-trips version 2 correspondence metadata archives", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codevault-archive-v2-"));
+    const archive = join(root, "case.cvcase");
+    const v2Manifest: CvcaseManifest = {
+      ...manifest(),
+      version: 2,
+      recordCounts: { correspondenceMessages: 1 },
+      artifacts: [],
+    };
+    const records = {
+      correspondenceMessages: [
+        { direction: "INBOUND", subject: "Metadata only" },
+      ],
+    };
+
+    await writeCvcase(archive, {
+      manifest: v2Manifest,
+      records,
+      artifacts: [],
+    });
+    const extracted = await readCvcase(archive, join(root, "extracted"));
+
+    expect(extracted.manifest.version).toBe(2);
+    expect(extracted.records).toEqual(records);
+  });
+
   it("round-trips records and verifies artifact digests", async () => {
     const root = await mkdtemp(join(tmpdir(), "codevault-archive-"));
     const artifact = join(root, "request.txt");

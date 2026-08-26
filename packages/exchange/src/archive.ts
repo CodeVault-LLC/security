@@ -31,7 +31,7 @@ export interface CvcaseArtifactManifest {
 
 export interface CvcaseManifest {
   format: typeof CVCASE_FORMAT;
-  version: 1;
+  version: 1 | 2;
   exportedAt: string;
   sourceVersion: string;
   case: { sourceId: string; ref: string; title: string };
@@ -408,7 +408,7 @@ function validateManifest(value: unknown): asserts value is CvcaseManifest {
   if (
     !isRecord(value) ||
     value.format !== CVCASE_FORMAT ||
-    value.version !== 1 ||
+    (value.version !== 1 && value.version !== 2) ||
     typeof value.exportedAt !== "string" ||
     typeof value.sourceVersion !== "string" ||
     !isRecord(value.case) ||
