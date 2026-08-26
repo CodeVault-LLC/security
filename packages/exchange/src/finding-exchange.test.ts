@@ -39,6 +39,12 @@ describe("finding exchange", () => {
     );
   });
 
+  it("rejects characters after a quoted CSV field", () => {
+    expect(() =>
+      parseFindingsCsv('title,visibility\n"Quoted finding"junk,PUBLIC'),
+    ).toThrow("unexpected character after a closing quote");
+  });
+
   it("rejects a declared incompatible JSON version", () => {
     expect(() =>
       parseFindingsJson(
