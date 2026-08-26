@@ -47,6 +47,7 @@ import {
 } from "../features/findings/finding-revision-diff.js";
 import { ScoringPanel } from "../features/findings/scoring-panel.js";
 import { AffectedVersionMatrix } from "../features/findings/affected-version-matrix.js";
+import { RemediationSlaCard } from "../features/findings/remediation-sla-card.js";
 import { EvidencePanel } from "../features/evidence/evidence-panel.js";
 import { formatDateTime } from "../lib/dates.js";
 import {
@@ -337,6 +338,8 @@ function FindingContextColumn({
   return (
     <aside className="space-y-4 xl:col-start-2 xl:row-start-1">
       <StatePanel finding={finding} canEdit={canEdit} onError={onError} />
+
+      <RemediationSlaCard finding={finding} canEdit={canEdit} />
 
       <Card>
         <CardHeader>
