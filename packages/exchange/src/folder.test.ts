@@ -82,6 +82,26 @@ describe("previewFolder", () => {
     ).toBe(true);
   });
 
+  it("marks repeated titles within the selected folder as duplicates", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codevault-folder-"));
+    await writeFile(
+      join(root, "a.md"),
+      "# Repeated finding title\n\nFirst body.",
+    );
+    await writeFile(
+      join(root, "b.md"),
+      "# Repeated finding title\n\nDifferent body.",
+    );
+
+    const preview = await previewFolder(root);
+
+    expect(preview.candidates[0]?.status).toBe("READY");
+    expect(preview.candidates[1]?.status).toBe("DUPLICATE");
+    expect(preview.candidates[1]?.duplicateReasons).toContain(
+      "Another selected finding has the same normalized title.",
+    );
+  });
+
   it("reports mapping errors without dropping the original file", async () => {
     const root = await mkdtemp(join(tmpdir(), "codevault-folder-"));
     await writeFile(join(root, "broken.json"), "{ definitely not json");
