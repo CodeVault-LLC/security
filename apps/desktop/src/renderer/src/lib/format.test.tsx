@@ -14,4 +14,9 @@ describe("formatBytesApprox", () => {
     expect(formatBytesApprox(0)).toBe("0 B");
     expect(formatBytesApprox(1536)).toBe("1.5 KiB");
   });
+
+  it("uses binary units through exbibytes", () => {
+    expect(formatBytesApprox(1024 ** 5)).toBe("1.0 PiB");
+    expect(formatBytesApprox(1024 ** 6)).toBe("1.0 EiB");
+  });
 });
