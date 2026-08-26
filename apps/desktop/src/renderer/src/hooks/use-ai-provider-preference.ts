@@ -5,7 +5,13 @@ import type { AiProviderId } from "@codevault/contracts";
 const STORAGE_KEY = "codevault.ai.default-provider";
 
 function readStoredProvider(): AiProviderId | null {
-  const stored = window.localStorage.getItem(STORAGE_KEY);
+  let stored: string | null;
+
+  try {
+    stored = window.localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
 
   return stored === "claude-code" || stored === "codex-cli" ? stored : null;
 }
@@ -20,10 +26,14 @@ export function useAiProviderPreference(): {
   );
 
   useEffect(() => {
-    if (providerId === null) {
-      window.localStorage.removeItem(STORAGE_KEY);
-    } else {
-      window.localStorage.setItem(STORAGE_KEY, providerId);
+    try {
+      if (providerId === null) {
+        window.localStorage.removeItem(STORAGE_KEY);
+      } else {
+        window.localStorage.setItem(STORAGE_KEY, providerId);
+      }
+    } catch {
+      // Provider selection remains valid for the current session.
     }
   }, [providerId]);
 
