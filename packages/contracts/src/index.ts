@@ -11,6 +11,7 @@ export * from "./findings.js";
 export * from "./intake.js";
 export * from "./mail.js";
 export * from "./metrics.js";
+export * from "./notifications.js";
 export * from "./mcp.js";
 export * from "./media.js";
 export * from "./organization.js";

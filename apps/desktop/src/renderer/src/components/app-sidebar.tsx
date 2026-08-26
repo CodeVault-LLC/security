@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Activity,
   BarChart3,
+  Bell,
   BriefcaseBusiness,
   Building2,
   Boxes,
@@ -26,8 +27,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@codevault/ui";
+import type { SecurityNotificationInbox } from "@codevault/contracts";
 
 import { bridge } from "../lib/bridge.js";
+import { queryKeys, useApiQuery } from "../lib/api.js";
 import { useSession } from "../lib/session.js";
 import { Avatar } from "./avatar.js";
 import { BrandWordmark } from "./brand-wordmark.js";
@@ -35,7 +38,7 @@ import { BrandWordmark } from "./brand-wordmark.js";
 /**
  * The global sidebar.
  *
- * Ten destinations, not one per database table. Everything else is reached from
+ * A small set of destinations, not one per database table. Everything else is reached from
  * the thing it belongs to — evidence from a case, scores from a finding —
  * because a flat list of every concept is how a research tool turns into an
  * enterprise console.
@@ -51,6 +54,7 @@ interface NavigationItem {
   label: string;
   icon: ReactNode;
   shortcut?: string;
+  badge?: number;
 }
 
 const PRIMARY_ITEMS: NavigationItem[] = [
@@ -99,6 +103,10 @@ export function AppSidebar(): React.JSX.Element {
   const [signingOut, setSigningOut] = useState(false);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [version, setVersion] = useState<string | null>(null);
+  const notifications = useApiQuery<SecurityNotificationInbox>(
+    queryKeys.notifications,
+    "/v1/notifications",
+  );
 
   useEffect(() => {
     let active = true;
@@ -131,6 +139,11 @@ export function AppSidebar(): React.JSX.Element {
     >
       <span className="shrink-0">{item.icon}</span>
       <span className="truncate max-[1100px]:hidden">{item.label}</span>
+      {item.badge === undefined || item.badge === 0 ? null : (
+        <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-white max-[1100px]:hidden">
+          {item.badge > 99 ? "99+" : item.badge}
+        </span>
+      )}
     </Link>
   );
 
@@ -190,6 +203,12 @@ export function AppSidebar(): React.JSX.Element {
         </div>
 
         <div className="flex flex-col gap-0.5">
+          {renderItem({
+            to: "/notifications",
+            label: "Notifications",
+            icon: <Bell aria-hidden className="size-4" />,
+            badge: notifications.data?.unreadCount ?? 0,
+          })}
           {renderItem({
             to: "/activity",
             label: "Activity",

@@ -132,6 +132,7 @@ export const queryKeys = {
   aiPolicies: ["ai-policies"] as const,
   aiProviders: ["ai-providers"] as const,
   mailConnections: ["mail-connections"] as const,
+  notifications: ["notifications"] as const,
   activity: (filters?: Record<string, unknown>) =>
     filters === undefined
       ? (["activity"] as const)
