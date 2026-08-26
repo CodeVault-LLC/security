@@ -155,8 +155,21 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
         }
 
         const text = await response.text();
-        const payload: unknown =
-          text.length === 0 ? null : (JSON.parse(text) as unknown);
+        let payload: unknown = null;
+
+        if (text.length > 0) {
+          try {
+            payload = JSON.parse(text) as unknown;
+          } catch {
+            throw new ApiError(
+              response.status,
+              "SERVER_ERROR",
+              "The server returned invalid JSON.",
+              null,
+              null,
+            );
+          }
+        }
 
         if (!response.ok) {
           const error = toApiError(response.status, payload);
