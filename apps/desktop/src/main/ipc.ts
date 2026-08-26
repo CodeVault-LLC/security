@@ -1574,6 +1574,53 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
   });
 
+  handle(IPC_CHANNELS.auditSaveCsv, async (payload) => {
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      !("caseId" in payload) ||
+      typeof payload.caseId !== "string" ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu.test(payload.caseId) ||
+      !("csv" in payload) ||
+      typeof payload.csv !== "string" ||
+      payload.csv.length === 0 ||
+      payload.csv.length > 10_000_000
+    ) {
+      return failure(new Error("invalid audit CSV export"));
+    }
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+
+    try {
+      const filename = `case-${payload.caseId.slice(0, 8)}-activity.csv`;
+      const destination = await dialog.showSaveDialog(window, {
+        title: "Save case activity CSV",
+        defaultPath: filename,
+        filters: [{ name: "CSV document", extensions: ["csv"] }],
+        properties: ["createDirectory", "showOverwriteConfirmation"],
+      });
+      if (destination.canceled || destination.filePath === undefined) {
+        return { ok: true as const, data: { saved: false, sha256: null } };
+      }
+
+      const bytes = new TextEncoder().encode(payload.csv);
+      const sha256 = createHash("sha256").update(bytes).digest("hex");
+      const temporaryDirectory = await mkdtemp(
+        join(tmpdir(), "codevault-audit-export-"),
+      );
+      const temporaryPath = join(temporaryDirectory, filename);
+      try {
+        await writeFile(temporaryPath, bytes, { flag: "wx" });
+        await copyFile(temporaryPath, destination.filePath);
+        return { ok: true as const, data: { saved: true, sha256 } };
+      } finally {
+        await rm(temporaryDirectory, { recursive: true, force: true });
+      }
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
   handle(IPC_CHANNELS.aiProviders, async () => providers.statuses());
 
   handle(IPC_CHANNELS.aiPreviewContext, async (payload) => {
