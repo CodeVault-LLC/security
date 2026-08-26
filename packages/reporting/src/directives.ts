@@ -46,32 +46,51 @@ export interface ParsedDirective {
  */
 const DIRECTIVE_PATTERN = /\[([a-z][a-z-]*)(?::([A-Za-z0-9:_.-]+))?\]/g;
 
-/**
- * Markdown link syntax, used to skip `[text](url)`.
- *
- * Without this, an ordinary link whose text happens to look like a directive
- * would be parsed as one.
- */
-const LINK_PATTERN = /\[[^\]]*\]\([^)]*\)/g;
-const REFERENCE_LINK_PATTERN = /\[[^\]]*\]\[[^\]]*\]/g;
-const LINK_DEFINITION_PATTERN = /^ {0,3}\[[^\]]+\]:[^\n]*$/gm;
-const INLINE_CODE_PATTERN = /(`+)(.*?)\1/g;
 const INDENTED_CODE_PATTERN = /^(?: {4}|\t).*$/gm;
 const HTML_COMMENT_PATTERN = /<!--[\s\S]*?(?:-->|$)/g;
 
 function linkRanges(markdown: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
+  let cursor = 0;
 
-  for (const pattern of [
-    LINK_PATTERN,
-    REFERENCE_LINK_PATTERN,
-    LINK_DEFINITION_PATTERN,
-  ]) {
-    for (const match of markdown.matchAll(pattern)) {
-      if (match.index !== undefined) {
-        ranges.push([match.index, match.index + match[0].length]);
+  while (cursor < markdown.length) {
+    const open = markdown.indexOf("[", cursor);
+    if (open === -1) break;
+    const labelEnd = markdown.indexOf("]", open + 1);
+    if (labelEnd === -1) break;
+    const destinationOpen = markdown[labelEnd + 1];
+
+    if (destinationOpen === "(" || destinationOpen === "[") {
+      const destinationClose = markdown.indexOf(
+        destinationOpen === "(" ? ")" : "]",
+        labelEnd + 2,
+      );
+      if (destinationClose !== -1) {
+        ranges.push([open, destinationClose + 1]);
+        cursor = destinationClose + 1;
+        continue;
       }
     }
+
+    cursor = labelEnd + 1;
+  }
+
+  let lineStart = 0;
+  while (lineStart < markdown.length) {
+    const lineEnd = markdown.indexOf("\n", lineStart);
+    const end = lineEnd === -1 ? markdown.length : lineEnd;
+    let open = lineStart;
+    while (open < end && markdown[open] === " " && open - lineStart < 3) {
+      open += 1;
+    }
+    if (markdown[open] === "[") {
+      const labelEnd = markdown.indexOf("]", open + 1);
+      if (labelEnd !== -1 && labelEnd < end && markdown[labelEnd + 1] === ":") {
+        ranges.push([open, end]);
+      }
+    }
+    if (lineEnd === -1) break;
+    lineStart = lineEnd + 1;
   }
 
   return ranges;
@@ -79,14 +98,43 @@ function linkRanges(markdown: string): Array<[number, number]> {
 
 function inlineCodeRanges(markdown: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
+  let cursor = 0;
 
-  for (const match of markdown.matchAll(INLINE_CODE_PATTERN)) {
-    if (match.index !== undefined) {
-      ranges.push([match.index, match.index + match[0].length]);
+  while (cursor < markdown.length) {
+    const open = markdown.indexOf("`", cursor);
+    if (open === -1) break;
+    const delimiterLength = repeatedCharacterLength(markdown, open, "`");
+    let candidate = open + delimiterLength;
+
+    while (candidate < markdown.length && markdown[candidate] !== "\n") {
+      const close = markdown.indexOf("`", candidate);
+      if (close === -1 || markdown.slice(candidate, close).includes("\n")) {
+        candidate = markdown.length;
+        break;
+      }
+      const closeLength = repeatedCharacterLength(markdown, close, "`");
+      if (closeLength >= delimiterLength) {
+        ranges.push([open, close + delimiterLength]);
+        candidate = close + closeLength;
+        break;
+      }
+      candidate = close + closeLength;
     }
+
+    cursor = candidate > open ? candidate : open + delimiterLength;
   }
 
   return ranges;
+}
+
+function repeatedCharacterLength(
+  value: string,
+  start: number,
+  character: string,
+): number {
+  let end = start;
+  while (value[end] === character) end += 1;
+  return end - start;
 }
 
 function indentedCodeRanges(markdown: string): Array<[number, number]> {

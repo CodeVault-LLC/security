@@ -107,6 +107,12 @@ describe("parseDirectives", () => {
     ).toEqual(["[finding:FIND-1]"]);
   });
 
+  it("handles long unmatched link and code delimiters in linear time", () => {
+    const markdown = `${"[".repeat(50_000)}${"`".repeat(50_000)}\n[finding:FIND-1]`;
+
+    expect(parseDirectives(markdown).at(-1)?.raw).toBe("[finding:FIND-1]");
+  });
+
   it("records the line so a lint message can point at it", () => {
     const directives = parseDirectives("line one\nline two\n[evidence:EVID-1]");
 
