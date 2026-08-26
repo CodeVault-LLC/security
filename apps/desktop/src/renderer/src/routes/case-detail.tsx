@@ -29,6 +29,7 @@ import {
 } from "@codevault/ui";
 
 import { CreateFindingDialog } from "../features/findings/create-finding-dialog.js";
+import { BulkRemediationControls } from "../features/findings/bulk-remediation-controls.js";
 import { ExportCaseArchiveButton } from "../features/cases/case-archive-actions.js";
 import { CaseActivityPanel } from "../features/cases/case-activity-panel.js";
 import { DuplicateCaseButton } from "../features/cases/duplicate-case-dialog.js";
@@ -350,6 +351,8 @@ function FindingsTable({
   canEdit: boolean;
   onCreate: () => void;
 }): React.JSX.Element {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
   if (findings.length === 0) {
     return (
       <EmptyState
@@ -368,29 +371,86 @@ function FindingsTable({
   }
 
   return (
-    <ul className="divide-y divide-border">
-      {findings.map((finding) => (
-        <li key={finding.id}>
-          <Link
-            to={`/findings/${finding.id}`}
-            className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-2 text-[12px] hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus lg:grid-cols-[8rem_minmax(12rem,1fr)_auto_auto_auto_6rem]"
-          >
-            <Mono className="text-text-muted max-lg:row-start-2">
-              {finding.ref}
-            </Mono>
-            <span className="min-w-0 truncate font-medium max-lg:col-span-2 max-lg:row-start-1">
-              {finding.title}
-            </span>
-            <SeverityBadge severity={finding.severity} score={finding.score} />
-            <StateBadge kind="validation" state={finding.validationState} />
-            <PriorArtBadge state={finding.priorArtState} />
-            <span className="shrink-0 text-right text-text-muted">
-              {formatDistanceToNowStrict(finding.updatedAt)}
-            </span>
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <div>
+      {canEdit ? (
+        <div className="flex items-start gap-3 border-b border-border bg-surface-raised px-4 py-2.5">
+          <label className="flex min-h-8 shrink-0 cursor-pointer items-center gap-2 text-[11px] text-text-muted">
+            <input
+              type="checkbox"
+              aria-label={
+                findings.length > 50
+                  ? "Select first 50 findings"
+                  : "Select all findings"
+              }
+              checked={selectedIds.size === Math.min(findings.length, 50)}
+              onChange={(event) =>
+                setSelectedIds(
+                  event.target.checked
+                    ? new Set(
+                        findings.slice(0, 50).map((finding) => finding.id),
+                      )
+                    : new Set(),
+                )
+              }
+            />
+            {findings.length > 50 ? "First 50" : "All"}
+          </label>
+          <BulkRemediationControls
+            caseId={findings[0]!.caseId}
+            findings={findings}
+            selectedIds={selectedIds}
+            onComplete={() => setSelectedIds(new Set())}
+          />
+        </div>
+      ) : null}
+
+      <ul className="divide-y divide-border">
+        {findings.map((finding) => (
+          <li key={finding.id} className="flex items-center">
+            {canEdit ? (
+              <label className="flex min-h-16 shrink-0 cursor-pointer items-center pl-4">
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${finding.ref}`}
+                  checked={selectedIds.has(finding.id)}
+                  disabled={
+                    !selectedIds.has(finding.id) && selectedIds.size >= 50
+                  }
+                  onChange={(event) =>
+                    setSelectedIds((current) => {
+                      const next = new Set(current);
+                      if (event.target.checked) next.add(finding.id);
+                      else next.delete(finding.id);
+                      return next;
+                    })
+                  }
+                />
+              </label>
+            ) : null}
+            <Link
+              to={`/findings/${finding.id}`}
+              className="grid min-h-16 min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 px-4 py-2 text-[12px] hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus lg:grid-cols-[8rem_minmax(12rem,1fr)_auto_auto_auto_6rem]"
+            >
+              <Mono className="text-text-muted max-lg:row-start-2">
+                {finding.ref}
+              </Mono>
+              <span className="min-w-0 truncate font-medium max-lg:col-span-2 max-lg:row-start-1">
+                {finding.title}
+              </span>
+              <SeverityBadge
+                severity={finding.severity}
+                score={finding.score}
+              />
+              <StateBadge kind="validation" state={finding.validationState} />
+              <PriorArtBadge state={finding.priorArtState} />
+              <span className="shrink-0 text-right text-text-muted">
+                {formatDistanceToNowStrict(finding.updatedAt)}
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
