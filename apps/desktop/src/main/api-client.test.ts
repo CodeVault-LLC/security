@@ -51,3 +51,23 @@ describe("API client session invalidation", () => {
     expect(onSessionExpired).toHaveBeenCalledOnce();
   });
 });
+
+describe("API client origin boundary", () => {
+  it("rejects an absolute request URL before attaching credentials", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+    const client = createApiClient({
+      sessionStore: storedSession(),
+      fetchImpl,
+    });
+
+    await expect(
+      client.request("https://attacker.example/v1/dashboard"),
+    ).rejects.toMatchObject({
+      status: 0,
+      category: "VALIDATION",
+    });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
