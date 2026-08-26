@@ -128,6 +128,20 @@ describe(".cvcase archive", () => {
     ).rejects.toThrow("repeats an artifact archive path");
   });
 
+  it("rejects invalid manifest record counts", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codevault-archive-"));
+    const invalid = manifest();
+    invalid.recordCounts.findings = -1;
+
+    await expect(
+      writeCvcase(join(root, "bad.cvcase"), {
+        manifest: invalid,
+        records: {},
+        artifacts: [],
+      }),
+    ).rejects.toThrow("record counts are invalid");
+  });
+
   it("does not overwrite an existing archive without caller confirmation", async () => {
     const root = await mkdtemp(join(tmpdir(), "codevault-archive-"));
     const artifact = join(root, "request.txt");

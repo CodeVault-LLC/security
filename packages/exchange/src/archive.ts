@@ -420,6 +420,16 @@ function validateManifest(value: unknown): asserts value is CvcaseManifest {
   ) {
     throw new Error("The .cvcase manifest is invalid or incompatible.");
   }
+  if (
+    Object.values(value.recordCounts).some(
+      (count) =>
+        typeof count !== "number" ||
+        !Number.isSafeInteger(count) ||
+        count < 0,
+    )
+  ) {
+    throw new Error("The .cvcase manifest record counts are invalid.");
+  }
   const ids = new Set<string>();
   const paths = new Set<string>();
   for (const item of value.artifacts) {
