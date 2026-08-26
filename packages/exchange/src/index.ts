@@ -3,3 +3,4 @@ export * from "./audit-export.js";
 export * from "./evidence-manifest.js";
 export * from "./finding-exchange.js";
 export * from "./folder.js";
+export * from "./public-advisory.js";

@@ -1668,6 +1668,53 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
   });
 
+  handle(IPC_CHANNELS.publicAdvisorySave, async (payload) => {
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      !("findingId" in payload) ||
+      typeof payload.findingId !== "string" ||
+      !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu.test(
+        payload.findingId,
+      ) ||
+      !("markdown" in payload) ||
+      typeof payload.markdown !== "string" ||
+      payload.markdown.length === 0 ||
+      payload.markdown.length > 10_000_000
+    ) {
+      return failure(new Error("invalid public advisory"));
+    }
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+    try {
+      const filename = `security-advisory-${payload.findingId.slice(0, 8)}.md`;
+      const destination = await dialog.showSaveDialog(window, {
+        title: "Save public security advisory",
+        defaultPath: filename,
+        filters: [{ name: "Markdown document", extensions: ["md"] }],
+        properties: ["createDirectory", "showOverwriteConfirmation"],
+      });
+      if (destination.canceled || destination.filePath === undefined) {
+        return { ok: true as const, data: { saved: false, sha256: null } };
+      }
+      const bytes = new TextEncoder().encode(payload.markdown);
+      const sha256 = createHash("sha256").update(bytes).digest("hex");
+      const temporaryDirectory = await mkdtemp(
+        join(tmpdir(), "codevault-public-advisory-"),
+      );
+      const temporaryPath = join(temporaryDirectory, filename);
+      try {
+        await writeFile(temporaryPath, bytes, { flag: "wx" });
+        await copyFile(temporaryPath, destination.filePath);
+        return { ok: true as const, data: { saved: true, sha256 } };
+      } finally {
+        await rm(temporaryDirectory, { recursive: true, force: true });
+      }
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
   handle(IPC_CHANNELS.evidenceSaveManifest, async (payload) => {
     const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu;
     if (
