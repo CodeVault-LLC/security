@@ -48,6 +48,7 @@ import {
 import { ScoringPanel } from "../features/findings/scoring-panel.js";
 import { AffectedVersionMatrix } from "../features/findings/affected-version-matrix.js";
 import { RemediationSlaCard } from "../features/findings/remediation-sla-card.js";
+import { PublicAdvisoryBuilder } from "../features/findings/public-advisory-builder.js";
 import { EvidencePanel } from "../features/evidence/evidence-panel.js";
 import { formatDateTime } from "../lib/dates.js";
 import {
@@ -340,6 +341,8 @@ function FindingContextColumn({
       <StatePanel finding={finding} canEdit={canEdit} onError={onError} />
 
       <RemediationSlaCard finding={finding} canEdit={canEdit} />
+
+      <PublicAdvisoryBuilder finding={finding} canEdit={canEdit} />
 
       <Card>
         <CardHeader>

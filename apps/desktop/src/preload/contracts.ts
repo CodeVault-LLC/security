@@ -198,6 +198,11 @@ export interface CaseHandoffBriefExportResult {
   sha256: string | null;
 }
 
+export interface PublicAdvisoryExportResult {
+  saved: boolean;
+  sha256: string | null;
+}
+
 export interface EvidenceManifestExportResult {
   saved: boolean;
   sha256: string | null;
@@ -320,6 +325,14 @@ export interface CodeVaultDesktopApi {
     ): Promise<ApiOutcome<CaseHandoffBriefExportResult>>;
   };
 
+  publicAdvisory: {
+    /** Saves a locally assembled, previewed public Markdown advisory. */
+    save(
+      findingId: string,
+      markdown: string,
+    ): Promise<ApiOutcome<PublicAdvisoryExportResult>>;
+  };
+
   evidence: {
     /** Saves a metadata-only artifact digest inventory. */
     saveManifest(
@@ -432,6 +445,7 @@ export const IPC_CHANNELS = {
   reportsDownloadExport: "reports:download-export",
   auditSaveCsv: "audit:save-csv",
   caseHandoffSaveBrief: "case-handoff:save-brief",
+  publicAdvisorySave: "public-advisory:save",
   evidenceSaveManifest: "evidence:save-manifest",
   disclosureSaveCalendar: "disclosure:save-calendar",
   avatarsSelectAndUpload: "avatars:select-and-upload",

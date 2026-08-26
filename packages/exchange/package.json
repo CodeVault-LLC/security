@@ -8,6 +8,7 @@
     "./audit-export": "./src/audit-export.ts",
     "./case-handoff-brief": "./src/case-handoff-brief.ts",
     "./evidence-manifest": "./src/evidence-manifest.ts",
+    "./public-advisory": "./src/public-advisory.ts",
     "./disclosure-calendar": "./src/disclosure-calendar.ts"
   },
   "scripts": {
