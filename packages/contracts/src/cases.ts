@@ -31,6 +31,16 @@ export const CreateCaseRequest = Type.Object({
 
 export type CreateCaseRequest = Static<typeof CreateCaseRequest>;
 
+export const DuplicateCaseRequest = Type.Object({
+  title: ShortText,
+  /** Reuses case-level asset links, never finding or evidence records. */
+  copyAssets: Type.Optional(Type.Boolean()),
+  /** Reuses explicit case members and their access levels. */
+  copyMembers: Type.Optional(Type.Boolean()),
+});
+
+export type DuplicateCaseRequest = Static<typeof DuplicateCaseRequest>;
+
 export const UpdateCaseRequest = Type.Object({
   title: Type.Optional(ShortText),
   summary: Type.Optional(Type.String({ maxLength: 2_000 })),

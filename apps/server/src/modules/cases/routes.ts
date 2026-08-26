@@ -9,6 +9,7 @@ import {
   CreateCaseNoteRequest,
   CaseNote,
   CreateCaseRequest,
+  DuplicateCaseRequest,
   ErrorResponse,
   IdParam,
   ListCasesQuery,
@@ -233,6 +234,139 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
       const access = await requireCaseRead(app.db, user, request.params.id);
 
       return loadCaseDetail(app, access.caseId);
+    },
+  );
+
+  app.post(
+    "/v1/cases/:id/duplicate",
+    {
+      schema: {
+        params: IdParam,
+        body: DuplicateCaseRequest,
+        response: { 200: CaseDetail, 403: ErrorResponse, 404: ErrorResponse },
+      },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const principal = principalOf(request);
+      const access = await requireCaseWrite(app.db, user, request.params.id);
+      const [source] = await app.db
+        .select()
+        .from(schema.cases)
+        .where(eq(schema.cases.id, access.caseId))
+        .limit(1);
+
+      if (source === undefined) throw notFound("Case");
+
+      const duplicateId = await app.db.transaction(async (tx) => {
+        const ref = await allocateReference(tx, user.organizationId, "case");
+        const [duplicate] = await tx
+          .insert(schema.cases)
+          .values({
+            organizationId: user.organizationId,
+            ref,
+            title: request.body.title,
+            summary: source.summary,
+            profile: source.profile,
+            ownerId: user.id,
+            restricted: source.restricted,
+            disclosureEnabled: source.disclosureEnabled,
+          })
+          .returning({ id: schema.cases.id });
+
+        if (duplicate === undefined) {
+          throw new DomainError(
+            "SERVER_ERROR",
+            "Could not duplicate the case.",
+          );
+        }
+
+        const policyPacks = await tx
+          .select({ policyPackId: schema.casePolicyPacks.policyPackId })
+          .from(schema.casePolicyPacks)
+          .where(eq(schema.casePolicyPacks.caseId, source.id));
+        const policyPackIds =
+          policyPacks.length === 0
+            ? [defaultPolicyPackForProfile(source.profile).id]
+            : policyPacks.map((pack) => pack.policyPackId);
+        await tx.insert(schema.casePolicyPacks).values(
+          policyPackIds.map((policyPackId) => ({
+            caseId: duplicate.id,
+            policyPackId,
+          })),
+        );
+
+        if (request.body.copyAssets ?? true) {
+          const assetLinks = await tx
+            .select({ assetId: schema.caseAssets.assetId })
+            .from(schema.caseAssets)
+            .where(eq(schema.caseAssets.caseId, source.id));
+          if (assetLinks.length > 0) {
+            await tx.insert(schema.caseAssets).values(
+              assetLinks.map((link) => ({
+                caseId: duplicate.id,
+                assetId: link.assetId,
+              })),
+            );
+          }
+        }
+
+        if (request.body.copyMembers ?? false) {
+          const members = await tx
+            .select({
+              userId: schema.caseMembers.userId,
+              access: schema.caseMembers.access,
+            })
+            .from(schema.caseMembers)
+            .where(eq(schema.caseMembers.caseId, source.id));
+          const copiedMembers = members.filter(
+            (member) => member.userId !== user.id,
+          );
+          if (copiedMembers.length > 0) {
+            await tx.insert(schema.caseMembers).values(
+              copiedMembers.map((member) => ({
+                caseId: duplicate.id,
+                userId: member.userId,
+                access: member.access,
+                addedBy: user.id,
+              })),
+            );
+          }
+        }
+
+        await app.audit.write(
+          tx,
+          {
+            actorId: user.id,
+            sessionId: principal.session.id,
+            requestId: request.requestId,
+          },
+          {
+            action: "case.duplicated",
+            entityType: "case",
+            entityId: duplicate.id,
+            caseId: duplicate.id,
+            after: {
+              sourceCaseId: source.id,
+              ref,
+              title: request.body.title,
+              copyAssets: request.body.copyAssets ?? true,
+              copyMembers: request.body.copyMembers ?? false,
+            },
+          },
+        );
+
+        return duplicate.id;
+      });
+
+      app.events.publish({
+        type: "entity.changed",
+        entityType: "case",
+        entityId: duplicateId,
+        caseId: duplicateId,
+      });
+
+      return loadCaseDetail(app, duplicateId);
     },
   );
 
