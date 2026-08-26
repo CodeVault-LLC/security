@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useAiProviderPreference } from "./use-ai-provider-preference.js";
 import { useTheme } from "./use-theme.js";
@@ -10,6 +10,8 @@ beforeEach(() => {
   document.documentElement.removeAttribute("data-accent");
   document.documentElement.removeAttribute("data-motion");
 });
+
+afterEach(() => vi.restoreAllMocks());
 
 describe("appearance preferences", () => {
   it("applies and persists scheme, accent, and reduced motion", async () => {
@@ -30,6 +32,33 @@ describe("appearance preferences", () => {
     expect(localStorage.getItem("codevault.theme")).toBe("dark");
     expect(localStorage.getItem("codevault.accent")).toBe("ocean");
     expect(localStorage.getItem("codevault.reduce-motion")).toBe("true");
+  });
+
+  it("keeps appearance controls usable when preference storage is unavailable", async () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new DOMException("Storage is unavailable", "SecurityError");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("Storage is unavailable", "SecurityError");
+    });
+
+    const { result } = renderHook(() => useTheme());
+
+    expect(result.current.preference).toBe("system");
+    expect(result.current.accent).toBe("default");
+    expect(result.current.reduceMotion).toBe(false);
+
+    act(() => {
+      result.current.setPreference("dark");
+      result.current.setAccent("iris");
+      result.current.setReduceMotion(true);
+    });
+
+    await waitFor(() => {
+      expect(document.documentElement.dataset.theme).toBe("dark");
+      expect(document.documentElement.dataset.accent).toBe("iris");
+      expect(document.documentElement.dataset.motion).toBe("reduced");
+    });
   });
 });
 
