@@ -72,6 +72,10 @@ export interface FakeStorage extends ObjectStorage {
 
 export interface FakeJobQueue extends JobQueue {
   sent: Array<{ queue: string; data: unknown }>;
+  schedules: Map<
+    string,
+    { queue: string; cron: string; data: unknown; key: string }
+  >;
 }
 
 export function createFakeStorage(): FakeStorage {
@@ -177,15 +181,26 @@ export function createFakeStorage(): FakeStorage {
 
 export function createFakeJobQueue(): FakeJobQueue {
   const sent: Array<{ queue: string; data: unknown }> = [];
+  const schedules = new Map<
+    string,
+    { queue: string; cron: string; data: unknown; key: string }
+  >();
 
   return {
     sent,
+    schedules,
     async start() {},
     async stop() {},
     async send(queue, data, _options) {
       sent.push({ queue, data });
 
       return uuidv7();
+    },
+    async schedule(queue, cron, data, key, _options) {
+      schedules.set(`${queue}:${key}`, { queue, cron, data, key });
+    },
+    async unschedule(queue, key) {
+      schedules.delete(`${queue}:${key}`);
     },
     instance() {
       throw new Error("The fake queue has no pg-boss instance.");

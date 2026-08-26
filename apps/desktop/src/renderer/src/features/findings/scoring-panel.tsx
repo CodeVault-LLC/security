@@ -38,6 +38,7 @@ import {
   intelligenceFreshness,
   isFreshnessTrackedIntelligence,
 } from "./intelligence-freshness.js";
+import { IntelligenceRefreshControls } from "./intelligence-refresh-controls.js";
 
 /**
  * Scoring.
@@ -461,6 +462,7 @@ export function ScoringPanel({
       </Card>
 
       <div className="space-y-4">
+        <IntelligenceRefreshControls finding={finding} canEdit={canEdit} />
         <Card>
           <CardHeader>
             <CardTitle>Recorded scores</CardTitle>

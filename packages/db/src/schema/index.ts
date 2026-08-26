@@ -9,6 +9,7 @@ export * from "./disclosure.js";
 export * from "./evidence.js";
 export * from "./findings.js";
 export * from "./intake.js";
+export * from "./intelligence.js";
 export * from "./media.js";
 export * from "./organizations.js";
 export * from "./mail.js";

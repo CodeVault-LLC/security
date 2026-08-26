@@ -16,6 +16,7 @@ import type { WorkerContext } from "../context.js";
 export interface IntelligenceRefreshJobData {
   findingId: string;
   cveIds: string[];
+  scheduled?: boolean;
 }
 
 export interface EpssRecord {
@@ -35,17 +36,20 @@ export async function refreshIntelligence(
   context: WorkerContext,
   data: IntelligenceRefreshJobData,
 ): Promise<void> {
-  if (data.cveIds.length === 0) {
+  const cveIds = data.scheduled
+    ? await scheduledCveIds(context, data.findingId)
+    : data.cveIds;
+  if (cveIds === null || cveIds.length === 0) {
     return;
   }
 
-  const epss = await fetchEpss(context, data.cveIds);
-  const kev = await fetchKevMembership(context, data.cveIds);
+  const epss = await fetchEpss(context, cveIds);
+  const kev = await fetchKevMembership(context, cveIds);
   const retrievedAt = new Date().toISOString();
 
   for (const score of buildIntelligenceScores(
     data.findingId,
-    data.cveIds,
+    cveIds,
     epss,
     kev,
     retrievedAt,
@@ -56,6 +60,43 @@ export async function refreshIntelligence(
   context.log(
     `intelligence refreshed for ${data.findingId}: ${epss.size} EPSS, ${kev === null ? "unavailable" : kev.size} KEV`,
   );
+}
+
+async function scheduledCveIds(
+  context: WorkerContext,
+  findingId: string,
+): Promise<string[] | null> {
+  const [policy] = await context.db
+    .select({
+      enabled: schema.intelligenceRefreshPolicies.enabled,
+      cadence: schema.intelligenceRefreshPolicies.cadence,
+    })
+    .from(schema.intelligenceRefreshPolicies)
+    .where(eq(schema.intelligenceRefreshPolicies.findingId, findingId));
+  if (policy === undefined || !policy.enabled) return null;
+
+  const identifiers = await context.db
+    .select({ value: schema.findingIdentifiers.value })
+    .from(schema.findingIdentifiers)
+    .where(
+      and(
+        eq(schema.findingIdentifiers.findingId, findingId),
+        eq(schema.findingIdentifiers.scheme, "CVE"),
+      ),
+    );
+  const now = new Date();
+  await context.db
+    .update(schema.intelligenceRefreshPolicies)
+    .set({
+      lastQueuedAt: now.toISOString(),
+      nextRunAt: new Date(
+        now.getTime() +
+          (policy.cadence === "DAILY" ? 24 : 7 * 24) * 60 * 60 * 1_000,
+      ).toISOString(),
+      updatedAt: sql`now()`,
+    })
+    .where(eq(schema.intelligenceRefreshPolicies.findingId, findingId));
+  return identifiers.map((identifier) => identifier.value);
 }
 
 export interface IntelligenceScore {
