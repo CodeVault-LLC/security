@@ -17,7 +17,7 @@ export function formatBytesApprox(bytes: number): string {
     return `${bytes} B`;
   }
 
-  const units = ["KiB", "MiB", "GiB", "TiB"];
+  const units = ["KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
   let value = bytes / 1024;
   let unit = 0;
 
