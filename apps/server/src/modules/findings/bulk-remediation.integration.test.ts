@@ -21,25 +21,28 @@ describeIntegration("bulk finding remediation", () => {
   beforeAll(async () => {
     harness = await createHarness();
     owner = await harness.createUser({ role: "MEMBER" });
-    caseDetail = (
-      await harness.app.inject({
-        method: "POST",
-        url: "/v1/cases",
-        headers: owner.headers,
-        payload: { title: "Coordinated remediation" },
-      })
-    ).json<CaseDetail>();
+    const caseResponse = await harness.app.inject({
+      method: "POST",
+      url: "/v1/cases",
+      headers: owner.headers,
+      payload: {
+        title: "Coordinated remediation",
+        profile: "STANDARD",
+      },
+    });
+    expect(caseResponse.statusCode, caseResponse.body).toBe(200);
+    caseDetail = caseResponse.json<CaseDetail>();
     findings = await Promise.all(
-      ["Parser bypass", "Authorization bypass"].map(async (title) =>
-        (
-          await harness.app.inject({
-            method: "POST",
-            url: "/v1/findings",
-            headers: owner.headers,
-            payload: { caseId: caseDetail.id, title },
-          })
-        ).json<FindingDetail>(),
-      ),
+      ["Parser bypass", "Authorization bypass"].map(async (title) => {
+        const response = await harness.app.inject({
+          method: "POST",
+          url: "/v1/findings",
+          headers: owner.headers,
+          payload: { caseId: caseDetail.id, title },
+        });
+        expect(response.statusCode, response.body).toBe(200);
+        return response.json<FindingDetail>();
+      }),
     );
   });
 
@@ -60,7 +63,7 @@ describeIntegration("bulk finding remediation", () => {
       },
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode, response.body).toBe(200);
     expect(response.json()).toEqual({
       updatedIds: findings.map((finding) => finding.id),
     });
@@ -105,7 +108,7 @@ describeIntegration("bulk finding remediation", () => {
     expect(audit).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          before: { remediationState: "UNFIXED" },
+          before: { remediationState: "UNKNOWN" },
           after: { remediationState: "FIXED" },
         }),
       ]),
@@ -119,7 +122,7 @@ describeIntegration("bulk finding remediation", () => {
       headers: owner.headers,
       payload: {
         caseId: caseDetail.id,
-        remediationState: "MITIGATED",
+        remediationState: "REGRESSED",
         items: [
           { id: findings[0]!.id, expectedRevision: 2 },
           { id: findings[1]!.id, expectedRevision: 1 },
@@ -127,7 +130,7 @@ describeIntegration("bulk finding remediation", () => {
       },
     });
 
-    expect(response.statusCode).toBe(409);
+    expect(response.statusCode, response.body).toBe(409);
     const unchanged = await harness.dbHandle.db
       .select({ remediationState: schema.findings.remediationState })
       .from(schema.findings)
