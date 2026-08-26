@@ -100,6 +100,14 @@ describe("parseDirectives", () => {
     ).toHaveLength(0);
   });
 
+  it("ignores directives inside HTML comments", () => {
+    expect(
+      parseDirectives(
+        "<!-- [evidence:EVID-000001] -->\n[finding:FIND-1]",
+      ).map((item) => item.raw),
+    ).toEqual(["[finding:FIND-1]"]);
+  });
+
   it("records the line so a lint message can point at it", () => {
     const directives = parseDirectives("line one\nline two\n[evidence:EVID-1]");
 

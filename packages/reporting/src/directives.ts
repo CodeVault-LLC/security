@@ -57,6 +57,7 @@ const REFERENCE_LINK_PATTERN = /\[[^\]]*\]\[[^\]]*\]/g;
 const LINK_DEFINITION_PATTERN = /^ {0,3}\[[^\]]+\]:[^\n]*$/gm;
 const INLINE_CODE_PATTERN = /(`+)(.*?)\1/g;
 const INDENTED_CODE_PATTERN = /^(?: {4}|\t).*$/gm;
+const HTML_COMMENT_PATTERN = /<!--[\s\S]*?(?:-->|$)/g;
 
 function linkRanges(markdown: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
@@ -91,6 +92,16 @@ function inlineCodeRanges(markdown: string): Array<[number, number]> {
 function indentedCodeRanges(markdown: string): Array<[number, number]> {
   const ranges: Array<[number, number]> = [];
   for (const match of markdown.matchAll(INDENTED_CODE_PATTERN)) {
+    if (match.index !== undefined) {
+      ranges.push([match.index, match.index + match[0].length]);
+    }
+  }
+  return ranges;
+}
+
+function htmlCommentRanges(markdown: string): Array<[number, number]> {
+  const ranges: Array<[number, number]> = [];
+  for (const match of markdown.matchAll(HTML_COMMENT_PATTERN)) {
     if (match.index !== undefined) {
       ranges.push([match.index, match.index + match[0].length]);
     }
@@ -149,6 +160,7 @@ export function parseDirectives(markdown: string): ParsedDirective[] {
     ...inlineCodeRanges(markdown),
     ...fencedCodeRanges(markdown),
     ...indentedCodeRanges(markdown),
+    ...htmlCommentRanges(markdown),
   ];
   const directives: ParsedDirective[] = [];
   let line = 1;
