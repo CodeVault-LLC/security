@@ -155,4 +155,19 @@ describe("API client response validation", () => {
       message: "The server returned an empty response.",
     });
   });
+
+  it("handles a malformed error envelope without hiding the HTTP response", async () => {
+    const client = createApiClient({
+      sessionStore: storedSession(),
+      fetchImpl: vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: null }), { status: 400 }),
+      ),
+    });
+
+    await expect(client.request("/v1/dashboard")).rejects.toMatchObject({
+      status: 400,
+      category: "VALIDATION",
+      message: "The server returned an unexpected response.",
+    });
+  });
 });

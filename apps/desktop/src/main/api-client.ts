@@ -1,5 +1,3 @@
-import type { ErrorResponse } from "@codevault/contracts";
-
 import type { SessionStore } from "./session-store.js";
 import { normalizeServerUrl } from "./security.js";
 
@@ -226,10 +224,17 @@ export function createApiClient(options: ApiClientOptions): ApiClient {
 }
 
 function toApiError(status: number, payload: unknown): ApiError {
-  const envelope = payload as Partial<ErrorResponse> | null;
-  const error = envelope?.error;
+  const envelope = isRecord(payload) ? payload : null;
+  const error = envelope?.["error"];
 
-  if (error === undefined) {
+  if (
+    !isRecord(error) ||
+    typeof error["category"] !== "string" ||
+    typeof error["message"] !== "string" ||
+    (error["requestId"] !== undefined &&
+      typeof error["requestId"] !== "string") ||
+    (error["details"] !== undefined && !isRecord(error["details"]))
+  ) {
     return new ApiError(
       status,
       status >= 500 ? "SERVER_ERROR" : "VALIDATION",
@@ -241,9 +246,13 @@ function toApiError(status: number, payload: unknown): ApiError {
 
   return new ApiError(
     status,
-    error.category,
-    error.message,
-    error.requestId ?? null,
-    error.details ?? null,
+    error["category"],
+    error["message"],
+    error["requestId"] ?? null,
+    error["details"] ?? null,
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
