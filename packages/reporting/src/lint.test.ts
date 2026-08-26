@@ -269,6 +269,23 @@ describe("public-report hygiene", () => {
     ).toBe(true);
   });
 
+  it("checks every private address on the same line", () => {
+    const result = lintReport(
+      input({
+        sections: [
+          section("Proxy 192.168.1.5 forwards to 10.20.30.40."),
+        ],
+        allowedPrivateAddresses: ["192.168.1.5"],
+      }),
+    );
+
+    expect(
+      result.findings.some(
+        (finding) => finding.ruleId === "private-address-in-public",
+      ),
+    ).toBe(true);
+  });
+
   it("flags an internal hostname", () => {
     const result = lintReport(
       input({ sections: [section("Tested on build01.corp.")] }),
