@@ -444,7 +444,9 @@ function validateManifest(value: unknown): asserts value is CvcaseManifest {
       item.sizeBytes < 0 ||
       typeof item.sha256 !== "string" ||
       !/^[0-9a-f]{64}$/u.test(item.sha256) ||
-      typeof item.visibility !== "string" ||
+      (item.visibility !== "INTERNAL" &&
+        item.visibility !== "VENDOR" &&
+        item.visibility !== "PUBLIC") ||
       typeof item.artifactKind !== "string"
     ) {
       throw new Error("The .cvcase artifact manifest is invalid.");
