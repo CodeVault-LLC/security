@@ -168,6 +168,14 @@ const api: CodeVaultDesktopApi = {
       }) as ReturnType<CodeVaultDesktopApi["reports"]["downloadExport"]>,
   },
 
+  audit: {
+    saveCsv: (caseId, csv) =>
+      ipcRenderer.invoke(IPC_CHANNELS.auditSaveCsv, {
+        caseId,
+        csv,
+      }) as ReturnType<CodeVaultDesktopApi["audit"]["saveCsv"]>,
+  },
+
   avatars: {
     selectAndUpload: (target) =>
       ipcRenderer.invoke(

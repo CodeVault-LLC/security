@@ -188,6 +188,11 @@ export interface CorrespondenceTranscriptExportResult {
   sha256: string | null;
 }
 
+export interface AuditCsvExportResult {
+  saved: boolean;
+  sha256: string | null;
+}
+
 /**
  * What the renderer may say about a run.
  *
@@ -284,6 +289,14 @@ export interface CodeVaultDesktopApi {
     ): Promise<ApiOutcome<ReportExportDownloadResult>>;
   };
 
+  audit: {
+    /** Saves a locally assembled, case-scoped audit CSV. */
+    saveCsv(
+      caseId: string,
+      csv: string,
+    ): Promise<ApiOutcome<AuditCsvExportResult>>;
+  };
+
   avatars: {
     selectAndUpload(
       target: "USER" | "ORGANIZATION",
@@ -377,6 +390,7 @@ export const IPC_CHANNELS = {
   caseArchivesExport: "case-archives:export",
   caseArchivesImport: "case-archives:import",
   reportsDownloadExport: "reports:download-export",
+  auditSaveCsv: "audit:save-csv",
   avatarsSelectAndUpload: "avatars:select-and-upload",
   avatarsLoad: "avatars:load",
   avatarsLoadUser: "avatars:load-user",

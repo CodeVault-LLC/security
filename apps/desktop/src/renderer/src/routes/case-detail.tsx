@@ -30,6 +30,7 @@ import {
 
 import { CreateFindingDialog } from "../features/findings/create-finding-dialog.js";
 import { ExportCaseArchiveButton } from "../features/cases/case-archive-actions.js";
+import { CaseActivityPanel } from "../features/cases/case-activity-panel.js";
 import { Avatar } from "../components/avatar.js";
 import { DisclosurePanel } from "../features/disclosure/disclosure-panel.js";
 import { EvidencePanel } from "../features/evidence/evidence-panel.js";
@@ -166,6 +167,7 @@ export function CaseDetailRoute({
             <TabsTrigger value="disclosure">Disclosure</TabsTrigger>
           ) : null}
           <TabsTrigger value="reports">Reports</TabsTrigger>
+          <TabsTrigger value="activity">Activity</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="p-4">
@@ -268,6 +270,10 @@ export function CaseDetailRoute({
               )}
             </Card>
           </div>
+        </TabsContent>
+
+        <TabsContent value="activity" className="p-4">
+          <CaseActivityPanel caseId={caseId} />
         </TabsContent>
 
         <TabsContent value="findings">
