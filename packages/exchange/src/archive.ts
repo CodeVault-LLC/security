@@ -421,6 +421,7 @@ function validateManifest(value: unknown): asserts value is CvcaseManifest {
     throw new Error("The .cvcase manifest is invalid or incompatible.");
   }
   const ids = new Set<string>();
+  const paths = new Set<string>();
   for (const item of value.artifacts) {
     if (
       !isRecord(item) ||
@@ -441,7 +442,13 @@ function validateManifest(value: unknown): asserts value is CvcaseManifest {
     assertSafePath(item.archivePath);
     if (ids.has(item.sourceId))
       throw new Error("The .cvcase manifest repeats an artifact ID.");
+    if (paths.has(item.archivePath)) {
+      throw new Error(
+        "The .cvcase manifest repeats an artifact archive path.",
+      );
+    }
     ids.add(item.sourceId);
+    paths.add(item.archivePath);
   }
 }
 
