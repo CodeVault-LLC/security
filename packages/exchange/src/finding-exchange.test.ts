@@ -3,8 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   exportFindingsCsv,
   exportFindingsJson,
+  exportFindingsSarif,
   parseFindingsCsv,
   parseFindingsJson,
+  parseFindingsSarif,
 } from "./finding-exchange.js";
 
 const findings = [
@@ -63,5 +65,62 @@ describe("finding exchange", () => {
         }),
       ),
     ).toThrow("version is not supported");
+  });
+
+  it("imports SARIF results with rules, CWEs, and source locations", () => {
+    const sarif = JSON.stringify({
+      version: "2.1.0",
+      $schema: "https://json.schemastore.org/sarif-2.1.0.json",
+      runs: [
+        {
+          tool: {
+            driver: {
+              name: "Example scanner",
+              rules: [
+                {
+                  id: "sql-injection",
+                  shortDescription: { text: "SQL injection rule" },
+                  properties: { tags: ["security", "CWE-89"] },
+                },
+              ],
+            },
+          },
+          results: [
+            {
+              ruleId: "sql-injection",
+              message: { text: "SQL injection in query builder" },
+              locations: [
+                {
+                  physicalLocation: {
+                    artifactLocation: { uri: "src/query.ts" },
+                    region: { startLine: 42, startColumn: 7 },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(parseFindingsSarif(sarif)).toEqual([
+      {
+        title: "SQL injection in query builder",
+        summaryMarkdown: "SQL injection rule",
+        technicalMarkdown: "Location: `src/query.ts:42:7`",
+        cweIds: ["CWE-89"],
+        visibility: "INTERNAL",
+      },
+    ]);
+  });
+
+  it("round-trips CodeVault fields through SARIF properties", () => {
+    expect(parseFindingsSarif(exportFindingsSarif(findings))).toEqual(findings);
+  });
+
+  it("rejects unsupported SARIF versions", () => {
+    expect(() =>
+      parseFindingsSarif(JSON.stringify({ version: "2.0.0", runs: [] })),
+    ).toThrow("SARIF version is not supported");
   });
 });

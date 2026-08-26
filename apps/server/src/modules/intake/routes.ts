@@ -31,8 +31,10 @@ import { allocateReference, schema } from "@codevault/db";
 import {
   exportFindingsCsv,
   exportFindingsJson,
+  exportFindingsSarif,
   parseFindingsCsv,
   parseFindingsJson,
+  parseFindingsSarif,
 } from "@codevault/exchange";
 
 import { assertRevision } from "../../http/concurrency.js";
@@ -313,7 +315,9 @@ export async function registerIntakeRoutes(app: AppInstance): Promise<void> {
       const content =
         request.query.format === "JSON"
           ? exportFindingsJson(findings)
-          : exportFindingsCsv(findings);
+          : request.query.format === "CSV"
+            ? exportFindingsCsv(findings)
+            : exportFindingsSarif(findings);
       return {
         format: request.query.format,
         filename: `codevault-findings-${request.query.caseId.slice(0, 8)}.${request.query.format.toLowerCase()}`,
@@ -340,7 +344,9 @@ export async function registerIntakeRoutes(app: AppInstance): Promise<void> {
         findings =
           request.body.format === "JSON"
             ? parseFindingsJson(request.body.content)
-            : parseFindingsCsv(request.body.content);
+            : request.body.format === "CSV"
+              ? parseFindingsCsv(request.body.content)
+              : parseFindingsSarif(request.body.content);
       } catch (error: unknown) {
         throw validationError(
           error instanceof Error

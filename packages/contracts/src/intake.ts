@@ -211,7 +211,11 @@ export const FolderIntakeResult = Type.Object({
 });
 export type FolderIntakeResult = Static<typeof FolderIntakeResult>;
 
-export const FindingExchangeFormatSchema = enumOf(["JSON", "CSV"] as const);
+export const FindingExchangeFormatSchema = enumOf([
+  "JSON",
+  "CSV",
+  "SARIF",
+] as const);
 export const ExportFindingsQuery = Type.Object({
   caseId: Uuid,
   format: FindingExchangeFormatSchema,

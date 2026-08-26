@@ -8,10 +8,17 @@ import type { IntakeDraft } from "@codevault/contracts";
 import {
   parseFindingsCsv,
   parseFindingsJson,
+  parseFindingsSarif,
   type ExchangeFinding,
 } from "./finding-exchange.js";
 
-const MAPPABLE_EXTENSIONS = new Set([".md", ".markdown", ".json", ".csv"]);
+const MAPPABLE_EXTENSIONS = new Set([
+  ".md",
+  ".markdown",
+  ".json",
+  ".csv",
+  ".sarif",
+]);
 const DEFAULT_MAX_FILES = 5_000;
 const DEFAULT_MAX_MAPPABLE_BYTES = 10 * 1024 * 1024;
 
@@ -215,6 +222,7 @@ async function walk(
 function mapText(extension: string, input: string): ExchangeFinding[] {
   if (extension === ".json") return parseFindingsJson(input);
   if (extension === ".csv") return parseFindingsCsv(input);
+  if (extension === ".sarif") return parseFindingsSarif(input);
   return [parseMarkdownFinding(input)];
 }
 
