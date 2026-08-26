@@ -91,6 +91,7 @@ export interface LintResult {
 interface SectionMatch {
   line: number;
   excerpt: string;
+  value: string;
 }
 
 /** Finds every match of a pattern with its line number and a short excerpt. */
@@ -111,6 +112,7 @@ function scan(markdown: string, pattern: RegExp): SectionMatch[] {
       matches.push({
         line: index + 1,
         excerpt: line.trim().slice(0, 160),
+        value: match[0],
       });
     }
   }
@@ -345,8 +347,8 @@ export function lintReport(input: LintInput): LintResult {
 
     if (isPublic) {
       for (const match of scan(markdown, PRIVATE_ADDRESS_PATTERN)) {
-        const allowed = (input.allowedPrivateAddresses ?? []).some((address) =>
-          match.excerpt.includes(address),
+        const allowed = (input.allowedPrivateAddresses ?? []).includes(
+          match.value,
         );
 
         if (allowed) {
