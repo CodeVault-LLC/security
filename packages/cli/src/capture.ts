@@ -97,15 +97,17 @@ export function parseCaptureArguments(
   ) {
     throw new Error("--mime must be 1 to 200 characters without controls.");
   }
+  const title = values.get("--title");
+  if (title !== undefined && (title.trim().length === 0 || title.length > 200)) {
+    throw new Error("--title must contain 1 to 200 characters.");
+  }
 
   return {
     caseId,
     ...(findingId === undefined ? {} : { findingId }),
     file: values.get("--file") ?? null,
     ...(name === undefined ? {} : { name }),
-    ...(values.get("--title") === undefined
-      ? {}
-      : { title: values.get("--title")! }),
+    ...(title === undefined ? {} : { title }),
     ...(values.get("--description") === undefined
       ? {}
       : { descriptionMarkdown: values.get("--description")! }),

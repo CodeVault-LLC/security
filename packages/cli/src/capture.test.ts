@@ -121,4 +121,18 @@ describe("capture arguments", () => {
       ).toThrow("--mime must be 1 to 200 characters without controls");
     },
   );
+
+  it.each(["", "   ", "x".repeat(201)])(
+    "rejects invalid evidence title %j",
+    (title) => {
+      expect(() =>
+        parseCaptureArguments([
+          "--case",
+          "018f2f56-7c9a-7abc-8def-0123456789ab",
+          "--title",
+          title,
+        ]),
+      ).toThrow("--title must contain 1 to 200 characters");
+    },
+  );
 });
