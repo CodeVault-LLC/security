@@ -1,5 +1,5 @@
 import { Download, FileDown, KeyRound, Save } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import type {
   CorrespondenceMessage,
@@ -13,6 +13,7 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
+  cn,
   Mono,
   Select,
   Spinner,
@@ -29,23 +30,52 @@ import { bridge } from "../../lib/bridge.js";
 import { formatDateTime } from "../../lib/dates.js";
 import { humanise } from "../../lib/format.js";
 import { buildCorrespondenceTranscript } from "./correspondence-transcript.js";
+import { ChooseFromMail } from "./choose-from-mail.js";
 
 export function CorrespondenceThread({
-  submissionId,
-  submissionStatus,
-  submissionRevision,
+  submission,
+  canEdit,
+  focusMessageId,
 }: {
-  submissionId: string;
-  submissionStatus: string;
-  submissionRevision: number;
+  submission: Pick<
+    SubmissionDetail,
+    "id" | "status" | "revision" | "routeSnapshot"
+  >;
+  canEdit: boolean;
+  focusMessageId?: string;
 }): React.JSX.Element {
+  const submissionId = submission.id;
   const [plaintext, setPlaintext] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const focusedMessageId = useRef<string | null>(null);
   const thread = useApiQuery<CorrespondenceThreadData>(
     queryKeys.correspondence(submissionId),
     `/v1/submissions/${submissionId}/correspondence`,
   );
+
+  useEffect(() => {
+    if (focusMessageId === undefined) {
+      focusedMessageId.current = null;
+      return;
+    }
+    if (
+      focusedMessageId.current === focusMessageId ||
+      thread.data?.items.some((message) => message.id === focusMessageId) !==
+        true
+    ) {
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      const target = document.getElementById(
+        `correspondence-message-${focusMessageId}`,
+      );
+      target?.scrollIntoView?.({ block: "center" });
+      target?.focus({ preventScroll: true });
+      focusedMessageId.current = focusMessageId;
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusMessageId, thread.data?.items]);
   const classify = useApiMutation<
     CorrespondenceMessage,
     { message: CorrespondenceMessage; classification: string }
@@ -70,7 +100,7 @@ export function CorrespondenceThread({
   const createReply = useApiMutation<SubmissionDetail, { messageId: string }>(
     ({ messageId }) => ({
       path: `/v1/submissions/${submissionId}/reply-draft`,
-      body: { messageId, expectedRevision: submissionRevision },
+      body: { messageId, expectedRevision: submission.revision },
     }),
     () => [
       queryKeys.submission(submissionId),
@@ -167,10 +197,30 @@ export function CorrespondenceThread({
         <QueryBoundary query={thread} loadingLabel="Loading correspondence…">
           {(data) =>
             data.items.length === 0 ? (
-              <p className="text-[12px] text-text-muted">
-                No sent or received messages yet. This is a submission thread,
-                not a mailbox view.
-              </p>
+              <div>
+                <p className="text-[12px] text-text-muted">
+                  {data.linkedThread === null
+                    ? "No sent or received messages yet. This is a submission thread, not a mailbox view."
+                    : "Gmail thread linked. CodeVault is importing its messages and attachments."}
+                </p>
+                {data.linkedThread === null &&
+                submission.status === "DRAFT" &&
+                submission.routeSnapshot.route.type === "EMAIL" &&
+                canEdit ? (
+                  <ChooseFromMail submission={submission} />
+                ) : null}
+                {data.linkedThread === null ? null : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="mt-2"
+                    loading={thread.isFetching}
+                    onClick={() => void thread.refetch()}
+                  >
+                    Check import status
+                  </Button>
+                )}
+              </div>
             ) : (
               <div className="space-y-3">
                 {data.items.map((message) => {
@@ -178,7 +228,13 @@ export function CorrespondenceThread({
                   return (
                     <article
                       key={message.id}
-                      className="rounded-(--cv-radius) border border-border p-3 text-[12px]"
+                      id={`correspondence-message-${message.id}`}
+                      tabIndex={-1}
+                      className={cn(
+                        "rounded-(--cv-radius) border border-border p-3 text-[12px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+                        focusMessageId === message.id &&
+                          "border-accent bg-accent/4",
+                      )}
                     >
                       <div className="flex flex-wrap items-center gap-2">
                         <span
@@ -239,12 +295,15 @@ export function CorrespondenceThread({
                           {localPlaintext ?? message.bodyText ?? ""}
                         </pre>
                       )}
-                      {localPlaintext === undefined ? null : (
+                      {localPlaintext === undefined || !canEdit ? null : (
                         <div className="mt-2 flex items-center gap-2">
                           <Button
                             size="sm"
                             variant="secondary"
-                            loading={savePlaintext.isPending}
+                            loading={
+                              savePlaintext.isPending &&
+                              savePlaintext.variables?.message.id === message.id
+                            }
                             onClick={() =>
                               savePlaintext.mutate(
                                 { message, bodyText: localPlaintext },
@@ -295,11 +354,14 @@ export function CorrespondenceThread({
                       )}
                       {message.direction === "INBOUND" ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          {submissionStatus === "SENT" ? (
+                          {submission.status === "SENT" && canEdit ? (
                             <Button
                               size="sm"
                               variant="secondary"
-                              loading={createReply.isPending}
+                              loading={
+                                createReply.isPending &&
+                                createReply.variables?.messageId === message.id
+                              }
                               onClick={() =>
                                 createReply.mutate(
                                   { messageId: message.id },
@@ -313,28 +375,33 @@ export function CorrespondenceThread({
                               Draft reply in this thread
                             </Button>
                           ) : null}
-                          <div className="w-56">
-                            <Select
-                              aria-label="Message classification"
-                              value={message.classification}
-                              onValueChange={(classification) =>
-                                classify.mutate(
-                                  { message, classification },
-                                  {
-                                    onError: (mutationError) =>
-                                      setError(mutationError.message),
-                                  },
-                                )
-                              }
-                              options={MESSAGE_CLASSIFICATIONS.map((value) => ({
-                                value,
-                                label: humanise(value),
-                              }))}
-                            />
-                            {classify.isPending ? (
-                              <Spinner className="mt-1 size-3" />
-                            ) : null}
-                          </div>
+                          {!canEdit ? null : (
+                            <div className="w-56">
+                              <Select
+                                aria-label="Message classification"
+                                value={message.classification}
+                                onValueChange={(classification) =>
+                                  classify.mutate(
+                                    { message, classification },
+                                    {
+                                      onError: (mutationError) =>
+                                        setError(mutationError.message),
+                                    },
+                                  )
+                                }
+                                options={MESSAGE_CLASSIFICATIONS.map(
+                                  (value) => ({
+                                    value,
+                                    label: humanise(value),
+                                  }),
+                                )}
+                              />
+                              {classify.isPending &&
+                              classify.variables?.message.id === message.id ? (
+                                <Spinner className="mt-1 size-3" />
+                              ) : null}
+                            </div>
+                          )}
                         </div>
                       ) : null}
                     </article>

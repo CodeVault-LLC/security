@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { PanelRight, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -27,6 +28,13 @@ import {
   InlineError,
   Mono,
   Select,
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
   stateSelectOptions,
   Tabs,
   TabsContent,
@@ -171,6 +179,7 @@ export function FindingDetailRoute({
   // the run, but the reviewer needs it where they decide whether to accept.
   const [proposals, setProposals] = useState<ReviewableProposal[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showAssist, setShowAssist] = useState(false);
 
   const finding = useApiQuery<FindingDetail>(
     queryKeys.finding(findingId),
@@ -216,53 +225,67 @@ export function FindingDetailRoute({
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <FindingHeader
-        finding={data}
-        actions={
-          <div className="flex items-center gap-2">
-            <VisibilityBadge visibility={data.visibility} />
-            {canEdit ? null : (
-              <span className="text-[11px] text-text-muted">Read only</span>
-            )}
-            <Button asChild variant="secondary" size="sm">
-              <Link to={`/cases/${data.caseId}`}>Open case</Link>
-            </Button>
-          </div>
-        }
-      />
-
-      <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="technical">Technical</TabsTrigger>
-          <TabsTrigger value="evidence">Evidence</TabsTrigger>
-          <TabsTrigger value="scoring">Scoring</TabsTrigger>
-          <TabsTrigger value="prior-art">Prior art</TabsTrigger>
-          <TabsTrigger value="history">History</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="p-4">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_320px]">
-            <FindingContextColumn
-              finding={data}
-              canEdit={canEdit}
-              onError={setError}
-            />
-
-            <div className="space-y-4 xl:col-start-1 xl:row-start-1">
+    <Sheet>
+      <div className="flex h-full flex-col">
+        <FindingHeader
+          finding={data}
+          actions={
+            <div className="flex items-center gap-1.5">
+              <VisibilityBadge visibility={data.visibility} />
               {canEdit ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-pressed={showAssist}
+                  className={showAssist ? "bg-surface-hover text-text" : ""}
+                  onClick={() => setShowAssist((current) => !current)}
+                >
+                  <Sparkles aria-hidden className="size-3.5" />
+                  Assist
+                </Button>
+              ) : (
+                <span className="text-[11px] text-text-muted">Read only</span>
+              )}
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="sm">
+                  <PanelRight aria-hidden className="size-3.5" />
+                  Details
+                </Button>
+              </SheetTrigger>
+              <Button asChild variant="secondary" size="sm">
+                <Link to={`/cases/${data.caseId}`}>Open case</Link>
+              </Button>
+            </div>
+          }
+        />
+
+        {error === null ? null : (
+          <InlineError className="mx-4 mt-3">{error}</InlineError>
+        )}
+
+        <Tabs defaultValue="write" className="flex min-h-0 flex-1 flex-col">
+          <TabsList>
+            <TabsTrigger value="write">Write</TabsTrigger>
+            <TabsTrigger value="evidence">Evidence</TabsTrigger>
+            <TabsTrigger value="scoring">Scoring</TabsTrigger>
+            <TabsTrigger value="prior-art">Prior art</TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="write" className="overflow-hidden">
+            <div className="flex h-full min-h-0 flex-col">
+              {canEdit && showAssist ? (
                 <AiToolbar
                   targetType="FINDING"
                   targetId={data.id}
                   actions={AI_ACTIONS}
                   onCompleted={onAiCompleted}
-                  className="border-b border-border pb-4"
+                  className="shrink-0 border-b border-border px-3 py-2"
                 />
               ) : null}
 
               {proposals.length === 0 ? null : (
-                <div className="space-y-3">
+                <div className="max-h-64 shrink-0 space-y-3 overflow-y-auto border-b border-border p-3">
                   {proposals.map(({ proposal, model }) => (
                     <ProposalReview
                       key={proposal.id}
@@ -284,44 +307,50 @@ export function FindingDetailRoute({
                 </div>
               )}
 
-              <FindingContentEditor finding={data} canEdit={canEdit} />
+              <div className="min-h-0 flex-1">
+                <FindingContentEditor finding={data} canEdit={canEdit} />
+              </div>
             </div>
-          </div>
+          </TabsContent>
 
-          {error === null ? null : (
-            <InlineError className="mt-3">{error}</InlineError>
-          )}
-        </TabsContent>
+          <TabsContent value="evidence">
+            <EvidencePanel
+              caseId={data.caseId}
+              findingId={data.id}
+              canEdit={canEdit}
+            />
+          </TabsContent>
 
-        <TabsContent value="technical" className="p-4">
-          <FindingContentEditor
+          <TabsContent value="scoring">
+            <ScoringPanel finding={data} canEdit={canEdit} />
+          </TabsContent>
+
+          <TabsContent value="prior-art">
+            <PriorArtPanel finding={data} canEdit={canEdit} />
+          </TabsContent>
+
+          <TabsContent value="history" className="p-4">
+            <FindingHistory findingId={data.id} />
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      <SheetContent>
+        <SheetHeader>
+          <SheetTitle>Finding details</SheetTitle>
+          <SheetDescription>
+            Workflow, affected assets, identifiers and disclosure controls.
+          </SheetDescription>
+        </SheetHeader>
+        <SheetBody>
+          <FindingContextColumn
             finding={data}
             canEdit={canEdit}
-            technicalOnly
+            onError={setError}
           />
-        </TabsContent>
-
-        <TabsContent value="evidence">
-          <EvidencePanel
-            caseId={data.caseId}
-            findingId={data.id}
-            canEdit={canEdit}
-          />
-        </TabsContent>
-
-        <TabsContent value="scoring">
-          <ScoringPanel finding={data} canEdit={canEdit} />
-        </TabsContent>
-
-        <TabsContent value="prior-art">
-          <PriorArtPanel finding={data} canEdit={canEdit} />
-        </TabsContent>
-
-        <TabsContent value="history" className="p-4">
-          <FindingHistory findingId={data.id} />
-        </TabsContent>
-      </Tabs>
-    </div>
+        </SheetBody>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -337,7 +366,7 @@ function FindingContextColumn({
   const primaryAsset = finding.assets.find((asset) => asset.primary);
 
   return (
-    <aside className="space-y-4 xl:col-start-2 xl:row-start-1">
+    <div className="space-y-4">
       <StatePanel finding={finding} canEdit={canEdit} onError={onError} />
 
       <RemediationSlaCard finding={finding} canEdit={canEdit} />
@@ -419,7 +448,7 @@ function FindingContextColumn({
           )}
         </CardBody>
       </Card>
-    </aside>
+    </div>
   );
 }
 
@@ -529,11 +558,9 @@ function StateRow({
 function FindingContentEditor({
   finding,
   canEdit,
-  technicalOnly = false,
 }: {
   finding: FindingDetail;
   canEdit: boolean;
-  technicalOnly?: boolean;
 }): React.JSX.Element {
   const [savingField, setSavingField] = useState<string | null>(null);
 
@@ -549,23 +576,7 @@ function FindingContentEditor({
     () => [queryKeys.finding(finding.id)],
   );
 
-  const fields = technicalOnly
-    ? FINDING_FIELDS.filter((field) =>
-        [
-          "technicalMarkdown",
-          "preconditionsMarkdown",
-          "attackPathMarkdown",
-          "reproductionMarkdown",
-        ].includes(field.key),
-      )
-    : FINDING_FIELDS.filter((field) =>
-        [
-          "summaryMarkdown",
-          "impactMarkdown",
-          "remediationMarkdown",
-          "researcherNotesMarkdown",
-        ].includes(field.key),
-      );
+  const fields = FINDING_FIELDS;
 
   const [activeField, setActiveField] = useState<
     (typeof fields)[number]["key"]
@@ -581,16 +592,14 @@ function FindingContentEditor({
 
   return (
     <section
-      aria-label={technicalOnly ? "Technical writing" : "Finding narrative"}
-      className="overflow-hidden rounded-(--cv-radius-lg) border border-border bg-surface"
+      aria-label="Finding narrative"
+      className="h-full overflow-hidden bg-surface"
     >
-      <div className="grid min-w-0 grid-cols-1 lg:grid-cols-[14rem_minmax(0,1fr)]">
-        <div className="border-b border-border bg-surface-raised lg:border-b-0 lg:border-r">
+      <div className="grid h-full min-w-0 grid-cols-1 lg:grid-cols-[13rem_minmax(0,1fr)]">
+        <div className="min-h-0 overflow-y-auto border-b border-border bg-surface-raised lg:border-b-0 lg:border-r">
           <div className="flex items-center justify-between gap-2 px-3 py-2.5">
             <div>
-              <h2 className="text-[13px] font-semibold">
-                {technicalOnly ? "Technical sections" : "Narrative sections"}
-              </h2>
+              <h2 className="text-[13px] font-semibold">Finding sections</h2>
               <p className="mt-0.5 text-[10.5px] text-text-muted">
                 {completedCount} of {fields.length} started
               </p>
@@ -601,9 +610,7 @@ function FindingContentEditor({
           </div>
 
           <nav
-            aria-label={
-              technicalOnly ? "Technical sections" : "Narrative sections"
-            }
+            aria-label="Finding sections"
             className="flex overflow-x-auto border-t border-border p-1 lg:block lg:overflow-visible"
           >
             {fields.map((field) => {
@@ -641,9 +648,9 @@ function FindingContentEditor({
           </nav>
         </div>
 
-        <div className="min-w-0 p-3">
+        <div className="flex min-h-0 min-w-0 flex-col">
           {update.error === null ? null : (
-            <InlineError className="mb-3">
+            <InlineError className="mx-4 mt-3">
               {failedField?.label ?? "This section"} could not be saved. Your
               draft remains on this device. {update.error.message}
             </InlineError>
@@ -660,9 +667,9 @@ function FindingContentEditor({
                 key={field.key}
                 id={`finding-section-panel-${field.key}`}
                 aria-labelledby={`finding-section-tab-${field.key}`}
-                hidden={!selected}
+                className={selected ? "flex min-h-0 flex-1 flex-col" : "hidden"}
               >
-                <div className="mb-3">
+                <div className="shrink-0 border-b border-border px-4 py-3">
                   <h3 className="text-[15px] font-semibold">{field.label}</h3>
                   <p className="mt-1 max-w-3xl text-[11px] leading-5 text-text-muted text-pretty">
                     {field.hint}
@@ -674,7 +681,7 @@ function FindingContentEditor({
                   readOnly={!canEdit}
                   draftKey={`finding:${finding.id}:${field.key}`}
                   caseId={finding.caseId}
-                  minHeight={technicalOnly ? "26rem" : "22rem"}
+                  fill
                   placeholder={
                     canEdit
                       ? `${field.hint} Markdown, with tables and diagrams.`

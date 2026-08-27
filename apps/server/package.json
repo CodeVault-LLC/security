@@ -30,9 +30,13 @@
     "entities": "8.0.0",
     "fastify": "^5.12.0",
     "jose": "6.2.9",
+    "mailparser": "3.9.15",
     "openpgp": "6.3.1",
     "otpauth": "9.5.1",
     "pg-boss": "^12.27.0"
+  },
+  "devDependencies": {
+    "@types/mailparser": "3.4.6"
   },
   "exports": {
     ".": "./src/index.ts",
@@ -44,6 +48,7 @@
     "./mail/provider": "./src/modules/mail/provider.ts",
     "./mail/provider-registry": "./src/modules/mail/provider-registry.ts",
     "./mail/gmail-provider": "./src/modules/mail/gmail-provider.ts",
+    "./mail/inbound-message": "./src/modules/mail/inbound-message.ts",
     "./mail/token-crypto": "./src/modules/mail/token-crypto.ts"
   }
 }

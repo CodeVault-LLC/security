@@ -1,4 +1,4 @@
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 import { Type } from "@sinclair/typebox";
 import { createHmac } from "node:crypto";
@@ -6,22 +6,32 @@ import { createHmac } from "node:crypto";
 import {
   ErrorResponse,
   GmailAuthorization,
+  GmailThreadPreview,
+  MailThreadDetail,
+  MailThreadPage,
+  MailTrackingTargets,
   MailboxConnection,
   StartGmailConnectionRequest,
   Uuid,
 } from "@codevault/contracts";
-import { DomainError } from "@codevault/core";
+import { canReadCase, canWriteCase, DomainError } from "@codevault/core";
 import { uuidv7 } from "@codevault/core/crypto";
 import { schema } from "@codevault/db";
 
 import type { AppInstance } from "../../http/app-instance.js";
-import { actingUser, principalOf } from "../../http/guards.js";
+import { actingUser, principalOf, requireAuthor } from "../../http/guards.js";
+import { loadCaseAccess } from "../../services/case-access.js";
+import { previewExistingGmailThread } from "../submissions/correspondence.js";
+import { requireSubmissionWrite } from "../submissions/service.js";
 import {
   buildGmailAuthorizationUrl,
   createPkce,
   gmailScopes,
 } from "./gmail-oauth.js";
 import { decryptSecret, encryptSecret } from "./token-crypto.js";
+import { MailProviderError } from "./provider.js";
+import { parseInboundMessage } from "./inbound-message.js";
+import { previewGmailMessage } from "./gmail-thread-reference.js";
 import {
   decodePubSubNotification,
   verifyGooglePushToken,
@@ -33,6 +43,24 @@ const CallbackQuery = Type.Object({
   state: Uuid,
 });
 const ConnectionParam = Type.Object({ id: Uuid });
+const MailThreadParam = Type.Object({
+  id: Uuid,
+  threadId: Type.String({
+    minLength: 1,
+    maxLength: 500,
+    pattern: "^[A-Za-z0-9_-]+$",
+  }),
+});
+const MailThreadListQuery = Type.Object({
+  folder: Type.Union([
+    Type.Literal("INBOX"),
+    Type.Literal("SENT"),
+    Type.Literal("TRACKED"),
+  ]),
+  query: Type.Optional(Type.String({ maxLength: 300 })),
+  pageToken: Type.Optional(Type.String({ minLength: 1, maxLength: 2_000 })),
+});
+const MailTrackingPreviewQuery = Type.Object({ submissionId: Uuid });
 const PubSubEnvelope = Type.Object(
   {
     message: Type.Object(
@@ -71,6 +99,122 @@ function gmailConfig(app: AppInstance) {
     );
   }
   return app.config.gmail;
+}
+
+async function mailboxAccess(
+  app: AppInstance,
+  userId: string,
+  connectionId: string,
+) {
+  const config = gmailConfig(app);
+  const connection = await app.db.query.mailboxConnections.findFirst({
+    where: (connections, { and, eq }) =>
+      and(
+        eq(connections.id, connectionId),
+        eq(connections.userId, userId),
+        eq(connections.provider, "gmail"),
+        eq(connections.status, "ACTIVE"),
+      ),
+  });
+  if (
+    connection === undefined ||
+    !connection.capabilities.includes("TRACK_REPLIES")
+  ) {
+    throw new DomainError(
+      "VALIDATION",
+      "Choose an active Gmail connection with reply tracking enabled.",
+    );
+  }
+  const refreshToken = decryptSecret(
+    {
+      ciphertext: connection.refreshTokenCiphertext,
+      nonce: connection.refreshTokenNonce,
+      authTag: connection.refreshTokenAuthTag,
+      keyVersion: connection.tokenKeyVersion,
+    },
+    config.tokenKeyring,
+    {
+      provider: "gmail",
+      connectionId: connection.id,
+      userId: connection.userId,
+    },
+  );
+  const provider = app.mailProviders.require("gmail");
+  try {
+    const access = await provider.refreshAccessToken(refreshToken);
+    return { connection, provider, accessToken: access.accessToken };
+  } catch (error: unknown) {
+    if (error instanceof MailProviderError) {
+      throw new DomainError(
+        "PROVIDER_UNAVAILABLE",
+        "Gmail authorization failed. Reconnect this mailbox in mail settings, then try again.",
+      );
+    }
+    throw error;
+  }
+}
+
+function mailboxFailure(error: unknown): never {
+  if (error instanceof DomainError) throw error;
+  if (error instanceof MailProviderError) {
+    throw new DomainError(
+      error.status === 401 || error.status === 403
+        ? "PROVIDER_UNAVAILABLE"
+        : error.status === 404
+          ? "NOT_FOUND"
+          : "PROVIDER_UNAVAILABLE",
+      error.status === 401 || error.status === 403
+        ? "Gmail needs to be reconnected in mail settings."
+        : error.status === 404
+          ? "Gmail thread was not found."
+          : "Gmail is temporarily unavailable. Try again.",
+    );
+  }
+  throw error;
+}
+
+async function trackingFor(
+  app: AppInstance,
+  user: ReturnType<typeof actingUser>,
+  connectionId: string,
+  providerThreadId: string,
+) {
+  const [row] = await app.db
+    .select({
+      submissionId: schema.submissions.id,
+      submissionRef: schema.submissions.ref,
+      caseId: schema.cases.id,
+      caseRef: schema.cases.ref,
+      caseTitle: schema.cases.title,
+      vendorName: schema.vendors.name,
+    })
+    .from(schema.submissionMailThreads)
+    .innerJoin(
+      schema.submissions,
+      eq(schema.submissions.id, schema.submissionMailThreads.submissionId),
+    )
+    .innerJoin(schema.cases, eq(schema.cases.id, schema.submissions.caseId))
+    .innerJoin(
+      schema.vendors,
+      eq(schema.vendors.id, schema.submissions.vendorId),
+    )
+    .where(
+      and(
+        eq(schema.submissionMailThreads.mailboxConnectionId, connectionId),
+        eq(schema.submissionMailThreads.providerThreadId, providerThreadId),
+      ),
+    )
+    .limit(1);
+  if (row === undefined) return null;
+  const access = await loadCaseAccess(app.db, row.caseId);
+  if (access === null || !canReadCase(user, access.context)) return null;
+  return {
+    submissionId: row.submissionId,
+    submissionRef: row.submissionRef,
+    caseRef: row.caseRef,
+    caseTitle: row.caseTitle,
+    vendorName: row.vendorName,
+  };
 }
 
 export async function registerMailRoutes(app: AppInstance): Promise<void> {
@@ -162,6 +306,363 @@ export async function registerMailRoutes(app: AppInstance): Promise<void> {
         orderBy: (connections, { desc }) => [desc(connections.createdAt)],
       });
       return { items: rows.map(connectionView) };
+    },
+  );
+
+  app.get(
+    "/v1/mail/connections/:id/threads",
+    {
+      schema: {
+        params: ConnectionParam,
+        querystring: MailThreadListQuery,
+        response: { 200: MailThreadPage, 503: ErrorResponse },
+      },
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+    },
+    async (request) => {
+      const user = actingUser(request);
+      const { connection, provider, accessToken } = await mailboxAccess(
+        app,
+        user.id,
+        request.params.id,
+      );
+      try {
+        if (request.query.folder === "TRACKED") {
+          const parsedOffset = Number.parseInt(
+            request.query.pageToken ?? "0",
+            10,
+          );
+          const offset =
+            Number.isSafeInteger(parsedOffset) && parsedOffset >= 0
+              ? parsedOffset
+              : 0;
+          const rows = await app.db
+            .select({ thread: schema.submissionMailThreads })
+            .from(schema.submissionMailThreads)
+            .where(
+              eq(
+                schema.submissionMailThreads.mailboxConnectionId,
+                connection.id,
+              ),
+            )
+            .orderBy(desc(schema.submissionMailThreads.createdAt))
+            .limit(21)
+            .offset(offset);
+          const items = [];
+          for (const { thread } of rows.slice(0, 20)) {
+            const tracking = await trackingFor(
+              app,
+              user,
+              connection.id,
+              thread.providerThreadId,
+            );
+            if (tracking === null) continue;
+            const messageIds = await provider.getThreadMessageIds(
+              accessToken,
+              thread.providerThreadId,
+            );
+            const providerMessageId = messageIds.at(-1);
+            if (providerMessageId === undefined) continue;
+            const metadata = await provider.getMessageMetadata(
+              accessToken,
+              providerMessageId,
+            );
+            const preview = previewGmailMessage(
+              metadata,
+              connection.emailAddress,
+            );
+            const participants = [preview.from, ...preview.to]
+              .filter((value, index, values) => values.indexOf(value) === index)
+              .slice(0, 100);
+            const query = request.query.query?.trim().toLowerCase();
+            if (
+              query !== undefined &&
+              query !== "" &&
+              ![
+                preview.subject,
+                ...participants,
+                tracking.caseRef,
+                tracking.caseTitle,
+                tracking.vendorName,
+              ].some((value) => value.toLowerCase().includes(query))
+            ) {
+              continue;
+            }
+            items.push({
+              providerMessageId,
+              providerThreadId: thread.providerThreadId,
+              subject: preview.subject,
+              participants,
+              occurredAt: preview.occurredAt,
+              unread: metadata.labelIds.includes("UNREAD"),
+              tracking,
+            });
+          }
+          return {
+            items,
+            nextPageToken: rows.length > 20 ? String(offset + 20) : null,
+          };
+        }
+
+        const page = await provider.listMessages(accessToken, {
+          labelId: request.query.folder,
+          maxResults: 30,
+          ...(request.query.query?.trim()
+            ? { query: request.query.query.trim() }
+            : {}),
+          ...(request.query.pageToken === undefined
+            ? {}
+            : { pageToken: request.query.pageToken }),
+        });
+        const references = page.messages.filter(
+          (reference, index, all) =>
+            all.findIndex(
+              (candidate) =>
+                candidate.providerThreadId === reference.providerThreadId,
+            ) === index,
+        );
+        const items = await Promise.all(
+          references.map(async (reference) => {
+            const metadata = await provider.getMessageMetadata(
+              accessToken,
+              reference.providerMessageId,
+            );
+            const preview = previewGmailMessage(
+              metadata,
+              connection.emailAddress,
+            );
+            return {
+              providerMessageId: reference.providerMessageId,
+              providerThreadId: reference.providerThreadId,
+              subject: preview.subject,
+              participants: [preview.from, ...preview.to]
+                .filter(
+                  (value, index, values) => values.indexOf(value) === index,
+                )
+                .slice(0, 100),
+              occurredAt: preview.occurredAt,
+              unread: metadata.labelIds.includes("UNREAD"),
+              tracking: await trackingFor(
+                app,
+                user,
+                connection.id,
+                reference.providerThreadId,
+              ),
+            };
+          }),
+        );
+        items.sort((left, right) =>
+          (right.occurredAt ?? "").localeCompare(left.occurredAt ?? ""),
+        );
+        return { items, nextPageToken: page.nextPageToken };
+      } catch (error: unknown) {
+        mailboxFailure(error);
+      }
+    },
+  );
+
+  app.get(
+    "/v1/mail/connections/:id/threads/:threadId/tracking-preview",
+    {
+      schema: {
+        params: MailThreadParam,
+        querystring: MailTrackingPreviewQuery,
+        response: {
+          200: GmailThreadPreview,
+          400: ErrorResponse,
+          409: ErrorResponse,
+          503: ErrorResponse,
+        },
+      },
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    },
+    async (request) => {
+      const user = requireAuthor(request);
+      const submission = await requireSubmissionWrite(
+        app,
+        user,
+        request.query.submissionId,
+      );
+      return previewExistingGmailThread(app, user.id, submission, {
+        mailboxConnectionId: request.params.id,
+        threadReference: request.params.threadId,
+      });
+    },
+  );
+
+  app.get(
+    "/v1/mail/connections/:id/threads/:threadId",
+    {
+      schema: {
+        params: MailThreadParam,
+        response: {
+          200: MailThreadDetail,
+          404: ErrorResponse,
+          503: ErrorResponse,
+        },
+      },
+      config: { rateLimit: { max: 60, timeWindow: "1 minute" } },
+    },
+    async (request) => {
+      const user = actingUser(request);
+      const { connection, provider, accessToken } = await mailboxAccess(
+        app,
+        user.id,
+        request.params.id,
+      );
+      try {
+        const messageIds = await provider.getThreadMessageIds(
+          accessToken,
+          request.params.threadId,
+        );
+        if (messageIds.length === 0) {
+          throw new DomainError("NOT_FOUND", "Gmail thread was not found.");
+        }
+        const tracking = await trackingFor(
+          app,
+          user,
+          connection.id,
+          request.params.threadId,
+        );
+        if (messageIds.length > 100) {
+          const metadata = await provider.getMessageMetadata(
+            accessToken,
+            messageIds.at(-1)!,
+          );
+          return {
+            mailboxConnectionId: connection.id,
+            mailboxAddress: connection.emailAddress,
+            providerThreadId: request.params.threadId,
+            subject: previewGmailMessage(metadata, connection.emailAddress)
+              .subject,
+            messages: [],
+            tooLarge: true,
+            tracking,
+          };
+        }
+        const messages = [];
+        for (const messageId of messageIds) {
+          const [metadata, raw] = await Promise.all([
+            provider.getMessageMetadata(accessToken, messageId),
+            provider.getMessageRaw(accessToken, messageId),
+          ]);
+          if (metadata.threadId !== request.params.threadId) {
+            throw new Error("Gmail returned inconsistent thread metadata.");
+          }
+          try {
+            const parsed = await parseInboundMessage(raw, {
+              providerMessageId: messageId,
+            });
+            messages.push({
+              providerMessageId: messageId,
+              direction:
+                metadata.labelIds.includes("SENT") ||
+                parsed.from === connection.emailAddress.toLowerCase()
+                  ? ("OUTBOUND" as const)
+                  : ("INBOUND" as const),
+              from: parsed.from,
+              to: parsed.to,
+              cc: parsed.cc,
+              subject: parsed.subject.slice(0, 300),
+              bodyText: parsed.bodyText,
+              encrypted: parsed.encrypted,
+              previewUnavailable: false,
+              occurredAt: parsed.receivedAt,
+              attachments: parsed.attachments.map((attachment) => ({
+                filename: attachment.filename,
+                contentType: attachment.contentType,
+                sizeBytes: attachment.content.byteLength,
+              })),
+            });
+          } catch {
+            const preview = previewGmailMessage(
+              metadata,
+              connection.emailAddress,
+            );
+            messages.push({
+              providerMessageId: messageId,
+              direction: preview.direction,
+              from: preview.from,
+              to: preview.to,
+              cc: [],
+              subject: preview.subject,
+              bodyText: null,
+              encrypted: false,
+              previewUnavailable: true,
+              occurredAt: preview.occurredAt ?? new Date(0).toISOString(),
+              attachments: [],
+            });
+          }
+        }
+        messages.sort((left, right) =>
+          left.occurredAt.localeCompare(right.occurredAt),
+        );
+        return {
+          mailboxConnectionId: connection.id,
+          mailboxAddress: connection.emailAddress,
+          providerThreadId: request.params.threadId,
+          subject:
+            messages.find((message) => message.subject !== "(no subject)")
+              ?.subject ?? "(no subject)",
+          messages,
+          tooLarge: false,
+          tracking,
+        };
+      } catch (error: unknown) {
+        mailboxFailure(error);
+      }
+    },
+  );
+
+  app.get(
+    "/v1/mail/tracking-targets",
+    { schema: { response: { 200: MailTrackingTargets } } },
+    async (request) => {
+      const user = actingUser(request);
+      const rows = await app.db
+        .select({
+          submission: schema.submissions,
+          caseId: schema.cases.id,
+          caseRef: schema.cases.ref,
+          caseTitle: schema.cases.title,
+          vendorName: schema.vendors.name,
+          linkedThreadId: schema.submissionMailThreads.id,
+        })
+        .from(schema.submissions)
+        .innerJoin(schema.cases, eq(schema.cases.id, schema.submissions.caseId))
+        .innerJoin(
+          schema.vendors,
+          eq(schema.vendors.id, schema.submissions.vendorId),
+        )
+        .leftJoin(
+          schema.submissionMailThreads,
+          eq(schema.submissionMailThreads.submissionId, schema.submissions.id),
+        )
+        .where(
+          and(
+            eq(schema.submissions.status, "DRAFT"),
+            isNull(schema.submissionMailThreads.id),
+          ),
+        )
+        .orderBy(desc(schema.submissions.updatedAt))
+        .limit(200);
+      const items = [];
+      for (const row of rows) {
+        const route = row.submission.routeSnapshot;
+        if (route.route.type !== "EMAIL") continue;
+        const access = await loadCaseAccess(app.db, row.caseId);
+        if (access === null || !canWriteCase(user, access.context)) continue;
+        items.push({
+          submissionId: row.submission.id,
+          submissionRef: row.submission.ref,
+          revision: row.submission.revision,
+          subject: row.submission.subject,
+          caseRef: row.caseRef,
+          caseTitle: row.caseTitle,
+          vendorName: row.vendorName,
+        });
+      }
+      return { items };
     },
   );
 

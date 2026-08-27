@@ -268,6 +268,13 @@ ambiguous and never auto-retried. Reply sync queries metadata first and fetches
 raw MIME only for a known provider thread. A stale history cursor recovers from
 known thread IDs rather than searching the mailbox.
 
+The interactive **Mail** page has a broader, user-driven read boundary. It
+lists Inbox and Sent metadata. When the user opens a thread, the server fetches
+raw MIME and returns plain text plus attachment metadata. The server does not
+store the preview. HTML, remote resources, and attachment bodies do not cross
+the renderer boundary. Tracking a thread requires a writable draft submission
+and starts the durable, audited import flow.
+
 *Enforced by* `apps/server/src/modules/mail/`,
 `apps/worker/src/jobs/gmail-send.ts`, and `apps/worker/src/jobs/gmail-sync.ts`.
 *Tested by* `tests/e2e/gmail-thread-sync.spec.ts` and the corresponding worker
@@ -310,10 +317,11 @@ idempotent and notification storage excludes message bodies and raw addresses.
   which is what the interface says and what the badge's tooltip explains.
 - **OpenPGP does not hide the email subject or transport metadata.** The UI
   labels the subject as unencrypted and confirmation makes recipients visible.
-- **Gmail restricted scope is broader than the product's view.** Application
-  minimisation prevents unrelated raw bodies from being fetched, but a fully
-  compromised worker holding a valid token could exercise Google's granted
-  scope. Use delivery-only mode where reply tracking is unnecessary.
+- **Gmail restricted scope is broader than background synchronization.** The
+  worker does not fetch unrelated bodies. The **Mail** page can fetch a body
+  only after the user opens its thread, and it does not persist the preview. A
+  compromised server that holds a valid token could exercise Google's full
+  granted scope. Use delivery-only mode where reply tracking is unnecessary.
 - **A compromised workstation OS defeats local key and confirmation controls.**
   Private-key custody protects against renderer/server compromise, not an
   attacker controlling the researcher's operating system.

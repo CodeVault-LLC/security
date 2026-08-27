@@ -46,6 +46,16 @@ export interface ProviderMessageMetadata {
   headers: Array<{ name: string; value: string }>;
 }
 
+export interface ProviderMessageReference {
+  providerMessageId: string;
+  providerThreadId: string;
+}
+
+export interface ProviderMessagePage {
+  messages: ProviderMessageReference[];
+  nextPageToken: string | null;
+}
+
 export interface MailProvider {
   readonly id: "gmail";
   exchangeAuthorizationCode(
@@ -70,6 +80,20 @@ export interface MailProvider {
     startHistoryId: string,
     pageToken?: string,
   ): Promise<MailHistoryPage>;
+  searchSentMessages(
+    accessToken: string,
+    query: string,
+    maxResults: number,
+  ): Promise<ProviderMessageReference[]>;
+  listMessages(
+    accessToken: string,
+    input: {
+      labelId: "INBOX" | "SENT";
+      query?: string;
+      pageToken?: string;
+      maxResults: number;
+    },
+  ): Promise<ProviderMessagePage>;
   getMessageMetadata(
     accessToken: string,
     messageId: string,

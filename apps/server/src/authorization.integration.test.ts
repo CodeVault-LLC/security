@@ -1,6 +1,10 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import type { CaseDetail, FindingDetail } from "@codevault/contracts";
+import type {
+  CaseDetail,
+  CaseListResponse,
+  FindingDetail,
+} from "@codevault/contracts";
 
 import {
   createHarness,
@@ -103,6 +107,30 @@ describeIntegration("case access", () => {
 
     expect(references).toContain(openCase.id);
     expect(references).toContain(restrictedCase.id);
+  });
+
+  it("returns an exact total and supports direct case-page requests", async () => {
+    const firstPage = await harness.app.inject({
+      method: "GET",
+      url: `/v1/cases?limit=1&page=1&ownerId=${owner.id}`,
+      headers: owner.headers,
+    });
+    const secondPage = await harness.app.inject({
+      method: "GET",
+      url: `/v1/cases?limit=1&page=2&ownerId=${owner.id}`,
+      headers: owner.headers,
+    });
+
+    expect(firstPage.statusCode, firstPage.body).toBe(200);
+    expect(secondPage.statusCode, secondPage.body).toBe(200);
+    const first = firstPage.json<CaseListResponse>();
+    const second = secondPage.json<CaseListResponse>();
+
+    expect(first.total).toBe(2);
+    expect(second.total).toBe(2);
+    expect(first.items).toHaveLength(1);
+    expect(second.items).toHaveLength(1);
+    expect(first.items[0]?.id).not.toBe(second.items[0]?.id);
   });
 
   it("grants access once a member is added", async () => {

@@ -7,6 +7,7 @@ import {
   HumanReference,
   Markdown,
   PaginationQuery,
+  PaginatedResponse,
   RevisionField,
   ShortText,
   Timestamp,
@@ -91,6 +92,7 @@ export type CaseDetail = Static<typeof CaseDetail>;
 
 export const ListCasesQuery = Type.Object({
   ...PaginationQuery.properties,
+  page: Type.Optional(Type.Integer({ minimum: 1, maximum: 100_000 })),
   status: Type.Optional(CaseStatusSchema),
   profile: Type.Optional(CaseProfileSchema),
   ownerId: Type.Optional(Uuid),
@@ -98,6 +100,13 @@ export const ListCasesQuery = Type.Object({
 });
 
 export type ListCasesQuery = Static<typeof ListCasesQuery>;
+
+export const CaseListResponse = Type.Object({
+  ...PaginatedResponse(CaseSummary).properties,
+  total: Type.Integer({ minimum: 0 }),
+});
+
+export type CaseListResponse = Static<typeof CaseListResponse>;
 
 export const AddCaseMemberRequest = Type.Object({
   userId: Uuid,

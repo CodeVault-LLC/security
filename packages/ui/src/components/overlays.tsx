@@ -103,6 +103,98 @@ export function DialogFooter({
   );
 }
 
+/**
+ * A complementary panel that keeps the current task visible.
+ *
+ * This follows the shadcn Sheet composition while reusing Radix Dialog for
+ * focus management, escape handling and focus return. Use it for inspectors
+ * and supporting controls, not for a second primary workspace.
+ */
+export const Sheet = DialogPrimitive.Root;
+export const SheetTrigger = DialogPrimitive.Trigger;
+export const SheetClose = DialogPrimitive.Close;
+
+export const SheetContent = forwardRef<
+  React.ComponentRef<typeof DialogPrimitive.Content>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(function SheetContent({ className, children, ...props }, ref) {
+  return (
+    <DialogPrimitive.Portal>
+      <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/35" />
+      <DialogPrimitive.Content
+        ref={ref}
+        className={cn(
+          "fixed inset-y-0 right-0 z-50 flex w-full max-w-[24rem] flex-col",
+          "border-l border-border-strong bg-surface shadow-2xl outline-none",
+          className,
+        )}
+        {...props}
+      >
+        {children}
+        <DialogPrimitive.Close
+          className="absolute right-2 top-2 flex size-9 items-center justify-center rounded-(--cv-radius) text-text-muted transition-colors duration-100 hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
+          aria-label="Close inspector"
+        >
+          <X aria-hidden className="size-4" />
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
+  );
+});
+
+export function SheetHeader({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>): React.JSX.Element {
+  return (
+    <div
+      className={cn(
+        "shrink-0 border-b border-border px-4 py-3 pr-12",
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
+export const SheetTitle = forwardRef<
+  React.ComponentRef<typeof DialogPrimitive.Title>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
+>(function SheetTitle({ className, ...props }, ref) {
+  return (
+    <DialogPrimitive.Title
+      ref={ref}
+      className={cn("text-[15px] font-semibold leading-5", className)}
+      {...props}
+    />
+  );
+});
+
+export const SheetDescription = forwardRef<
+  React.ComponentRef<typeof DialogPrimitive.Description>,
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>
+>(function SheetDescription({ className, ...props }, ref) {
+  return (
+    <DialogPrimitive.Description
+      ref={ref}
+      className={cn("mt-0.5 text-[12px] leading-5 text-text-muted", className)}
+      {...props}
+    />
+  );
+});
+
+export function SheetBody({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>): React.JSX.Element {
+  return (
+    <div
+      className={cn("min-h-0 flex-1 overflow-y-auto p-4", className)}
+      {...props}
+    />
+  );
+}
+
 export const Tabs = TabsPrimitive.Root;
 
 /**

@@ -36,6 +36,8 @@ export interface MarkdownFieldProps {
   placeholder?: string;
   /** Editor height when not in focus mode. */
   minHeight?: string;
+  /** Fill the height supplied by the parent workspace. */
+  fill?: boolean;
   showLineNumbers?: boolean;
   /** Debounced autosave, off when there is no `onSave`. */
   autosaveMs?: number;
@@ -57,6 +59,7 @@ export function MarkdownField({
   caseId,
   placeholder = "Markdown. Tables, diagrams and callouts all render in the report.",
   minHeight = "18rem",
+  fill = false,
   showLineNumbers = false,
   autosaveMs = 1_200,
   saving = false,
@@ -150,7 +153,7 @@ export function MarkdownField({
   const body = (
     <div
       className={`flex min-h-0 flex-col rounded-(--cv-radius) border border-border bg-surface ${
-        focusMode ? "h-full" : ""
+        focusMode ? "h-full" : fill ? "flex-1 rounded-none border-0" : ""
       } focus-within:border-focus focus-within:ring-1 focus-within:ring-focus/30`}
     >
       <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
@@ -244,10 +247,12 @@ export function MarkdownField({
       )}
 
       <div
-        className={focusMode ? "min-h-0 flex-1 overflow-auto" : "overflow-auto"}
+        className={
+          focusMode || fill ? "min-h-0 flex-1 overflow-auto" : "overflow-auto"
+        }
         // A fixed height rather than a minimum: the editor scrolls internally,
         // so a long attack path does not push the rest of the page away.
-        style={focusMode ? undefined : { height: minHeight }}
+        style={focusMode || fill ? undefined : { height: minHeight }}
       >
         {mode === "write" ? (
           <MarkdownEditor

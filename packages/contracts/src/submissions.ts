@@ -461,6 +461,16 @@ export type CorrespondenceMessage = Static<typeof CorrespondenceMessage>;
 export const CorrespondenceThread = Type.Object(
   {
     items: Type.Array(CorrespondenceMessage),
+    linkedThread: Type.Union([
+      Type.Object(
+        {
+          providerThreadId: Type.String({ minLength: 1, maxLength: 500 }),
+          linkedAt: Timestamp,
+        },
+        { additionalProperties: false },
+      ),
+      Type.Null(),
+    ]),
     sync: Type.Union([
       Type.Object({
         status: Type.String({ maxLength: 100 }),
@@ -478,6 +488,80 @@ export const CorrespondenceThread = Type.Object(
 );
 
 export type CorrespondenceThread = Static<typeof CorrespondenceThread>;
+
+export const GmailThreadSearchRequest = Type.Object(
+  {
+    mailboxConnectionId: Uuid,
+    query: Type.String({ minLength: 1, maxLength: 300 }),
+  },
+  { additionalProperties: false },
+);
+
+export const GmailThreadSearchResult = Type.Object(
+  {
+    providerThreadId: Type.String({ minLength: 1, maxLength: 500 }),
+    subject: MailSubject,
+    to: Type.Array(Type.String({ maxLength: 998 }), { maxItems: 100 }),
+    occurredAt: Type.Union([Timestamp, Type.Null()]),
+  },
+  { additionalProperties: false },
+);
+
+export const GmailThreadSearchResults = Type.Object(
+  {
+    items: Type.Array(GmailThreadSearchResult, { maxItems: 20 }),
+  },
+  { additionalProperties: false },
+);
+
+export type GmailThreadSearchResults = Static<typeof GmailThreadSearchResults>;
+
+export const GmailThreadReferenceRequest = Type.Object(
+  {
+    mailboxConnectionId: Uuid,
+    threadReference: Type.String({ minLength: 1, maxLength: 2_048 }),
+  },
+  { additionalProperties: false },
+);
+
+export const GmailThreadPreviewMessage = Type.Object(
+  {
+    providerMessageId: Type.String({ minLength: 1, maxLength: 500 }),
+    direction: CorrespondenceDirectionSchema,
+    from: Type.String({ minLength: 1, maxLength: 998 }),
+    to: Type.Array(Type.String({ maxLength: 998 }), { maxItems: 100 }),
+    subject: MailSubject,
+    occurredAt: Type.Union([Timestamp, Type.Null()]),
+  },
+  { additionalProperties: false },
+);
+
+export const GmailThreadPreview = Type.Object(
+  {
+    mailboxConnectionId: Uuid,
+    mailboxAddress: Type.String({ minLength: 3, maxLength: 320 }),
+    providerThreadId: Type.String({ minLength: 1, maxLength: 500 }),
+    subject: MailSubject,
+    messages: Type.Array(GmailThreadPreviewMessage, {
+      minItems: 1,
+      maxItems: 200,
+    }),
+    warnings: Type.Array(Type.String({ minLength: 1, maxLength: 1_000 }), {
+      maxItems: 10,
+    }),
+  },
+  { additionalProperties: false },
+);
+
+export type GmailThreadPreview = Static<typeof GmailThreadPreview>;
+
+export const LinkExistingGmailThreadRequest = Type.Object(
+  {
+    ...GmailThreadReferenceRequest.properties,
+    expectedRevision: RevisionField,
+  },
+  { additionalProperties: false },
+);
 
 export const UpdateCorrespondenceClassificationRequest = Type.Object(
   {

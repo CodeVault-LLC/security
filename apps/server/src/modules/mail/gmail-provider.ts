@@ -5,6 +5,8 @@ import type {
   MailProvider,
   OAuthTokens,
   ProviderMessageMetadata,
+  ProviderMessagePage,
+  ProviderMessageReference,
   SendAsAddress,
   SentMessage,
 } from "./provider.js";
@@ -246,6 +248,62 @@ export function createGmailProvider(config: GmailProviderConfig): MailProvider {
       return {
         historyId: data.historyId,
         messageIds: [...ids],
+        nextPageToken:
+          typeof data.nextPageToken === "string" ? data.nextPageToken : null,
+      };
+    },
+
+    async searchSentMessages(
+      accessToken,
+      query,
+      maxResults,
+    ): Promise<ProviderMessageReference[]> {
+      const url = new URL(gmailUrl("/users/me/messages"));
+      url.searchParams.set("labelIds", "SENT");
+      url.searchParams.set("q", query);
+      url.searchParams.set("maxResults", String(Math.min(maxResults, 50)));
+      const data = await authenticated(accessToken, url.toString());
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      return messages.flatMap((value) => {
+        const row = asObject(value);
+        return typeof row.id === "string" && typeof row.threadId === "string"
+          ? [
+              {
+                providerMessageId: row.id,
+                providerThreadId: row.threadId,
+              },
+            ]
+          : [];
+      });
+    },
+
+    async listMessages(accessToken, input): Promise<ProviderMessagePage> {
+      const url = new URL(gmailUrl("/users/me/messages"));
+      url.searchParams.set("labelIds", input.labelId);
+      url.searchParams.set(
+        "maxResults",
+        String(Math.min(input.maxResults, 50)),
+      );
+      if (input.query !== undefined && input.query.trim() !== "") {
+        url.searchParams.set("q", input.query.trim());
+      }
+      if (input.pageToken !== undefined) {
+        url.searchParams.set("pageToken", input.pageToken);
+      }
+      const data = await authenticated(accessToken, url.toString());
+      const messages = Array.isArray(data.messages) ? data.messages : [];
+      return {
+        messages: messages.flatMap((value) => {
+          const row = asObject(value);
+          return typeof row.id === "string" && typeof row.threadId === "string"
+            ? [
+                {
+                  providerMessageId: row.id,
+                  providerThreadId: row.threadId,
+                },
+              ]
+            : [];
+        }),
         nextPageToken:
           typeof data.nextPageToken === "string" ? data.nextPageToken : null,
       };

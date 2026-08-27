@@ -10,6 +10,7 @@ import {
   FileText,
   Home,
   LogOut,
+  Mail,
   Settings,
   ShieldAlert,
   ShieldCheck,
@@ -92,6 +93,11 @@ const PUBLISHING_ITEMS: NavigationItem[] = [
     label: "Disclosure",
     icon: <Send aria-hidden className="size-4" />,
   },
+  {
+    to: "/mail",
+    label: "Mail",
+    icon: <Mail aria-hidden className="size-4" />,
+  },
 ];
 
 export function AppSidebar(): React.JSX.Element {
@@ -106,6 +112,7 @@ export function AppSidebar(): React.JSX.Element {
   const notifications = useApiQuery<SecurityNotificationInbox>(
     queryKeys.notifications,
     "/v1/notifications",
+    { refetchInterval: 30_000 },
   );
 
   useEffect(() => {
@@ -125,8 +132,16 @@ export function AppSidebar(): React.JSX.Element {
     <Link
       key={item.to}
       to={item.to}
-      aria-label={item.label}
-      title={item.label}
+      aria-label={
+        item.badge === undefined || item.badge === 0
+          ? item.label
+          : `${item.label}, ${item.badge} unread`
+      }
+      title={
+        item.badge === undefined || item.badge === 0
+          ? item.label
+          : `${item.label} (${item.badge} unread)`
+      }
       activeOptions={{ exact: item.to === "/" }}
       activeProps={{
         className:
@@ -135,12 +150,12 @@ export function AppSidebar(): React.JSX.Element {
       inactiveProps={{
         className: "text-text-muted hover:bg-surface-hover hover:text-text",
       }}
-      className="group flex min-h-9 items-center gap-2 rounded-(--cv-radius) px-2 text-[13px] transition-[background-color,color,box-shadow] duration-100 max-[1100px]:justify-center max-sm:px-1"
+      className="group relative flex min-h-9 items-center gap-2 rounded-(--cv-radius) px-2 text-[13px] transition-[background-color,color,box-shadow] duration-100 max-[1100px]:justify-center max-sm:px-1"
     >
       <span className="shrink-0">{item.icon}</span>
       <span className="truncate max-[1100px]:hidden">{item.label}</span>
       {item.badge === undefined || item.badge === 0 ? null : (
-        <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-white max-[1100px]:hidden">
+        <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-white max-[1100px]:absolute max-[1100px]:right-0.5 max-[1100px]:top-0.5 max-[1100px]:min-w-4 max-[1100px]:px-1">
           {item.badge > 99 ? "99+" : item.badge}
         </span>
       )}

@@ -1,8 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { Plus, Search } from "lucide-react";
-import { useState } from "react";
+import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
+import { useRef, useState } from "react";
 
-import type { CaseSummary, OrganizationUserList } from "@codevault/contracts";
+import type {
+  CaseListResponse,
+  OrganizationUserList,
+} from "@codevault/contracts";
 import { CASE_STATUSES } from "@codevault/core";
 import {
   Button,
@@ -33,35 +36,59 @@ import { useDebouncedValue } from "../hooks/use-debounced-value.js";
  * an embargoed case is itself information.
  */
 
-interface Paginated<T> {
-  items: T[];
-  nextCursor: string | null;
-}
+const PAGE_SIZE = 50;
 
 export function CasesRoute(): React.JSX.Element {
   const user = useSession((state) => state.user);
   const editable = canWrite(user);
   const [createOpen, setCreateOpen] = useState(false);
-  const [limit, setLimit] = useState(100);
+  const [pageIndex, setPageIndex] = useState(0);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("ALL");
   const [ownerId, setOwnerId] = useState("ALL");
+  const listRef = useRef<HTMLDivElement>(null);
   const debouncedSearch = useDebouncedValue(search.trim(), 250);
   const users = useApiQuery<OrganizationUserList>(
     ["organization", "users"],
     "/v1/organization/users",
   );
-  const params = new URLSearchParams({ limit: String(limit) });
+  const params = new URLSearchParams({ limit: String(PAGE_SIZE) });
+  params.set("page", String(pageIndex + 1));
   if (debouncedSearch.length > 0) params.set("query", debouncedSearch);
   if (status !== "ALL") params.set("status", status);
   if (ownerId !== "ALL") params.set("ownerId", ownerId);
 
-  const cases = useApiQuery<Paginated<CaseSummary>>(
-    queryKeys.cases({ limit, query: debouncedSearch, status, ownerId }),
+  const cases = useApiQuery<CaseListResponse>(
+    queryKeys.cases({
+      limit: PAGE_SIZE,
+      page: pageIndex + 1,
+      query: debouncedSearch,
+      status,
+      ownerId,
+    }),
     `/v1/cases?${params.toString()}`,
   );
 
   const items = cases.data?.items ?? [];
+  const total = cases.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const resetPagination = (): void => {
+    setPageIndex(0);
+  };
+
+  const goToPage = (nextPageIndex: number): void => {
+    if (
+      cases.isFetching ||
+      nextPageIndex === pageIndex ||
+      nextPageIndex < 0 ||
+      nextPageIndex >= pageCount
+    )
+      return;
+
+    setPageIndex(nextPageIndex);
+    if (listRef.current !== null) listRef.current.scrollTop = 0;
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -92,7 +119,7 @@ export function CasesRoute(): React.JSX.Element {
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
-              setLimit(100);
+              resetPagination();
             }}
             placeholder="Search by title or case reference"
             className="pl-9"
@@ -103,7 +130,7 @@ export function CasesRoute(): React.JSX.Element {
           value={status}
           onValueChange={(value) => {
             setStatus(value);
-            setLimit(100);
+            resetPagination();
           }}
           className="w-40"
           options={[
@@ -119,7 +146,7 @@ export function CasesRoute(): React.JSX.Element {
           value={ownerId}
           onValueChange={(value) => {
             setOwnerId(value);
-            setLimit(100);
+            resetPagination();
           }}
           className="w-48"
           options={[
@@ -130,50 +157,66 @@ export function CasesRoute(): React.JSX.Element {
             })),
           ]}
         />
+        {cases.data === undefined ? null : (
+          <p
+            className="ml-auto shrink-0 px-1 text-[11px] tabular-nums text-text-muted"
+            aria-live="polite"
+          >
+            {total.toLocaleString()} {total === 1 ? "case" : "cases"}
+          </p>
+        )}
       </div>
 
-      {cases.error !== null ? (
-        <ErrorState
-          title={errorHeading(cases.error)}
-          description={cases.error.message}
-          action={
-            <Button
-              variant="secondary"
-              size="sm"
-              loading={cases.isFetching}
-              onClick={() => void cases.refetch()}
-            >
-              Try again
-            </Button>
-          }
-        />
-      ) : cases.isLoading ? (
-        <LoadingState label="Loading cases…" />
-      ) : items.length === 0 ? (
-        <EmptyState
-          title={
-            debouncedSearch.length > 0 || status !== "ALL" || ownerId !== "ALL"
-              ? "No cases match these filters"
-              : "No cases yet"
-          }
-          description={
-            debouncedSearch.length > 0 || status !== "ALL" || ownerId !== "ALL"
-              ? "Change or clear a filter to see more cases."
-              : editable
-                ? "Start a case for one research effort. Findings, evidence, and audience-specific reports stay attached to it."
-                : "No cases are available to you. Restricted case names are hidden unless you are a member."
-          }
-          action={
-            editable ? (
-              <Button variant="primary" onClick={() => setCreateOpen(true)}>
-                <Plus aria-hidden className="size-3.5" />
-                New case
+      <div
+        ref={listRef}
+        className="min-h-0 flex-1 overflow-y-auto"
+        aria-busy={cases.isFetching || undefined}
+      >
+        {cases.error !== null ? (
+          <ErrorState
+            title={errorHeading(cases.error)}
+            description={cases.error.message}
+            action={
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={cases.isFetching}
+                onClick={() => void cases.refetch()}
+              >
+                Try again
               </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto">
+            }
+          />
+        ) : cases.isLoading ? (
+          <LoadingState label={`Loading page ${pageIndex + 1}…`} />
+        ) : items.length === 0 ? (
+          <EmptyState
+            title={
+              debouncedSearch.length > 0 ||
+              status !== "ALL" ||
+              ownerId !== "ALL"
+                ? "No cases match these filters"
+                : "No cases yet"
+            }
+            description={
+              debouncedSearch.length > 0 ||
+              status !== "ALL" ||
+              ownerId !== "ALL"
+                ? "Change or clear a filter to see more cases."
+                : editable
+                  ? "Start a case for one research effort. Findings, evidence, and audience-specific reports stay attached to it."
+                  : "No cases are available to you. Restricted case names are hidden unless you are a member."
+            }
+            action={
+              editable ? (
+                <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                  <Plus aria-hidden className="size-3.5" />
+                  New case
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
           <ul className="divide-y divide-border">
             {items.map((item) => (
               <li key={item.id}>
@@ -220,21 +263,143 @@ export function CasesRoute(): React.JSX.Element {
               </li>
             ))}
           </ul>
-          {cases.data?.nextCursor === null ? null : (
-            <div className="flex justify-center border-t border-border p-3">
-              <Button
-                variant="secondary"
-                loading={cases.isFetching}
-                onClick={() => setLimit((current) => current + 100)}
-              >
-                Load more cases
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
+
+      {cases.data !== undefined && total > 0 ? (
+        <CasePagination
+          pageIndex={pageIndex}
+          pageCount={pageCount}
+          loading={cases.isFetching}
+          onPageChange={goToPage}
+        />
+      ) : null}
 
       <CreateCaseDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
+}
+
+function CasePagination({
+  pageIndex,
+  pageCount,
+  loading,
+  onPageChange,
+}: {
+  pageIndex: number;
+  pageCount: number;
+  loading: boolean;
+  onPageChange: (pageIndex: number) => void;
+}): React.JSX.Element {
+  const pageItems = paginationItems(pageIndex, pageCount);
+
+  return (
+    <nav
+      aria-label="Case pagination"
+      className="flex min-h-14 shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border bg-surface px-4 py-2"
+    >
+      <p className="text-[11px] tabular-nums text-text-muted">
+        Page {pageIndex + 1} of {pageCount}
+      </p>
+      <div className="flex items-center gap-1">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={pageIndex === 0 || loading}
+          onClick={() => onPageChange(pageIndex - 1)}
+          aria-label="Previous page"
+        >
+          <ChevronLeft aria-hidden />
+          <span className="hidden sm:inline">Previous</span>
+        </Button>
+
+        <div
+          role="group"
+          className="flex items-center gap-0.5"
+          aria-label="Pages"
+        >
+          {pageItems.map((item) =>
+            typeof item === "number" ? (
+              <Button
+                key={item}
+                type="button"
+                variant={item === pageIndex ? "primary" : "ghost"}
+                size="sm"
+                className="min-w-8 px-2 tabular-nums"
+                aria-label={`Page ${item + 1}`}
+                aria-current={item === pageIndex ? "page" : undefined}
+                disabled={loading}
+                onClick={() => onPageChange(item)}
+              >
+                {item + 1}
+              </Button>
+            ) : (
+              <span
+                key={item}
+                aria-hidden
+                className="flex size-8 items-center justify-center text-[12px] text-text-muted"
+              >
+                …
+              </span>
+            ),
+          )}
+        </div>
+
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={pageIndex >= pageCount - 1 || loading}
+          onClick={() => onPageChange(pageIndex + 1)}
+          aria-label="Next page"
+        >
+          <span className="hidden sm:inline">Next</span>
+          <ChevronRight aria-hidden />
+        </Button>
+      </div>
+    </nav>
+  );
+}
+
+function paginationItems(
+  pageIndex: number,
+  pageCount: number,
+): (number | "ellipsis-start" | "ellipsis-end")[] {
+  if (pageCount <= 7) {
+    return Array.from({ length: pageCount }, (_, index) => index);
+  }
+
+  const visible = new Set([0, pageCount - 1]);
+  for (
+    let index = Math.max(0, pageIndex - 1);
+    index <= Math.min(pageCount - 1, pageIndex + 1);
+    index += 1
+  ) {
+    visible.add(index);
+  }
+
+  if (pageIndex <= 2) {
+    visible.add(1);
+    visible.add(2);
+    visible.add(3);
+  }
+  if (pageIndex >= pageCount - 3) {
+    visible.add(pageCount - 2);
+    visible.add(pageCount - 3);
+    visible.add(pageCount - 4);
+  }
+
+  const pages = [...visible].sort((left, right) => left - right);
+  const items: (number | "ellipsis-start" | "ellipsis-end")[] = [];
+
+  pages.forEach((page, index) => {
+    const previous = pages[index - 1];
+    if (previous !== undefined && page - previous > 1) {
+      items.push(index === 1 ? "ellipsis-start" : "ellipsis-end");
+    }
+    items.push(page);
+  });
+
+  return items;
 }

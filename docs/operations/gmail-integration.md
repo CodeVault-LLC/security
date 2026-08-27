@@ -1,11 +1,40 @@
 # Gmail integration operations
 
-Gmail is an optional delivery and tracked-reply transport, not a general mail
-client. CodeVault asks for the least capability selected by the user: identity
-and `gmail.send` for delivery, and `gmail.readonly` only when tracked replies
-are enabled. Even with the restricted read scope, the worker fetches metadata
-first and downloads raw content only after the provider thread ID matches a
-CodeVault submission.
+Gmail is an optional delivery and tracked-reply transport. The **Mail** page is
+a narrow mailbox browser for choosing disclosure threads. It does not compose
+new messages, change Gmail labels, delete messages, or persist an untracked
+thread.
+
+CodeVault asks for the least capability selected by the user: identity and
+`gmail.send` for delivery, and `gmail.readonly` only when tracked replies are
+enabled. The **Mail** page lists Inbox, Sent, and Tracked threads from Gmail.
+Opening a thread downloads its raw MIME and converts it to plain text in the
+server process. The response omits executable HTML, remote images, and
+attachment bodies. CodeVault does not store this preview. Tracking the thread
+starts the existing durable import and audit flow.
+
+Background synchronization remains narrower than interactive browsing. The
+worker fetches metadata first and downloads raw content only when the provider
+thread ID matches a CodeVault submission.
+
+## Track an existing disclosure thread
+
+A researcher can track one Gmail thread against a draft email submission. Open
+**Mail**, select Inbox or Sent, and review the conversation. Click **Track
+thread**, then choose the disclosure draft. A submission page can open **Mail**
+with that draft preselected. Gmail browser URLs use private web identifiers and
+cannot supply an API thread ID.
+
+CodeVault rejects a thread that has no sent message from the selected mailbox.
+It also warns when the participants do not match the saved vendor email route.
+After confirmation, CodeVault marks the submission sent and queues an import of
+that thread's messages and attachments. The import does not change or delete
+the Gmail messages.
+
+The initial import does not create a notification for each historical reply.
+New inbound replies create durable notifications for the case owner, the
+mailbox owner, and explicit case members. Replies still use the reviewed,
+approved, sealed, and confirmed CodeVault send path.
 
 ## Google Cloud ownership and consent
 

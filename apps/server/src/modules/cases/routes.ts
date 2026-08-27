@@ -4,8 +4,9 @@ import { and, desc, eq, lt, or, sql, type SQL } from "drizzle-orm";
 import {
   AddCaseMemberRequest,
   CaseDetail,
+  CaseListResponse,
   CaseReadiness,
-  CaseSummary,
+  type CaseSummary,
   CreateCaseNoteRequest,
   CaseNote,
   CreateCaseRequest,
@@ -14,7 +15,6 @@ import {
   IdParam,
   ListCasesQuery,
   OkResponse,
-  PaginatedResponse,
   UpdateCaseRequest,
 } from "@codevault/contracts";
 import {
@@ -45,7 +45,6 @@ import { evaluateCaseReadiness } from "./readiness.js";
  * findings, disclosure, reports — accretes as the research happens.
  */
 
-const CaseListResponse = PaginatedResponse(CaseSummary);
 const CaseNoteListResponse = Type.Object({ items: Type.Array(CaseNote) });
 
 export async function registerCaseRoutes(app: AppInstance): Promise<void> {
@@ -60,7 +59,10 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
     async (request) => {
       const user = actingUser(request);
       const size = pageSize(request.query.limit);
-      const cursor = decodeCursor(request.query.cursor);
+      const cursor =
+        request.query.page === undefined
+          ? decodeCursor(request.query.cursor)
+          : null;
 
       const visibility = visibilityCondition(user.organizationId);
       const filters: SQL[] = [visibility];
@@ -85,8 +87,15 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
         );
       }
 
+      const [totalRow] = await app.db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(schema.cases)
+        .where(and(...filters));
+      const total = totalRow?.total ?? 0;
+      const rowFilters = [...filters];
+
       if (cursor !== null) {
-        filters.push(
+        rowFilters.push(
           or(
             lt(schema.cases.updatedAt, cursor.timestamp),
             and(
@@ -119,15 +128,21 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
         })
         .from(schema.cases)
         .innerJoin(schema.users, eq(schema.users.id, schema.cases.ownerId))
-        .where(and(...filters))
+        .where(and(...rowFilters))
         .orderBy(desc(schema.cases.updatedAt), desc(schema.cases.id))
-        .limit(size + 1);
+        .limit(size + 1)
+        .offset(
+          request.query.page === undefined
+            ? 0
+            : (request.query.page - 1) * size,
+        );
 
       const page = paginate(rows, size, (row) => row.updatedAt);
 
       return {
         items: page.items.map(toCaseSummary),
         nextCursor: page.nextCursor,
+        total,
       };
     },
   );
