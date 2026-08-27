@@ -34,7 +34,6 @@ import { bridge } from "../lib/bridge.js";
 import { queryKeys, useApiQuery } from "../lib/api.js";
 import { useSession } from "../lib/session.js";
 import { Avatar } from "./avatar.js";
-import { BrandWordmark } from "./brand-wordmark.js";
 
 /**
  * The global sidebar.
@@ -100,7 +99,11 @@ const PUBLISHING_ITEMS: NavigationItem[] = [
   },
 ];
 
-export function AppSidebar(): React.JSX.Element {
+export function AppSidebar({
+  expanded,
+}: {
+  expanded: boolean;
+}): React.JSX.Element {
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
   });
@@ -150,12 +153,20 @@ export function AppSidebar(): React.JSX.Element {
       inactiveProps={{
         className: "text-text-muted hover:bg-surface-hover hover:text-text",
       }}
-      className="group relative flex min-h-9 items-center gap-2 rounded-(--cv-radius) px-2 text-[13px] transition-[background-color,color,box-shadow] duration-100 max-[1100px]:justify-center max-sm:px-1"
+      className={cn(
+        "group relative flex min-h-9 items-center rounded-(--cv-radius) text-[13px] transition-[background-color,color,box-shadow] duration-100",
+        expanded ? "gap-2 px-2" : "justify-center px-1",
+      )}
     >
       <span className="shrink-0">{item.icon}</span>
-      <span className="truncate max-[1100px]:hidden">{item.label}</span>
+      {expanded ? <span className="truncate">{item.label}</span> : null}
       {item.badge === undefined || item.badge === 0 ? null : (
-        <span className="ml-auto min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-white max-[1100px]:absolute max-[1100px]:right-0.5 max-[1100px]:top-0.5 max-[1100px]:min-w-4 max-[1100px]:px-1">
+        <span
+          className={cn(
+            "min-w-5 rounded-full bg-accent px-1.5 text-center text-[10px] font-semibold text-white",
+            expanded ? "ml-auto" : "absolute right-0 top-0 min-w-4 px-1",
+          )}
+        >
           {item.badge > 99 ? "99+" : item.badge}
         </span>
       )}
@@ -180,19 +191,24 @@ export function AppSidebar(): React.JSX.Element {
       aria-label="Primary"
       className="flex h-full w-full min-w-0 flex-col bg-surface"
     >
-      <div className="cv-drag-region flex h-11 shrink-0 items-center pl-[74px] pr-3 max-[1100px]:px-0">
-        <BrandWordmark compact className="max-[1100px]:hidden" />
-      </div>
-
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-2 py-2 max-[1100px]:gap-2">
+      <div
+        className={cn(
+          "flex flex-1 flex-col overflow-y-auto px-2 py-2",
+          expanded ? "gap-4" : "gap-2",
+        )}
+      >
         <div className="flex flex-col gap-0.5">
           {PRIMARY_ITEMS.map(renderItem)}
         </div>
 
         <div className="flex flex-col gap-0.5">
-          <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted max-[1100px]:hidden">
-            Organization
-          </p>
+          {expanded ? (
+            <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted">
+              Organization
+            </p>
+          ) : (
+            <div aria-hidden className="mx-2 mb-1 border-t border-border" />
+          )}
           {renderItem({
             to: "/organization/users",
             label: "Users",
@@ -211,9 +227,13 @@ export function AppSidebar(): React.JSX.Element {
         </div>
 
         <div className="flex flex-col gap-0.5">
-          <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted max-[1100px]:hidden">
-            Publishing
-          </p>
+          {expanded ? (
+            <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.09em] text-text-muted">
+              Publishing
+            </p>
+          ) : (
+            <div aria-hidden className="mx-2 mb-1 border-t border-border" />
+          )}
           {PUBLISHING_ITEMS.map(renderItem)}
         </div>
 
@@ -244,7 +264,10 @@ export function AppSidebar(): React.JSX.Element {
               type="button"
               aria-label="Open account menu"
               className={cn(
-                "group flex min-h-12 w-full items-center gap-2 rounded-(--cv-radius) px-2 py-1.5 text-left text-[13px]",
+                "group flex w-full items-center rounded-(--cv-radius) text-left text-[13px]",
+                expanded
+                  ? "min-h-11 gap-2 px-2 py-1.5"
+                  : "size-10 justify-center p-0",
                 "text-text-muted hover:bg-surface-hover hover:text-text",
                 "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
                 pathname.startsWith("/settings") &&
@@ -258,24 +281,32 @@ export function AppSidebar(): React.JSX.Element {
                 label={user?.displayName ?? "Account"}
                 size="sm"
               />
-              <span className="min-w-0 flex-1 max-[1100px]:hidden">
-                <span className="block truncate font-medium text-text">
-                  {user?.displayName ?? "Account"}
+              {expanded ? (
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-medium text-text">
+                    {user?.displayName ?? "Account"}
+                  </span>
+                  <span className="block truncate text-[11px]">
+                    {user?.email ?? "Account menu"}
+                  </span>
                 </span>
-                <span className="block truncate text-[11px]">
-                  {user?.email ?? "Account menu"}
-                </span>
-              </span>
-              <ChevronUp
-                aria-hidden
-                className="size-4 shrink-0 transition-transform duration-150 ease-out group-data-[state=open]:rotate-180 motion-reduce:transition-none max-[1100px]:hidden"
-              />
+              ) : null}
+              {expanded ? (
+                <ChevronUp
+                  aria-hidden
+                  className="size-4 shrink-0 transition-transform duration-150 ease-out group-data-[state=open]:rotate-180 motion-reduce:transition-none"
+                />
+              ) : null}
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             side="top"
             align="start"
-            className="w-[calc(var(--radix-dropdown-menu-trigger-width)+1px)]"
+            className={
+              expanded
+                ? "w-[calc(var(--radix-dropdown-menu-trigger-width)+1px)]"
+                : "w-64"
+            }
           >
             <DropdownMenuLabel>
               <span className="block truncate font-medium text-text">

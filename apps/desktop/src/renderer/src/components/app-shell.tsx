@@ -1,4 +1,4 @@
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -6,7 +6,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Search,
-  WifiOff,
 } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
@@ -16,7 +15,6 @@ import { subscribeToServerEvents } from "../lib/events.js";
 import { useSession } from "../lib/session.js";
 import { AppSidebar } from "./app-sidebar.js";
 import { CommandPalette } from "./command-palette.js";
-import { ResizablePanels } from "./resizable-panels.js";
 import { CreateCaseDialog } from "../features/cases/create-case-dialog.js";
 import { CreateFindingDialog } from "../features/findings/create-finding-dialog.js";
 
@@ -31,13 +29,13 @@ export interface AppShellProps {
   children: ReactNode;
 }
 
-const SIDEBAR_OPEN_KEY = "codevault.workspace.sidebar-open";
+const SIDEBAR_EXPANDED_KEY = "codevault.workspace.sidebar-expanded";
 
-function initialSidebarOpen(): boolean {
+function initialSidebarExpanded(): boolean {
   try {
-    return window.localStorage.getItem(SIDEBAR_OPEN_KEY) !== "false";
+    return window.localStorage.getItem(SIDEBAR_EXPANDED_KEY) === "true";
   } catch {
-    return true;
+    return false;
   }
 }
 
@@ -68,13 +66,14 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
   const navigate = useNavigate();
   const setEventsConnected = useSession((state) => state.setEventsConnected);
   const storageWarning = useSession((state) => state.storageWarning);
-  const eventsConnected = useSession((state) => state.eventsConnected);
 
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [createCaseOpen, setCreateCaseOpen] = useState(false);
   const [createFindingOpen, setCreateFindingOpen] = useState(false);
   const [warningDismissed, setWarningDismissed] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(initialSidebarOpen);
+  const [sidebarExpanded, setSidebarExpanded] = useState(
+    initialSidebarExpanded,
+  );
 
   const pathname = useRouterState({
     select: (state) => state.location.pathname,
@@ -104,64 +103,56 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(SIDEBAR_OPEN_KEY, String(sidebarOpen));
+      window.localStorage.setItem(
+        SIDEBAR_EXPANDED_KEY,
+        String(sidebarExpanded),
+      );
     } catch {
       // The layout preference is useful, but the workspace does not depend on it.
     }
-  }, [sidebarOpen]);
+  }, [sidebarExpanded]);
 
   const goToFindings = useCallback(() => {
     void navigate({ to: "/findings" });
   }, [navigate]);
 
-  const workspace = (
-    <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden bg-background">
-      <div className="cv-drag-region flex h-11 shrink-0 items-center gap-2 border-b border-border bg-surface px-2">
+  return (
+    <div className="flex h-full w-full flex-col overflow-hidden bg-background text-text">
+      <header className="cv-drag-region flex h-11 shrink-0 items-center gap-2 border-b border-border bg-surface pl-[70px] pr-2">
         <button
           type="button"
-          onClick={() => setSidebarOpen((open) => !open)}
-          aria-label={sidebarOpen ? "Hide navigation" : "Show navigation"}
-          title={sidebarOpen ? "Hide navigation" : "Show navigation"}
+          onClick={() => setSidebarExpanded((expanded) => !expanded)}
+          aria-label={
+            sidebarExpanded ? "Collapse navigation" : "Expand navigation"
+          }
+          title={sidebarExpanded ? "Collapse navigation" : "Expand navigation"}
           className="cv-no-drag flex size-9 shrink-0 items-center justify-center rounded-(--cv-radius) text-text-muted transition-colors duration-100 hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
         >
-          {sidebarOpen ? (
+          {sidebarExpanded ? (
             <PanelLeftClose aria-hidden className="size-4" />
           ) : (
             <PanelLeftOpen aria-hidden className="size-4" />
           )}
         </button>
-        <div className="h-4 w-px bg-border" />
-        <div className="flex min-w-0 items-center gap-1.5 text-[12px]">
-          <span className="truncate font-medium text-text">
+        <nav
+          aria-label="Breadcrumb"
+          className="cv-no-drag flex min-w-0 items-center gap-1.5 text-[12px]"
+        >
+          <Link
+            to="/"
+            className="truncate font-medium text-text hover:text-accent focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-focus"
+          >
             CodeVault Security
-          </span>
+          </Link>
           <ChevronRight
             aria-hidden
             className="size-3.5 shrink-0 text-text-muted"
           />
-          <span className="truncate text-text-muted">
+          <span aria-current="page" className="truncate text-text-muted">
             {workspaceLabel(pathname)}
           </span>
-        </div>
+        </nav>
         <div className="cv-no-drag ml-auto flex shrink-0 items-center gap-1.5">
-          <span
-            role="status"
-            className={`hidden items-center gap-1.5 px-1.5 text-[11px] sm:flex ${
-              eventsConnected ? "text-text-muted" : "text-warning"
-            }`}
-            title={
-              eventsConnected
-                ? "Live updates connected"
-                : "Live updates are offline. Data may be stale."
-            }
-          >
-            {eventsConnected ? (
-              <span aria-hidden className="size-1.5 rounded-full bg-success" />
-            ) : (
-              <WifiOff aria-hidden className="size-3.5" />
-            )}
-            {eventsConnected ? "Live" : "Offline"}
-          </span>
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
@@ -174,7 +165,7 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
             </kbd>
           </button>
         </div>
-      </div>
+      </header>
 
       {storageWarning === null || warningDismissed ? null : (
         <div className="flex items-center gap-2 border-b border-warning/40 bg-warning/10 px-4 py-2 text-[12px] text-warning">
@@ -195,29 +186,18 @@ export function AppShell({ children }: AppShellProps): React.JSX.Element {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
-    </main>
-  );
-
-  return (
-    <div className="h-full w-full overflow-hidden bg-background text-text">
-      {sidebarOpen ? (
-        <ResizablePanels
-          primary={<AppSidebar />}
-          secondary={workspace}
-          primaryLabel="Primary navigation"
-          secondaryLabel="Workspace"
-          resizeLabel="Resize primary navigation"
-          storageKey="codevault.workspace.sidebar-width"
-          initialPrimarySize={0.16}
-          minPrimarySize={184}
-          maxPrimarySize={280}
-          minSecondarySize={560}
-          className="cv-app-shell-layout h-full w-full"
-        />
-      ) : (
-        workspace
-      )}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <aside
+          className={`shrink-0 border-r border-border transition-[width] duration-150 motion-reduce:transition-none ${
+            sidebarExpanded ? "w-56" : "w-14"
+          }`}
+        >
+          <AppSidebar expanded={sidebarExpanded} />
+        </aside>
+        <main className="min-w-0 flex-1 overflow-hidden bg-background">
+          {children}
+        </main>
+      </div>
 
       <CommandPalette
         open={paletteOpen}

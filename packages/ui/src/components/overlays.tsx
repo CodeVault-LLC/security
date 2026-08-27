@@ -197,24 +197,16 @@ export function SheetBody({
 
 export const Tabs = TabsPrimitive.Root;
 
-/**
- * A segmented control.
- *
- * The list is a recessed track and the active tab a pill inside it, so which
- * view you are on is legible at a glance rather than from a two-pixel
- * underline. The active pill is accent-tinted rather than a lighter surface:
- * the surface ramp runs in opposite directions in the two themes, so a
- * lightness step that lifts the pill in light mode would sink it in dark.
- */
+/** Compact record navigation with a stable active edge. */
 export const TabsList = forwardRef<
   React.ComponentRef<typeof TabsPrimitive.List>,
   React.ComponentPropsWithoutRef<typeof TabsPrimitive.List>
 >(function TabsList({ className, ...props }, ref) {
   return (
-    <div className="shrink-0 overflow-x-auto border-b border-border px-4 py-2">
+    <div className="shrink-0 overflow-x-auto border-b border-border bg-surface px-3">
       <TabsPrimitive.List
         ref={ref}
-        className={cn("inline-flex min-w-max items-center gap-1", className)}
+        className={cn("inline-flex min-w-max items-center", className)}
         {...props}
       />
     </div>
@@ -229,12 +221,10 @@ export const TabsTrigger = forwardRef<
     <TabsPrimitive.Trigger
       ref={ref}
       className={cn(
-        "relative inline-flex items-center gap-1.5 whitespace-nowrap rounded-(--cv-radius)",
-        "min-h-8 px-2.5 py-1 text-[12px] font-medium text-text-muted",
-        "transition-[background-color,color] duration-100",
-        "hover:bg-surface-hover hover:text-text",
-        "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
-        "data-[state=active]:bg-surface-hover data-[state=active]:text-text",
+        "relative -mb-px inline-flex min-h-10 items-center gap-1.5 whitespace-nowrap border-b-2 border-transparent px-3 py-1 text-[12px] font-medium text-text-muted",
+        "transition-[border-color,color] duration-100 hover:text-text",
+        "focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus",
+        "data-[state=active]:border-accent data-[state=active]:text-text",
         className,
       )}
       {...props}

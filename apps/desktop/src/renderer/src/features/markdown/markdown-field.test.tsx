@@ -40,12 +40,12 @@ afterEach(() => {
 });
 
 describe("preview", () => {
-  it("renders the value as Markdown when the preview tab is chosen", async () => {
+  it("renders the value as Markdown when the preview control is chosen", async () => {
     const user = userEvent.setup();
 
     renderField({ value: "## Attack path\n\n| a | b |\n| - | - |\n| 1 | 2 |" });
 
-    await user.click(screen.getByRole("button", { name: "preview" }));
+    await user.click(screen.getByRole("button", { name: "Preview Markdown" }));
 
     await waitFor(() => {
       expect(screen.getByRole("heading", { name: "Attack path" })).toBeTruthy();
@@ -58,7 +58,7 @@ describe("preview", () => {
     const user = userEvent.setup();
 
     renderField({ value: "" });
-    await user.click(screen.getByRole("button", { name: "preview" }));
+    await user.click(screen.getByRole("button", { name: "Preview Markdown" }));
 
     expect(screen.getByText("Nothing to preview yet.")).toBeTruthy();
   });
@@ -67,7 +67,7 @@ describe("preview", () => {
     const user = userEvent.setup();
 
     renderField({ value: "> [!CAUTION]\n> Destructive." });
-    await user.click(screen.getByRole("button", { name: "preview" }));
+    await user.click(screen.getByRole("button", { name: "Preview Markdown" }));
 
     await waitFor(() => {
       expect(screen.getByText("Caution")).toBeTruthy();
@@ -245,7 +245,7 @@ describe("read-only", () => {
     const user = userEvent.setup();
 
     renderField({ value: "**bold**", readOnly: true });
-    await user.click(screen.getByRole("button", { name: "preview" }));
+    await user.click(screen.getByRole("button", { name: "Preview Markdown" }));
 
     await waitFor(() => {
       expect(screen.getByText("bold")).toBeTruthy();
@@ -265,7 +265,7 @@ describe("toolbar", () => {
     renderField({ value: "" });
 
     expect(screen.queryByRole("button", { name: "Bold" })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Format" }));
+    await user.click(screen.getByRole("button", { name: "Formatting" }));
 
     for (const label of ["Bold", "Italic", "Link", "Table", "Insert"]) {
       expect(screen.getByRole("button", { name: label })).toBeTruthy();
@@ -276,7 +276,7 @@ describe("toolbar", () => {
     const user = userEvent.setup();
 
     renderField({ value: "" });
-    await user.click(screen.getByRole("button", { name: "Format" }));
+    await user.click(screen.getByRole("button", { name: "Formatting" }));
     await user.click(screen.getByRole("button", { name: "Insert" }));
 
     expect(screen.getByLabelText(/search things to insert/i)).toBeTruthy();

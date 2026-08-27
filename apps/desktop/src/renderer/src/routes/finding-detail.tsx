@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { PanelRight, Sparkles } from "lucide-react";
+import { MoreHorizontal, PanelRight, Sparkles } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -21,9 +21,12 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   EmptyState,
   ErrorState,
-  FindingHeader,
   LoadingState,
   InlineError,
   Mono,
@@ -48,6 +51,10 @@ import {
 import { AiToolbar } from "../features/ai/ai-toolbar.js";
 import { Avatar } from "../components/avatar.js";
 import { MarkdownField } from "../features/markdown/markdown-field.js";
+import {
+  buildFindingDocument,
+  parseFindingDocument,
+} from "../features/findings/finding-document.js";
 import { PriorArtPanel } from "../features/findings/prior-art-panel.js";
 import {
   FindingRevisionDiff,
@@ -75,64 +82,6 @@ import { QueryError } from "../components/query-boundary.js";
  * proposals appear inline as diffs to accept, edit or reject, and no AI action
  * changes anything until one of those buttons is pressed.
  */
-
-/**
- * The written body of a finding.
- *
- * The hints are prompts, not instructions: an empty field is the most common
- * state of a half-written finding, and a blank box asks a researcher to
- * remember what belongs in it while they are still thinking about the bug.
- */
-const FINDING_FIELDS = [
-  {
-    key: "summaryMarkdown",
-    label: "Executive summary",
-    hint: "What it is and why it matters, in a paragraph a manager will read.",
-    height: "10rem",
-  },
-  {
-    key: "technicalMarkdown",
-    label: "Technical description",
-    hint: "The mechanism. Code, requests and a diagram if the path is worth drawing.",
-    height: "22rem",
-  },
-  {
-    key: "preconditionsMarkdown",
-    label: "Attack preconditions",
-    hint: "What an attacker needs first: position, credentials, timing.",
-    height: "10rem",
-  },
-  {
-    key: "attackPathMarkdown",
-    label: "Attack path",
-    hint: "Entry to impact. A ```mermaid flowchart renders in the report.",
-    height: "14rem",
-  },
-  {
-    key: "impactMarkdown",
-    label: "Security impact",
-    hint: "What an attacker gains, in terms the vendor's risk owner uses.",
-    height: "10rem",
-  },
-  {
-    key: "reproductionMarkdown",
-    label: "Reproduction steps",
-    hint: "Numbered steps someone else can follow exactly. Fence the requests.",
-    height: "16rem",
-  },
-  {
-    key: "remediationMarkdown",
-    label: "Remediation recommendation",
-    hint: "The fix, and any interim mitigation worth naming.",
-    height: "10rem",
-  },
-  {
-    key: "researcherNotesMarkdown",
-    label: "Researcher notes (internal)",
-    hint: "Working notes. Never included in a report.",
-    height: "10rem",
-  },
-] as const;
 
 const AI_ACTIONS = [
   {
@@ -227,52 +176,73 @@ export function FindingDetailRoute({
   return (
     <Sheet>
       <div className="flex h-full flex-col">
-        <FindingHeader
-          finding={data}
-          actions={
-            <div className="flex items-center gap-1.5">
-              <VisibilityBadge visibility={data.visibility} />
-              {canEdit ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  aria-pressed={showAssist}
-                  className={showAssist ? "bg-surface-hover text-text" : ""}
-                  onClick={() => setShowAssist((current) => !current)}
-                >
-                  <Sparkles aria-hidden className="size-3.5" />
-                  Assist
-                </Button>
-              ) : (
-                <span className="text-[11px] text-text-muted">Read only</span>
-              )}
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="sm">
-                  <PanelRight aria-hidden className="size-3.5" />
-                  Details
-                </Button>
-              </SheetTrigger>
-              <Button asChild variant="secondary" size="sm">
-                <Link to={`/cases/${data.caseId}`}>Open case</Link>
+        <header className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-3">
+          <Link
+            to={`/cases/${data.caseId}`}
+            className="shrink-0 rounded-sm focus-visible:outline-2 focus-visible:outline-focus"
+            title={`Open case ${data.caseRef}`}
+          >
+            <Mono className="text-text-muted hover:text-text">{data.ref}</Mono>
+          </Link>
+          <h1 className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+            {data.title}
+          </h1>
+          <div className="hidden shrink-0 items-center gap-1.5 md:flex">
+            <VisibilityBadge visibility={data.visibility} />
+          </div>
+          <SheetTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="size-8 px-0"
+              aria-label="Finding details"
+              title="Finding details"
+            >
+              <PanelRight aria-hidden className="size-3.5" />
+            </Button>
+          </SheetTrigger>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="size-8 px-0"
+                aria-label="More finding actions"
+                title="More actions"
+              >
+                <MoreHorizontal aria-hidden className="size-4" />
               </Button>
-            </div>
-          }
-        />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {canEdit ? (
+                <DropdownMenuItem
+                  onSelect={() => setShowAssist((current) => !current)}
+                >
+                  <Sparkles aria-hidden className="size-4" />
+                  {showAssist ? "Hide assistant" : "Open assistant"}
+                </DropdownMenuItem>
+              ) : null}
+              <DropdownMenuItem asChild>
+                <Link to={`/cases/${data.caseId}`}>Open case</Link>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </header>
 
         {error === null ? null : (
           <InlineError className="mx-4 mt-3">{error}</InlineError>
         )}
 
-        <Tabs defaultValue="write" className="flex min-h-0 flex-1 flex-col">
+        <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col">
           <TabsList>
-            <TabsTrigger value="write">Write</TabsTrigger>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="scoring">Score</TabsTrigger>
             <TabsTrigger value="evidence">Evidence</TabsTrigger>
-            <TabsTrigger value="scoring">Scoring</TabsTrigger>
             <TabsTrigger value="prior-art">Prior art</TabsTrigger>
             <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="write" className="overflow-hidden">
+          <TabsContent value="overview" className="overflow-hidden">
             <div className="flex h-full min-h-0 flex-col">
               {canEdit && showAssist ? (
                 <AiToolbar
@@ -562,153 +532,37 @@ function FindingContentEditor({
   finding: FindingDetail;
   canEdit: boolean;
 }): React.JSX.Element {
-  const [savingField, setSavingField] = useState<string | null>(null);
-
-  const update = useApiMutation<
-    FindingDetail,
-    { field: string; value: string }
-  >(
-    ({ field, value }) => ({
+  const update = useApiMutation<FindingDetail, Record<string, string>>(
+    (content) => ({
       path: `/v1/findings/${finding.id}`,
       method: "PATCH",
-      body: { [field]: value, expectedRevision: finding.revision },
+      body: { ...content, expectedRevision: finding.revision },
     }),
     () => [queryKeys.finding(finding.id)],
   );
 
-  const fields = FINDING_FIELDS;
-
-  const [activeField, setActiveField] = useState<
-    (typeof fields)[number]["key"]
-  >(fields[0]?.key ?? "summaryMarkdown");
-  const [localDrafts, setLocalDrafts] = useState<Record<string, string>>({});
-  const completedCount = fields.filter((field) => {
-    const stored =
-      (finding[field.key as keyof FindingDetail] as string | null) ?? "";
-
-    return (localDrafts[field.key] ?? stored).trim().length > 0;
-  }).length;
-  const failedField = fields.find((field) => field.key === savingField);
-
   return (
     <section
       aria-label="Finding narrative"
-      className="h-full overflow-hidden bg-surface"
+      className="flex h-full min-h-0 flex-col overflow-hidden bg-surface"
     >
-      <div className="grid h-full min-w-0 grid-cols-1 lg:grid-cols-[13rem_minmax(0,1fr)]">
-        <div className="min-h-0 overflow-y-auto border-b border-border bg-surface-raised lg:border-b-0 lg:border-r">
-          <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-            <div>
-              <h2 className="text-[13px] font-semibold">Finding sections</h2>
-              <p className="mt-0.5 text-[10.5px] text-text-muted">
-                {completedCount} of {fields.length} started
-              </p>
-            </div>
-            {canEdit ? null : (
-              <span className="text-[10.5px] text-text-muted">Read only</span>
-            )}
-          </div>
-
-          <nav
-            aria-label="Finding sections"
-            className="flex overflow-x-auto border-t border-border p-1 lg:block lg:overflow-visible"
-          >
-            {fields.map((field) => {
-              const stored =
-                (finding[field.key as keyof FindingDetail] as string | null) ??
-                "";
-              const text = localDrafts[field.key] ?? stored;
-              const words =
-                text.trim().length === 0 ? 0 : text.trim().split(/\s+/).length;
-              const selected = activeField === field.key;
-
-              return (
-                <button
-                  key={field.key}
-                  id={`finding-section-tab-${field.key}`}
-                  type="button"
-                  aria-pressed={selected}
-                  aria-controls={`finding-section-panel-${field.key}`}
-                  onClick={() => setActiveField(field.key)}
-                  className={`min-h-12 min-w-44 rounded-(--cv-radius) px-2.5 py-2 text-left transition-colors duration-100 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus lg:mb-0.5 lg:w-full lg:min-w-0 ${
-                    selected
-                      ? "bg-surface text-text"
-                      : "text-text-muted hover:bg-surface-hover hover:text-text"
-                  }`}
-                >
-                  <span className="block truncate text-[12px] font-medium">
-                    {field.label}
-                  </span>
-                  <span className="mt-0.5 block text-[10.5px] tabular-nums">
-                    {words === 0 ? "Not started" : `${words} words`}
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-
-        <div className="flex min-h-0 min-w-0 flex-col">
-          {update.error === null ? null : (
-            <InlineError className="mx-4 mt-3">
-              {failedField?.label ?? "This section"} could not be saved. Your
-              draft remains on this device. {update.error.message}
-            </InlineError>
-          )}
-
-          {fields.map((field) => {
-            const stored =
-              (finding[field.key as keyof FindingDetail] as string | null) ??
-              "";
-            const selected = activeField === field.key;
-
-            return (
-              <section
-                key={field.key}
-                id={`finding-section-panel-${field.key}`}
-                aria-labelledby={`finding-section-tab-${field.key}`}
-                className={selected ? "flex min-h-0 flex-1 flex-col" : "hidden"}
-              >
-                <div className="shrink-0 border-b border-border px-4 py-3">
-                  <h3 className="text-[15px] font-semibold">{field.label}</h3>
-                  <p className="mt-1 max-w-3xl text-[11px] leading-5 text-text-muted text-pretty">
-                    {field.hint}
-                  </p>
-                </div>
-                <MarkdownField
-                  ariaLabel={field.label}
-                  value={stored}
-                  readOnly={!canEdit}
-                  draftKey={`finding:${finding.id}:${field.key}`}
-                  caseId={finding.caseId}
-                  fill
-                  placeholder={
-                    canEdit
-                      ? `${field.hint} Markdown, with tables and diagrams.`
-                      : "Empty."
-                  }
-                  saving={update.isPending && savingField === field.key}
-                  error={
-                    update.error !== null && savingField === field.key
-                      ? "Save failed"
-                      : null
-                  }
-                  onChange={(value) =>
-                    setLocalDrafts((current) => ({
-                      ...current,
-                      [field.key]: value,
-                    }))
-                  }
-                  onSave={(value) => {
-                    setSavingField(field.key);
-                    update.mutate({ field: field.key, value });
-                  }}
-                />
-              </section>
-            );
-          })}
-        </div>
-      </div>
+      <MarkdownField
+        ariaLabel="Finding document"
+        value={buildFindingDocument(finding)}
+        readOnly={!canEdit}
+        draftKey={`finding:${finding.id}:document`}
+        caseId={finding.caseId}
+        fill
+        showLineNumbers
+        placeholder="Write the finding as one Markdown document. Keep the section headings so each part remains available to reports."
+        saving={update.isPending}
+        error={
+          update.error === null
+            ? null
+            : `Save failed. Your local draft is safe. ${update.error.message}`
+        }
+        onSave={(value) => update.mutate(parseFindingDocument(value))}
+      />
     </section>
   );
 }
