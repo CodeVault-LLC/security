@@ -6,6 +6,10 @@ with the prerelease sequence defined in [`ROADMAP.md`](ROADMAP.md).
 
 ## [Unreleased]
 
+No changes recorded yet.
+
+## [0.1.0-alpha.8] - 2026-08-27
+
 ### Added
 
 - Added YubiKey and FIDO2 security-key enrollment, WebAuthn sign-in, key
@@ -129,6 +133,7 @@ with the prerelease sequence defined in [`ROADMAP.md`](ROADMAP.md).
   OCI images, attestations, signatures, SBOMs, and VEX described by the release
   policy.
 
-[Unreleased]: https://github.com/CodeVault-LLC/security/compare/v0.1.0-alpha.7...HEAD
+[Unreleased]: https://github.com/CodeVault-LLC/security/compare/v0.1.0-alpha.8...HEAD
+[0.1.0-alpha.8]: https://github.com/CodeVault-LLC/security/compare/v0.1.0-alpha.6...v0.1.0-alpha.8
 [0.1.0-alpha.7]: https://github.com/CodeVault-LLC/security/compare/v0.1.0-alpha.6...v0.1.0-alpha.7
 [0.1.0-alpha.6]: https://github.com/CodeVault-LLC/security/compare/v0.1.0-alpha.5...v0.1.0-alpha.6
