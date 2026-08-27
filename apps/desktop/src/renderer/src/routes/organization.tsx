@@ -40,7 +40,7 @@ import { Avatar } from "../components/avatar.js";
 import { QueryError } from "../components/query-boundary.js";
 import { OrganizationSettingsPage as OrganizationPage } from "../components/settings-layout.js";
 import { normalizeAiProviderStatuses } from "../lib/ai-providers.js";
-import { useApiMutation, useApiQuery } from "../lib/api.js";
+import { queryKeys, useApiMutation, useApiQuery } from "../lib/api.js";
 import { bridge } from "../lib/bridge.js";
 import { formatDateTime } from "../lib/dates.js";
 import { useSession } from "../lib/session.js";
@@ -1415,6 +1415,7 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
       sessionAbsoluteHours: number;
       recentMfaMinutes: number;
       mcpEnabled: boolean;
+      mailHtmlRenderingEnabled: boolean;
     }>
   >({});
   const [saved, setSaved] = useState(false);
@@ -1428,6 +1429,10 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
     recentMfaMinutes:
       draft.recentMfaMinutes ?? policy.data?.recentMfaMinutes ?? 10,
     mcpEnabled: draft.mcpEnabled ?? policy.data?.mcpEnabled ?? true,
+    mailHtmlRenderingEnabled:
+      draft.mailHtmlRenderingEnabled ??
+      policy.data?.mailHtmlRenderingEnabled ??
+      true,
   };
   const invalid = {
     inviteTtlHours: values.inviteTtlHours < 1 || values.inviteTtlHours > 72,
@@ -1446,14 +1451,19 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
       values.sessionIdleMinutes !== policy.data.sessionIdleMinutes ||
       values.sessionAbsoluteHours !== policy.data.sessionAbsoluteHours ||
       values.recentMfaMinutes !== policy.data.recentMfaMinutes ||
-      values.mcpEnabled !== policy.data.mcpEnabled);
+      values.mcpEnabled !== policy.data.mcpEnabled ||
+      values.mailHtmlRenderingEnabled !== policy.data.mailHtmlRenderingEnabled);
   const update = useApiMutation<OrganizationSecurityPolicy>(
     () => ({
       path: "/v1/organization/security",
       method: "PATCH",
       body: values,
     }),
-    () => [["organization", "security"]],
+    () => [
+      ["organization", "security"],
+      queryKeys.mailPreferences,
+      ["mailbox-thread"],
+    ],
   );
 
   const setPolicyValue = <K extends keyof typeof values>(
@@ -1691,16 +1701,61 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
                   )}
                 </div>
               </section>
+
+              <section className="border-t border-border px-4 py-4">
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_18rem] sm:items-center">
+                  <div>
+                    <h3 className="text-[12px] font-semibold">
+                      HTML email rendering
+                    </h3>
+                    <p className="mt-1 max-w-2xl text-[11px] leading-4 text-text-muted">
+                      Allow members to view sanitized HTML in Mail. CodeVault
+                      always blocks scripts, forms, remote images, and email
+                      CSS.
+                    </p>
+                  </div>
+                  {admin ? (
+                    <PolicyCheckbox
+                      checked={values.mailHtmlRenderingEnabled}
+                      label={
+                        values.mailHtmlRenderingEnabled
+                          ? "HTML available"
+                          : "Plain text required"
+                      }
+                      description="Applies to every connected mailbox and member."
+                      onChange={(checked) =>
+                        setPolicyValue("mailHtmlRenderingEnabled", checked)
+                      }
+                    />
+                  ) : (
+                    <strong
+                      className={cn(
+                        "text-[12px] sm:text-right",
+                        values.mailHtmlRenderingEnabled
+                          ? "text-success"
+                          : "text-warning",
+                      )}
+                    >
+                      {values.mailHtmlRenderingEnabled
+                        ? "Available"
+                        : "Plain text required"}
+                    </strong>
+                  )}
+                </div>
+              </section>
             </CardBody>
 
             {admin ? (
               <>
                 <p className="border-t border-border px-4 py-2 text-[11px] text-warning">
-                  {values.mfaRequired === false && policy.data.mfaRequired
-                    ? "Disabling MFA allows password-only sign-in for every member. Enrolled authenticators and recovery codes are kept."
-                    : values.mfaRequired && !policy.data.mfaRequired
-                      ? "Enabling MFA revokes password-only sessions. Members without an authenticator must enroll at their next sign-in."
-                      : "Saving stricter session limits can revoke sessions that already exceed the new policy."}{" "}
+                  {!values.mailHtmlRenderingEnabled &&
+                  policy.data.mailHtmlRenderingEnabled
+                    ? "Disabling HTML email rendering makes Mail use plain text for every member. Personal preferences are preserved."
+                    : values.mfaRequired === false && policy.data.mfaRequired
+                      ? "Disabling MFA allows password-only sign-in for every member. Enrolled authenticators and recovery codes are kept."
+                      : values.mfaRequired && !policy.data.mfaRequired
+                        ? "Enabling MFA revokes password-only sessions. Members without an authenticator must enroll at their next sign-in."
+                        : "Saving stricter session limits can revoke sessions that already exceed the new policy."}{" "}
                   {policy.data.mfaRequired
                     ? "A recent authenticator verification is required."
                     : "This change applies organization-wide."}

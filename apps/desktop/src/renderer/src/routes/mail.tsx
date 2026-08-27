@@ -4,6 +4,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  FileCode2,
+  FileText,
   Inbox,
   LockKeyhole,
   Paperclip,
@@ -19,10 +21,12 @@ import type {
   MailboxConnection,
   MailboxFolder,
   MailCategory,
+  MailRenderingPreferences,
   MailReadFilter,
   MailThreadAttachmentPreview,
   GmailThreadPreview,
   MailThreadDetail,
+  MailThreadMessagePreview,
   MailThreadPage,
   MailThreadSummary,
   MailTrackingTargets,
@@ -30,6 +34,7 @@ import type {
 } from "@codevault/contracts";
 import {
   Button,
+  ButtonGroup,
   Card,
   EmptyState,
   FieldError,
@@ -88,6 +93,10 @@ export function MailRoute({
   const connections = useApiQuery<{ items: MailboxConnection[] }>(
     queryKeys.mailConnections,
     "/v1/mail/connections",
+  );
+  const displayPreferences = useApiQuery<MailRenderingPreferences>(
+    queryKeys.mailPreferences,
+    "/v1/settings/mail",
   );
   const trackedConnections = useMemo(
     () =>
@@ -485,6 +494,9 @@ export function MailRoute({
                           {(thread) => (
                             <ThreadReader
                               thread={thread}
+                              automaticHtml={
+                                displayPreferences.data?.automaticHtml ?? false
+                              }
                               targets={targets}
                               trackingTargetId={resolvedTrackingTargetId}
                               setTrackingTargetId={setTrackingTargetId}
@@ -671,8 +683,100 @@ function AttachmentDownloadButton({
   );
 }
 
+function emailHtmlDocument(html: string): string {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; base-uri 'none'; connect-src 'none'; font-src 'none'; form-action 'none'; frame-src 'none'; img-src data:; media-src 'none'; object-src 'none'; script-src 'none'; style-src 'unsafe-inline'">
+    <meta name="color-scheme" content="light">
+    <style>
+      :root { color-scheme: light; font-family: "Geist Variable", ui-sans-serif, system-ui, sans-serif; }
+      * { box-sizing: border-box; }
+      body { margin: 0; padding: 20px; color: oklch(22% 0.01 250); background: oklch(100% 0 0); font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+      h1, h2, h3, h4, h5, h6 { margin: 1.25em 0 .55em; line-height: 1.25; }
+      p, ul, ol, blockquote, pre, table { margin: 0 0 1em; }
+      a { color: oklch(52% 0.16 255); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+      blockquote { margin-left: 0; padding-left: 12px; border-left: 2px solid oklch(88.5% 0.007 250); color: oklch(52% 0.012 250); }
+      pre, code { font-family: Lilex, "Geist Mono Variable", ui-monospace, monospace; }
+      pre { max-width: 100%; overflow: auto; padding: 12px; border-radius: 6px; background: oklch(96.8% 0.004 250); }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { padding: 7px 9px; border: 1px solid oklch(88.5% 0.007 250); text-align: left; vertical-align: top; }
+      hr { border: 0; border-top: 1px solid oklch(88.5% 0.007 250); }
+      @media (max-width: 520px) { body { padding: 14px; } }
+    </style>
+  </head>
+  <body>${html}</body>
+</html>`;
+}
+
+function MailMessageBody({
+  message,
+  automaticHtml,
+}: {
+  message: MailThreadMessagePreview;
+  automaticHtml: boolean;
+}): React.JSX.Element {
+  const hasHtml = message.bodyHtml !== null;
+  const [mode, setMode] = useState<"HTML" | "TEXT">(
+    automaticHtml && hasHtml ? "HTML" : "TEXT",
+  );
+
+  if (!hasHtml) {
+    return (
+      <pre className="whitespace-pre-wrap break-words font-sans text-[12px] leading-5 text-text">
+        {message.bodyText || "Message has no readable body."}
+      </pre>
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <ButtonGroup aria-label="Message body format">
+          <Button
+            size="sm"
+            variant={mode === "HTML" ? "secondary" : "ghost"}
+            aria-pressed={mode === "HTML"}
+            onClick={() => setMode("HTML")}
+          >
+            <FileCode2 aria-hidden /> HTML
+          </Button>
+          <Button
+            size="sm"
+            variant={mode === "TEXT" ? "secondary" : "ghost"}
+            aria-pressed={mode === "TEXT"}
+            onClick={() => setMode("TEXT")}
+          >
+            <FileText aria-hidden /> Plain text
+          </Button>
+        </ButtonGroup>
+        <span className="inline-flex items-center gap-1.5 text-[10px] text-text-muted">
+          <ShieldCheck aria-hidden className="size-3" />
+          Sanitized · remote content blocked
+        </span>
+      </div>
+
+      {mode === "HTML" ? (
+        <iframe
+          title={`HTML message from ${message.from}`}
+          sandbox=""
+          referrerPolicy="no-referrer"
+          srcDoc={emailHtmlDocument(message.bodyHtml!)}
+          className="h-[28rem] w-full rounded-(--cv-radius) bg-white outline outline-1 -outline-offset-1 outline-[oklch(0_0_0/0.1)]"
+        />
+      ) : (
+        <pre className="whitespace-pre-wrap break-words font-sans text-[12px] leading-5 text-text">
+          {message.bodyText || "Message has no plain-text body."}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 function ThreadReader({
   thread,
+  automaticHtml,
   targets,
   trackingTargetId,
   setTrackingTargetId,
@@ -681,6 +785,7 @@ function ThreadReader({
   canTrack,
 }: {
   thread: MailThreadDetail;
+  automaticHtml: boolean;
   targets: ReturnType<typeof useApiQuery<MailTrackingTargets>>;
   trackingTargetId: string;
   setTrackingTargetId: (id: string) => void;
@@ -698,6 +803,18 @@ function ThreadReader({
           <p className="mt-1 text-[11px] text-text-muted">
             {thread.messages.length} message
             {thread.messages.length === 1 ? "" : "s"} · {thread.mailboxAddress}
+          </p>
+          <p className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-medium text-text-muted">
+            {thread.htmlRenderingAllowed ? (
+              <ShieldCheck aria-hidden className="size-3 text-success" />
+            ) : (
+              <LockKeyhole aria-hidden className="size-3" />
+            )}
+            {thread.htmlRenderingAllowed
+              ? automaticHtml
+                ? "Sanitized HTML opens automatically"
+                : "Plain text opens first"
+              : "Plain text required by organization policy"}
           </p>
         </div>
         {thread.tracking === null ? null : (
@@ -734,11 +851,16 @@ function ThreadReader({
           {thread.messages.map((message) => (
             <article
               key={message.providerMessageId}
-              className="rounded-(--cv-radius-lg) border border-border bg-surface p-4 shadow-[0_1px_2px_oklch(0_0_0/0.025)]"
+              className="overflow-hidden rounded-(--cv-radius-lg) border border-border bg-surface shadow-[0_1px_2px_oklch(0_0_0/0.025)]"
             >
-              <div className="flex flex-wrap items-start justify-between gap-2">
+              <header className="flex flex-wrap items-start justify-between gap-2 border-b border-border bg-surface-raised/55 px-4 py-3">
                 <div>
-                  <p className="text-[12px] font-medium">
+                  <p className="flex items-center gap-1.5 text-[12px] font-medium">
+                    {message.direction === "INBOUND" ? (
+                      <Inbox aria-hidden className="size-3.5 text-text-muted" />
+                    ) : (
+                      <Send aria-hidden className="size-3.5 text-text-muted" />
+                    )}
                     {message.direction === "INBOUND" ? "Vendor reply" : "Sent"}
                   </p>
                   <p className="mt-0.5 break-all text-[11px] text-text-muted">
@@ -748,39 +870,46 @@ function ThreadReader({
                 <time className="text-[10px] tabular-nums text-text-muted">
                   {formatDateTime(message.occurredAt)}
                 </time>
-              </div>
-              {message.encrypted ? (
-                <div className="mt-3 flex gap-2 rounded-(--cv-radius) bg-surface-raised p-3 text-[12px] text-text-muted">
-                  <LockKeyhole aria-hidden className="mt-0.5 size-4 shrink-0" />
-                  <p>
-                    OpenPGP encrypted. Track the thread, then use the local
-                    reviewed-decryption flow from the submission.
+              </header>
+              <div className="p-4">
+                {message.encrypted ? (
+                  <div className="flex gap-2 rounded-(--cv-radius) bg-surface-raised p-3 text-[12px] text-text-muted">
+                    <LockKeyhole
+                      aria-hidden
+                      className="mt-0.5 size-4 shrink-0"
+                    />
+                    <p>
+                      OpenPGP encrypted. Track the thread, then use the local
+                      reviewed-decryption flow from the submission.
+                    </p>
+                  </div>
+                ) : message.previewUnavailable ? (
+                  <p className="rounded-(--cv-radius) bg-surface-raised p-3 text-[12px] text-text-muted">
+                    This message uses a MIME structure that CodeVault cannot
+                    preview safely. Open it in Gmail, or track the thread to use
+                    the normal import checks.
                   </p>
-                </div>
-              ) : message.previewUnavailable ? (
-                <p className="mt-3 rounded-(--cv-radius) bg-surface-raised p-3 text-[12px] text-text-muted">
-                  This message uses a MIME structure that CodeVault cannot
-                  preview safely. Open it in Gmail, or track the thread to use
-                  the normal import checks.
-                </p>
-              ) : (
-                <pre className="mt-3 whitespace-pre-wrap break-words font-sans text-[12px] leading-5 text-text">
-                  {message.bodyText || "Message has no plain-text body."}
-                </pre>
-              )}
-              {message.attachments.length === 0 ? null : (
-                <ul className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
-                  {message.attachments.map((attachment) => (
-                    <li key={attachment.attachmentIndex}>
-                      <AttachmentDownloadButton
-                        connectionId={thread.mailboxConnectionId}
-                        messageId={message.providerMessageId}
-                        attachment={attachment}
-                      />
-                    </li>
-                  ))}
-                </ul>
-              )}
+                ) : (
+                  <MailMessageBody
+                    key={`${message.providerMessageId}:${automaticHtml ? "html" : "text"}`}
+                    message={message}
+                    automaticHtml={automaticHtml}
+                  />
+                )}
+                {message.attachments.length === 0 ? null : (
+                  <ul className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
+                    {message.attachments.map((attachment) => (
+                      <li key={attachment.attachmentIndex}>
+                        <AttachmentDownloadButton
+                          connectionId={thread.mailboxConnectionId}
+                          messageId={message.providerMessageId}
+                          attachment={attachment}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </article>
           ))}
         </div>

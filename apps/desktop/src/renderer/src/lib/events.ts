@@ -1,6 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import type { ServerEvent } from "@codevault/contracts";
+import type { MailThreadDetail, ServerEvent } from "@codevault/contracts";
 
 import { bridge } from "./bridge.js";
 import { queryKeys } from "./api.js";
@@ -81,6 +81,28 @@ export function invalidateForEvent(
 
     case "disclosure": {
       invalidate(["disclosure"]);
+      break;
+    }
+
+    case "organization_security_policy": {
+      if (event.detail["mailHtmlRenderingEnabled"] === false) {
+        queryClient.setQueriesData<MailThreadDetail>(
+          { queryKey: ["mailbox-thread"] },
+          (thread) =>
+            thread === undefined
+              ? undefined
+              : {
+                  ...thread,
+                  htmlRenderingAllowed: false,
+                  messages: thread.messages.map((message) => ({
+                    ...message,
+                    bodyHtml: null,
+                  })),
+                },
+        );
+      }
+      invalidate(queryKeys.mailPreferences);
+      invalidate(["mailbox-thread"]);
       break;
     }
 

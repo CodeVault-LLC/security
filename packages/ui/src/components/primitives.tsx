@@ -1,5 +1,6 @@
 import * as CheckboxPrimitive from "@radix-ui/react-checkbox";
 import { Slot } from "@radix-ui/react-slot";
+import * as SwitchPrimitive from "@radix-ui/react-switch";
 import { cva, type VariantProps } from "class-variance-authority";
 import { AlertTriangle, Check, Loader2 } from "lucide-react";
 import {
@@ -145,6 +146,36 @@ export const Checkbox = forwardRef<
         <Check aria-hidden className="size-3" strokeWidth={2.5} />
       </CheckboxPrimitive.Indicator>
     </CheckboxPrimitive.Root>
+  );
+});
+
+/** A compact immediate-setting switch with a full desktop hit target. */
+export const Switch = forwardRef<
+  ComponentRef<typeof SwitchPrimitive.Root>,
+  ComponentPropsWithoutRef<typeof SwitchPrimitive.Root>
+>(function Switch({ className, ...props }, ref) {
+  return (
+    <SwitchPrimitive.Root
+      ref={ref}
+      className={cn(
+        "relative inline-flex h-10 w-12 shrink-0 cursor-pointer items-center justify-center rounded-(--cv-radius)",
+        "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus disabled:cursor-not-allowed",
+        "before:h-5 before:w-9 before:rounded-full before:bg-surface-hover",
+        "before:transition-[background-color] before:duration-150 before:ease-out motion-reduce:before:transition-none",
+        "data-[state=checked]:before:bg-accent disabled:before:bg-surface-raised disabled:before:opacity-65",
+        className,
+      )}
+      {...props}
+    >
+      <SwitchPrimitive.Thumb
+        aria-hidden
+        className={cn(
+          "absolute left-2 block size-4 rounded-full bg-white shadow-sm",
+          "transition-transform duration-150 ease-out motion-reduce:transition-none",
+          "data-[state=checked]:translate-x-4",
+        )}
+      />
+    </SwitchPrimitive.Root>
   );
 });
 

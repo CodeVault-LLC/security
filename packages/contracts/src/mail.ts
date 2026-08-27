@@ -192,6 +192,7 @@ export const MailThreadMessagePreview = Type.Object(
     cc: Type.Array(EmailAddress, { maxItems: 100 }),
     subject: Type.String({ minLength: 1, maxLength: 300 }),
     bodyText: Type.Union([Type.String({ maxLength: 1_000_000 }), Type.Null()]),
+    bodyHtml: Type.Union([Type.String({ maxLength: 1_000_000 }), Type.Null()]),
     encrypted: Type.Boolean(),
     previewUnavailable: Type.Boolean(),
     occurredAt: Timestamp,
@@ -209,11 +210,26 @@ export const MailThreadDetail = Type.Object(
     subject: Type.String({ minLength: 1, maxLength: 300 }),
     messages: Type.Array(MailThreadMessagePreview, { maxItems: 100 }),
     tooLarge: Type.Boolean(),
+    htmlRenderingAllowed: Type.Boolean(),
     tracking: Type.Union([MailThreadTracking, Type.Null()]),
   },
   { additionalProperties: false },
 );
 export type MailThreadDetail = Static<typeof MailThreadDetail>;
+
+export const MailRenderingPreferences = Type.Object(
+  {
+    automaticHtml: Type.Boolean(),
+    organizationAllowsHtml: Type.Boolean(),
+  },
+  { additionalProperties: false },
+);
+export type MailRenderingPreferences = Static<typeof MailRenderingPreferences>;
+
+export const UpdateMailRenderingPreferences = Type.Object(
+  { automaticHtml: Type.Boolean() },
+  { additionalProperties: false },
+);
 
 export const MailTrackingTarget = Type.Object(
   {

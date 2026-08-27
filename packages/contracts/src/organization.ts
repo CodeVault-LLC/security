@@ -31,6 +31,7 @@ export const OrganizationSecurityPolicy = Type.Object({
   sessionAbsoluteHours: Type.Integer(),
   recentMfaMinutes: Type.Integer(),
   mcpEnabled: Type.Boolean(),
+  mailHtmlRenderingEnabled: Type.Boolean(),
   updatedAt: Timestamp,
 });
 export const UpdateOrganizationSecurityPolicy = Type.Object({
@@ -42,6 +43,7 @@ export const UpdateOrganizationSecurityPolicy = Type.Object({
   ),
   recentMfaMinutes: Type.Optional(Type.Integer({ minimum: 5, maximum: 30 })),
   mcpEnabled: Type.Optional(Type.Boolean()),
+  mailHtmlRenderingEnabled: Type.Optional(Type.Boolean()),
 });
 export const OrganizationUser = Type.Object({
   id: Uuid,

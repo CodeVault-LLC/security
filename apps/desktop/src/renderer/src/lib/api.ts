@@ -139,6 +139,7 @@ export const queryKeys = {
   aiPolicies: ["ai-policies"] as const,
   aiProviders: ["ai-providers"] as const,
   mailConnections: ["mail-connections"] as const,
+  mailPreferences: ["mail-preferences"] as const,
   mailboxThreads: (
     connectionId: string,
     folder: string,

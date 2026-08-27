@@ -79,6 +79,8 @@ export async function resolveMcpAccess(
       recentMfaMinutes: schema.organizationSecurityPolicies.recentMfaMinutes,
       mfaRequired: schema.organizationSecurityPolicies.mfaRequired,
       mcpEnabled: schema.organizationSecurityPolicies.mcpEnabled,
+      mailHtmlRenderingEnabled:
+        schema.organizationSecurityPolicies.mailHtmlRenderingEnabled,
     })
     .from(schema.mcpAccessTokens)
     .innerJoin(schema.users, eq(schema.users.id, schema.mcpAccessTokens.userId))
@@ -141,6 +143,7 @@ export async function resolveMcpAccess(
         recentMfaMinutes: row.recentMfaMinutes,
         mfaRequired: row.mfaRequired,
         mcpEnabled: row.mcpEnabled,
+        mailHtmlRenderingEnabled: row.mailHtmlRenderingEnabled,
       },
     },
   };

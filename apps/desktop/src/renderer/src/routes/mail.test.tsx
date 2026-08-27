@@ -62,6 +62,12 @@ describe("MailRoute", () => {
       if (path === "/v1/mail/connections") {
         return Promise.resolve({ ok: true, data: { items: [connection] } });
       }
+      if (path === "/v1/settings/mail") {
+        return Promise.resolve({
+          ok: true,
+          data: { automaticHtml: true, organizationAllowsHtml: true },
+        });
+      }
       if (path === "/v1/mail/tracking-targets") {
         return Promise.resolve({
           ok: true,
@@ -102,6 +108,7 @@ describe("MailRoute", () => {
             providerThreadId: threadId,
             subject: "Security issue in account recovery",
             tooLarge: false,
+            htmlRenderingAllowed: true,
             tracking: null,
             messages: [
               {
@@ -112,6 +119,8 @@ describe("MailRoute", () => {
                 cc: [],
                 subject: "Security issue in account recovery",
                 bodyText: "I found an account recovery issue.",
+                bodyHtml:
+                  "<p>I found an <strong>account recovery issue</strong>.</p>",
                 encrypted: false,
                 previewUnavailable: false,
                 occurredAt: "2026-08-25T09:30:00.000Z",
@@ -182,6 +191,16 @@ describe("MailRoute", () => {
         name: "Security issue in account recovery",
       }),
     ).toBeTruthy();
+    const htmlPreview = await screen.findByTitle(
+      `HTML message from ${connection.emailAddress}`,
+    );
+    expect(htmlPreview.getAttribute("sandbox")).toBe("");
+    expect(htmlPreview.getAttribute("srcdoc")).toContain(
+      "<strong>account recovery issue</strong>",
+    );
+    expect(htmlPreview.getAttribute("srcdoc")).toContain("default-src 'none'");
+
+    await userEvent.click(screen.getByRole("button", { name: /plain text/i }));
     expect(screen.getByText("I found an account recovery issue.")).toBeTruthy();
     const trackButton = await screen.findByRole("button", {
       name: "Track thread",

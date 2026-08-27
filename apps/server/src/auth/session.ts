@@ -46,6 +46,7 @@ export interface AuthenticatedPrincipal {
       recentMfaMinutes: number;
       mfaRequired: boolean;
       mcpEnabled: boolean;
+      mailHtmlRenderingEnabled: boolean;
     };
   };
 }
@@ -132,6 +133,8 @@ export async function resolveSession(
       recentMfaMinutes: schema.organizationSecurityPolicies.recentMfaMinutes,
       mfaRequired: schema.organizationSecurityPolicies.mfaRequired,
       mcpEnabled: schema.organizationSecurityPolicies.mcpEnabled,
+      mailHtmlRenderingEnabled:
+        schema.organizationSecurityPolicies.mailHtmlRenderingEnabled,
     })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
@@ -211,6 +214,7 @@ export async function resolveSession(
         recentMfaMinutes: row.recentMfaMinutes,
         mfaRequired: row.mfaRequired,
         mcpEnabled: row.mcpEnabled,
+        mailHtmlRenderingEnabled: row.mailHtmlRenderingEnabled,
       },
     },
   };

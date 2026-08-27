@@ -64,7 +64,8 @@ export const CONTENT_SECURITY_POLICY = [
   "connect-src 'none'",
   "media-src 'none'",
   "object-src 'none'",
-  "frame-src 'none'",
+  // The renderer uses same-origin srcdoc frames for server-sanitized email.
+  "frame-src 'self'",
   "worker-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
@@ -98,7 +99,7 @@ export function developmentContentSecurityPolicy(devServerUrl: string): string {
     `connect-src ${origin} ${websocket}`,
     "media-src 'none'",
     "object-src 'none'",
-    "frame-src 'none'",
+    "frame-src 'self'",
     "worker-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",

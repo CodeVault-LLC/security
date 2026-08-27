@@ -34,6 +34,7 @@ export const users = pgTable(
     /** Argon2id encoded hash, including its parameters and salt. */
     passwordHash: text("password_hash").notNull(),
     disabled: boolean("disabled").notNull().default(false),
+    automaticHtmlMail: boolean("automatic_html_mail").notNull().default(true),
     lastLoginAt: timestampColumn("last_login_at"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
