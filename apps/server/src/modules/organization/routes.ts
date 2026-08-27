@@ -288,6 +288,7 @@ export async function registerOrganizationRoutes(
         sessionAbsoluteHours: policy!.sessionAbsoluteHours,
         recentMfaMinutes: policy!.recentMfaMinutes,
         mcpEnabled: policy!.mcpEnabled,
+        mailHtmlRenderingEnabled: policy!.mailHtmlRenderingEnabled,
         updatedAt: policy!.updatedAt,
       };
     },
@@ -331,6 +332,15 @@ export async function registerOrganizationRoutes(
             AND session.mfa_method = 'PASSWORD'
         `);
       }
+      app.events.publish({
+        type: "entity.changed",
+        entityType: "organization_security_policy",
+        entityId: admin.organizationId,
+        caseId: null,
+        detail: {
+          mailHtmlRenderingEnabled: policy!.mailHtmlRenderingEnabled,
+        },
+      });
       return {
         mfaRequired: policy!.mfaRequired,
         inviteTtlHours: policy!.inviteTtlHours,
@@ -338,6 +348,7 @@ export async function registerOrganizationRoutes(
         sessionAbsoluteHours: policy!.sessionAbsoluteHours,
         recentMfaMinutes: policy!.recentMfaMinutes,
         mcpEnabled: policy!.mcpEnabled,
+        mailHtmlRenderingEnabled: policy!.mailHtmlRenderingEnabled,
         updatedAt: policy!.updatedAt,
       };
     },

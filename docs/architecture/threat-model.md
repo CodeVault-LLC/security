@@ -270,10 +270,13 @@ known thread IDs rather than searching the mailbox.
 
 The interactive **Mail** page has a broader, user-driven read boundary. It
 lists Inbox and Sent metadata. When the user opens a thread, the server fetches
-raw MIME and returns plain text plus attachment metadata. The server does not
-store the preview. HTML, remote resources, and attachment bodies do not cross
-the renderer boundary. Tracking a thread requires a writable draft submission
-and starts the durable, audited import flow.
+raw MIME and returns plain text plus attachment metadata. If the organization
+policy allows HTML, the server can also return allowlisted HTML structure. The
+server removes scripts, forms, remote media, and CSS before the HTML crosses the
+renderer boundary. A sandboxed `srcdoc` frame applies a second CSP that blocks
+scripts, forms, frames, connections, and remote media. The server does not
+store the preview. Tracking a thread requires a writable draft submission and
+starts the durable, audited import flow.
 
 *Enforced by* `apps/server/src/modules/mail/`,
 `apps/worker/src/jobs/gmail-send.ts`, and `apps/worker/src/jobs/gmail-sync.ts`.
@@ -282,12 +285,14 @@ unit tests.
 
 ### 14. Hostile inbound mail ↔ correspondence UI
 
-Inbound MIME is size- and count-bounded. HTML never reaches the renderer;
-scripts, remote tracking resources, control characters, and path-bearing
-filenames are removed or normalised. OpenPGP ciphertext is stored as opaque raw
-mail with no server-side plaintext. Decryption happens locally after an
-unavoidable native confirmation, and reviewed plaintext is an explicit audited
-append-only revision.
+Inbound MIME is size- and count-bounded. The server returns sanitized HTML only
+when the organization policy allows it. Scripts, forms, remote tracking
+resources, CSS, control characters, and path-bearing filenames are removed or
+normalized. A policy change removes cached HTML from connected clients before
+they refetch the thread. OpenPGP ciphertext is stored as opaque raw mail with no
+server-side plaintext. Decryption happens locally after an unavoidable native
+confirmation, and reviewed plaintext is an explicit audited append-only
+revision.
 
 Pub/Sub notifications are authenticated with Google's OIDC signature, issuer,
 exact audience, and exact service-account email. Duplicate notifications are

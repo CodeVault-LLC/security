@@ -27,6 +27,7 @@ describe("configurable organization authentication", () => {
         sessionAbsoluteHours: 12,
         recentMfaMinutes: 10,
         mcpEnabled: true,
+        mailHtmlRenderingEnabled: true,
         updatedAt: "2026-08-25T00:00:00.000Z",
       }),
     ).toBe(true);

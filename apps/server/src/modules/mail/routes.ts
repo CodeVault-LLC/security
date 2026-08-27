@@ -625,6 +625,8 @@ export async function registerMailRoutes(app: AppInstance): Promise<void> {
     },
     async (request) => {
       const user = actingUser(request);
+      const htmlRenderingAllowed =
+        principalOf(request).organization.policy.mailHtmlRenderingEnabled;
       const { connection, provider, accessToken } = await mailboxAccess(
         app,
         user.id,
@@ -657,6 +659,7 @@ export async function registerMailRoutes(app: AppInstance): Promise<void> {
               .subject,
             messages: [],
             tooLarge: true,
+            htmlRenderingAllowed,
             tracking,
           };
         }
@@ -672,6 +675,7 @@ export async function registerMailRoutes(app: AppInstance): Promise<void> {
           try {
             const parsed = await parseInboundMessage(raw, {
               providerMessageId: messageId,
+              includeHtml: htmlRenderingAllowed,
             });
             messages.push({
               providerMessageId: messageId,
@@ -685,6 +689,7 @@ export async function registerMailRoutes(app: AppInstance): Promise<void> {
               cc: parsed.cc,
               subject: parsed.subject.slice(0, 300),
               bodyText: parsed.bodyText,
+              bodyHtml: parsed.bodyHtml,
               encrypted: parsed.encrypted,
               previewUnavailable: false,
               occurredAt: parsed.receivedAt,
@@ -708,6 +713,7 @@ export async function registerMailRoutes(app: AppInstance): Promise<void> {
               cc: [],
               subject: preview.subject,
               bodyText: null,
+              bodyHtml: null,
               encrypted: false,
               previewUnavailable: true,
               occurredAt: preview.occurredAt ?? new Date(0).toISOString(),
@@ -727,6 +733,7 @@ export async function registerMailRoutes(app: AppInstance): Promise<void> {
               ?.subject ?? "(no subject)",
           messages,
           tooLarge: false,
+          htmlRenderingAllowed,
           tracking,
         };
       } catch (error: unknown) {

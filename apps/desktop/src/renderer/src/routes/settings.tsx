@@ -2,9 +2,11 @@ import { Link } from "@tanstack/react-router";
 import {
   Bot,
   Check,
+  FileCode2,
   KeyRound,
   Laptop,
   Loader2,
+  LockKeyhole,
   Mail,
   RefreshCw,
   Smartphone,
@@ -16,10 +18,11 @@ import type {
   AiProviderStatus,
   GmailAuthorization,
   MailboxConnection,
+  MailRenderingPreferences,
   OrganizationUser,
   WebAuthnCredentialSummary,
 } from "@codevault/contracts";
-import { Button, Checkbox, cn, Input, Label } from "@codevault/ui";
+import { Button, Checkbox, cn, Input, Label, Switch } from "@codevault/ui";
 
 import { Avatar } from "../components/avatar.js";
 import { QueryError } from "../components/query-boundary.js";
@@ -446,30 +449,15 @@ export function PersonalAppearanceRoute(): React.JSX.Element {
 
       <SettingsSection title="Motion">
         <div className="flex min-h-12 items-center justify-between gap-4 border-y border-border py-2">
-          <span className="text-[13px] font-medium">Reduce motion</span>
-          <button
-            type="button"
-            role="switch"
+          <label htmlFor="reduce-motion" className="text-[13px] font-medium">
+            Reduce motion
+          </label>
+          <Switch
+            id="reduce-motion"
             aria-label="Reduce motion"
-            aria-checked={reduceMotion}
-            className="group flex min-h-10 min-w-14 items-center justify-center rounded-(--cv-radius) focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus"
-            onClick={() => setReduceMotion(!reduceMotion)}
-          >
-            <span
-              aria-hidden
-              className={cn(
-                "relative h-5 w-9 rounded-full transition-[background-color] duration-150 ease-out motion-reduce:transition-none",
-                reduceMotion ? "bg-accent" : "bg-surface-hover",
-              )}
-            >
-              <span
-                className={cn(
-                  "absolute left-0.5 top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform duration-150 ease-out motion-reduce:transition-none",
-                  reduceMotion && "translate-x-4",
-                )}
-              />
-            </span>
-          </button>
+            checked={reduceMotion}
+            onCheckedChange={setReduceMotion}
+          />
         </div>
       </SettingsSection>
     </PersonalPage>
@@ -590,9 +578,13 @@ export function PersonalAiRoute(): React.JSX.Element {
                 </span>
               </label>
               {(providers ?? []).map((provider) => {
+                const providerPolicy = policies.data?.items.find(
+                  (item) => item.providerId === provider.providerId,
+                );
                 const ready = configuredProviders.some(
                   (item) => item.providerId === provider.providerId,
                 );
+                const organizationLocked = providerPolicy?.enabled === false;
 
                 return (
                   <label
@@ -616,8 +608,15 @@ export function PersonalAiRoute(): React.JSX.Element {
                     <span className="text-[13px] font-medium">
                       {provider.displayName}
                     </span>
-                    <span className="ml-auto text-[11px] text-text-muted">
-                      {ready ? "Ready" : "Unavailable"}
+                    <span className="ml-auto flex items-center gap-1.5 text-[11px] text-text-muted">
+                      {organizationLocked ? (
+                        <LockKeyhole aria-hidden className="size-3" />
+                      ) : null}
+                      {ready
+                        ? "Ready"
+                        : organizationLocked
+                          ? "Organization locked"
+                          : "Unavailable"}
                     </span>
                   </label>
                 );
@@ -1348,6 +1347,21 @@ export function PersonalMailRoute(): React.JSX.Element {
     queryKeys.mailConnections,
     "/v1/mail/connections",
   );
+  const displayPreferences = useApiQuery<MailRenderingPreferences>(
+    queryKeys.mailPreferences,
+    "/v1/settings/mail",
+  );
+  const updateDisplayPreferences = useApiMutation<
+    MailRenderingPreferences,
+    boolean
+  >(
+    (automaticHtml) => ({
+      path: "/v1/settings/mail",
+      method: "PATCH",
+      body: { automaticHtml },
+    }),
+    () => [queryKeys.mailPreferences],
+  );
   const connectGmail = useApiMutation<
     GmailAuthorization,
     { enableReplyTracking: boolean }
@@ -1415,6 +1429,91 @@ export function PersonalMailRoute(): React.JSX.Element {
       title="Mail"
       description="Connect Gmail for reviewed disclosures. CodeVault never receives your Google password."
     >
+      <SettingsSection title="Message display">
+        {displayPreferences.error ? (
+          <QueryError query={displayPreferences} className="mb-3" />
+        ) : null}
+        {displayPreferences.data === undefined &&
+        displayPreferences.error === null ? (
+          <LoadingLine label="Loading mail display policy…" />
+        ) : displayPreferences.data ? (
+          <div className="overflow-hidden rounded-(--cv-radius-lg) border border-border bg-surface">
+            <div className="grid gap-3 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-(--cv-radius) bg-surface-raised text-text-muted">
+                  <FileCode2 aria-hidden className="size-4" />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-[13px] font-medium">
+                      Render HTML automatically
+                    </h3>
+                    {!displayPreferences.data.organizationAllowsHtml ? (
+                      <span className="inline-flex min-h-5 items-center gap-1 rounded-full border border-border-strong bg-surface-raised px-1.5 text-[10px] font-medium text-text-muted">
+                        <LockKeyhole aria-hidden className="size-3" />
+                        Organization locked
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="mt-1 max-w-2xl text-pretty text-[11px] leading-4 text-text-muted">
+                    {displayPreferences.data.organizationAllowsHtml
+                      ? "Open sanitized HTML when a message provides it. Remote images, scripts, forms, and email CSS stay blocked."
+                      : "Your organization requires plain-text mail. This preference cannot be changed."}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 sm:justify-end">
+                <span className="text-[11px] font-medium text-text-muted">
+                  {displayPreferences.data.organizationAllowsHtml
+                    ? displayPreferences.data.automaticHtml
+                      ? "Automatic"
+                      : "Plain text first"
+                    : "Required"}
+                </span>
+                <Switch
+                  aria-label="Render HTML email automatically"
+                  checked={
+                    displayPreferences.data.organizationAllowsHtml &&
+                    displayPreferences.data.automaticHtml
+                  }
+                  disabled={
+                    !displayPreferences.data.organizationAllowsHtml ||
+                    updateDisplayPreferences.isPending
+                  }
+                  onCheckedChange={(checked) => {
+                    updateDisplayPreferences.reset();
+                    updateDisplayPreferences.mutate(checked);
+                  }}
+                />
+                {!displayPreferences.data.organizationAllowsHtml ? (
+                  <LockKeyhole
+                    aria-label="Locked by organization policy"
+                    className="size-4 text-text-muted"
+                  />
+                ) : null}
+              </div>
+            </div>
+            {updateDisplayPreferences.error ? (
+              <p
+                role="alert"
+                className="border-t border-danger/30 px-4 py-2 text-[11px] text-danger"
+              >
+                {updateDisplayPreferences.error.message} The saved preference
+                has not changed. Try again.
+              </p>
+            ) : null}
+            {updateDisplayPreferences.isSuccess ? (
+              <p
+                role="status"
+                className="border-t border-border px-4 py-2 text-[11px] text-success"
+              >
+                Mail display preference saved.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </SettingsSection>
+
       <SettingsSection title="Gmail connection">
         {disconnectedMailbox ? (
           <p

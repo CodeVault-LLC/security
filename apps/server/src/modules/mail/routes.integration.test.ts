@@ -138,9 +138,11 @@ describeIntegration("Gmail connection routes", () => {
             "Subject: Existing disclosure",
             `Message-ID: <${messageId}@example.test>`,
             "Date: Wed, 26 Aug 2026 10:00:00 +0000",
-            "Content-Type: text/plain; charset=utf-8",
+            `Content-Type: ${outbound ? "text/plain" : "text/html"}; charset=utf-8`,
             "",
-            outbound ? "Initial report" : "Thank you for the report",
+            outbound
+              ? "Initial report"
+              : '<p>Thank you for the <strong>report</strong></p><script>steal()</script><img src="https://tracker.invalid/pixel">',
           ].join("\r\n"),
         );
       },
@@ -320,10 +322,15 @@ describeIntegration("Gmail connection routes", () => {
     expect(threadResponse.json<MailThreadDetail>()).toMatchObject({
       providerThreadId: "thread-existing",
       tooLarge: false,
+      htmlRenderingAllowed: true,
       tracking: null,
       messages: [
-        { direction: "OUTBOUND", bodyText: "Initial report" },
-        { direction: "INBOUND", bodyText: "Thank you for the report" },
+        { direction: "OUTBOUND", bodyText: "Initial report", bodyHtml: null },
+        {
+          direction: "INBOUND",
+          bodyText: "Thank you for the report",
+          bodyHtml: "<p>Thank you for the <strong>report</strong></p>",
+        },
       ],
     });
 

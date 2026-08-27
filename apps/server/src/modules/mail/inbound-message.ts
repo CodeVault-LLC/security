@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import { simpleParser, type AddressObject } from "mailparser";
+import sanitizeHtml from "sanitize-html";
 
 const MAX_RAW_BYTES = 35 * 1024 * 1024;
 const MAX_BODY_CHARACTERS = 1_000_000;
@@ -21,6 +22,7 @@ export interface ParsedInboundMessage {
   cc: string[];
   subject: string;
   bodyText: string | null;
+  bodyHtml: string | null;
   encrypted: boolean;
   receivedAt: string;
   attachments: ParsedInboundAttachment[];
@@ -68,10 +70,79 @@ function safeFilename(value: string | undefined, index: number): string {
   return (basename || `attachment-${index + 1}`).slice(0, 200);
 }
 
-/** Converts hostile MIME into a text-only renderer-safe representation. */
+/** Keeps email structure while dropping active content, remote media, and CSS. */
+export function sanitiseEmailHtml(value: string): string | null {
+  const clean = sanitizeHtml(value.slice(0, MAX_BODY_CHARACTERS), {
+    allowedTags: [
+      "a",
+      "abbr",
+      "b",
+      "blockquote",
+      "br",
+      "caption",
+      "code",
+      "col",
+      "colgroup",
+      "dd",
+      "del",
+      "details",
+      "div",
+      "dl",
+      "dt",
+      "em",
+      "h1",
+      "h2",
+      "h3",
+      "h4",
+      "h5",
+      "h6",
+      "hr",
+      "i",
+      "ins",
+      "li",
+      "mark",
+      "ol",
+      "p",
+      "pre",
+      "s",
+      "small",
+      "span",
+      "strong",
+      "sub",
+      "summary",
+      "sup",
+      "table",
+      "tbody",
+      "td",
+      "tfoot",
+      "th",
+      "thead",
+      "tr",
+      "u",
+      "ul",
+    ],
+    allowedAttributes: {
+      "*": ["dir", "lang", "title"],
+      a: ["href", "title"],
+      col: ["span", "width"],
+      td: ["colspan", "rowspan", "headers"],
+      th: ["colspan", "rowspan", "headers", "scope"],
+    },
+    allowedSchemes: ["http", "https", "mailto"],
+    allowProtocolRelative: false,
+    enforceHtmlBoundary: true,
+    nonTextTags: ["style", "script", "textarea", "option", "noscript"],
+  })
+    .trim()
+    .slice(0, MAX_BODY_CHARACTERS);
+
+  return clean === "" ? null : clean;
+}
+
+/** Converts hostile MIME into renderer-safe text and optional sanitized HTML. */
 export async function parseInboundMessage(
   raw: Uint8Array,
-  context: { providerMessageId: string },
+  context: { providerMessageId: string; includeHtml?: boolean },
 ): Promise<ParsedInboundMessage> {
   if (raw.byteLength === 0 || raw.byteLength > MAX_RAW_BYTES) {
     throw new Error("Inbound message is empty or too large.");
@@ -116,6 +187,12 @@ export async function parseInboundMessage(
         .replace(/(?:^|\n)\s*\[https?:\/\/[^\]\n]+\]\s*(?=\n|$)/gi, "\n")
         .trim()
         .slice(0, MAX_BODY_CHARACTERS);
+  const bodyHtml =
+    !encrypted &&
+    context.includeHtml === true &&
+    typeof parsed.html === "string"
+      ? sanitiseEmailHtml(parsed.html)
+      : null;
 
   return {
     rfcMessageId: safeMessageId(parsed.messageId, context.providerMessageId),
@@ -129,6 +206,7 @@ export async function parseInboundMessage(
     cc: addresses(parsed.cc),
     subject: safeHeader(parsed.subject, "(no subject)"),
     bodyText: body,
+    bodyHtml,
     encrypted,
     receivedAt: (parsed.date ?? new Date()).toISOString(),
     attachments: encrypted

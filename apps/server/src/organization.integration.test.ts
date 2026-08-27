@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import type { CreateMcpAccessTokenResponse } from "@codevault/contracts";
 import { schema } from "@codevault/db";
@@ -131,6 +131,69 @@ describeIntegration("organization and personal settings APIs", () => {
       .from(schema.users)
       .where(eq(schema.users.id, admin.id));
     expect(adminRow?.name).not.toBe("Updated Member");
+  });
+
+  it("locks personal HTML mail preferences when organization policy blocks them", async () => {
+    await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/organization/security",
+      headers: admin.headers,
+      payload: { mailHtmlRenderingEnabled: true },
+    });
+    const publish = vi.spyOn(harness.app.events, "publish");
+    const initial = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/settings/mail",
+      headers: member.headers,
+      payload: { automaticHtml: false },
+    });
+    expect(initial.statusCode, initial.body).toBe(200);
+    expect(initial.json()).toMatchObject({
+      automaticHtml: false,
+      organizationAllowsHtml: true,
+    });
+
+    const blocked = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/organization/security",
+      headers: admin.headers,
+      payload: { mailHtmlRenderingEnabled: false },
+    });
+    expect(blocked.statusCode, blocked.body).toBe(200);
+    expect(publish).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "entity.changed",
+        entityType: "organization_security_policy",
+        detail: { mailHtmlRenderingEnabled: false },
+      }),
+    );
+
+    const denied = await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/settings/mail",
+      headers: member.headers,
+      payload: { automaticHtml: true },
+    });
+    expect(denied.statusCode).toBe(403);
+
+    const preference = await harness.app.inject({
+      method: "GET",
+      url: "/v1/settings/mail",
+      headers: member.headers,
+    });
+    expect(preference.statusCode, preference.body).toBe(200);
+    expect(preference.json()).toMatchObject({
+      automaticHtml: false,
+      organizationAllowsHtml: false,
+    });
+
+    await harness.app.inject({
+      method: "PATCH",
+      url: "/v1/organization/security",
+      headers: admin.headers,
+      payload: { mailHtmlRenderingEnabled: true },
+    });
+    publish.mockRestore();
   });
 
   it("reports the current user's actual account protection", async () => {

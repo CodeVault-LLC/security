@@ -174,8 +174,8 @@ describe("content security policy", () => {
     expect(CONTENT_SECURITY_POLICY).toContain("connect-src 'none'");
   });
 
-  it("forbids framing and object embedding", () => {
-    expect(CONTENT_SECURITY_POLICY).toContain("frame-src 'none'");
+  it("allows same-origin srcdoc mail previews but forbids foreign framing", () => {
+    expect(CONTENT_SECURITY_POLICY).toContain("frame-src 'self'");
     expect(CONTENT_SECURITY_POLICY).toContain("object-src 'none'");
     expect(CONTENT_SECURITY_POLICY).toContain("frame-ancestors 'none'");
   });
@@ -225,7 +225,7 @@ describe("development content security policy", () => {
   it("keeps the refusals that are not about serving the renderer", () => {
     expect(devPolicy).toContain("default-src 'none'");
     expect(devPolicy).toContain("object-src 'none'");
-    expect(devPolicy).toContain("frame-src 'none'");
+    expect(devPolicy).toContain("frame-src 'self'");
     expect(devPolicy).toContain("frame-ancestors 'none'");
     expect(devPolicy).toContain("form-action 'none'");
   });

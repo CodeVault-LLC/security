@@ -5,8 +5,10 @@ import {
   CreateMcpAccessTokenRequest,
   CreateMcpAccessTokenResponse,
   ErrorResponse,
+  MailRenderingPreferences,
   McpAccessTokenList,
   OkResponse,
+  UpdateMailRenderingPreferences,
 } from "@codevault/contracts";
 import {
   DomainError,
@@ -70,6 +72,56 @@ const Sessions = Type.Object({
 const Id = Type.Object({ id: Type.String({ format: "uuid" }) });
 
 export async function registerSettingsRoutes(app: AppInstance): Promise<void> {
+  app.get(
+    "/v1/settings/mail",
+    { schema: { response: { 200: MailRenderingPreferences } } },
+    async (request) => {
+      const principal = principalOf(request);
+      const [user] = await app.db
+        .select({ automaticHtml: schema.users.automaticHtmlMail })
+        .from(schema.users)
+        .where(eq(schema.users.id, principal.user.id))
+        .limit(1);
+
+      return {
+        automaticHtml: user?.automaticHtml ?? true,
+        organizationAllowsHtml:
+          principal.organization.policy.mailHtmlRenderingEnabled,
+      };
+    },
+  );
+
+  app.patch(
+    "/v1/settings/mail",
+    {
+      schema: {
+        body: UpdateMailRenderingPreferences,
+        response: { 200: MailRenderingPreferences, 403: ErrorResponse },
+      },
+    },
+    async (request) => {
+      const principal = requireInteractiveSession(request);
+      if (!principal.organization.policy.mailHtmlRenderingEnabled) {
+        throw permissionDenied(
+          "HTML email rendering is disabled by your organization.",
+        );
+      }
+      const [user] = await app.db
+        .update(schema.users)
+        .set({
+          automaticHtmlMail: request.body.automaticHtml,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(schema.users.id, principal.user.id))
+        .returning({ automaticHtml: schema.users.automaticHtmlMail });
+
+      return {
+        automaticHtml: user?.automaticHtml ?? request.body.automaticHtml,
+        organizationAllowsHtml: true,
+      };
+    },
+  );
+
   app.get(
     "/v1/settings/mcp-access",
     { schema: { response: { 200: McpAccessTokenList } } },
