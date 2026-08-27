@@ -46,7 +46,7 @@
     "@tanstack/react-table": "^8.21.3",
     "@tanstack/react-virtual": "^3.14.9",
     "@types/nodemailer": "7.0.1",
-    "@vitejs/plugin-react": "^5.2.0",
+    "@vitejs/plugin-react": "^6.1.0",
     "electron": "^43.4.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
