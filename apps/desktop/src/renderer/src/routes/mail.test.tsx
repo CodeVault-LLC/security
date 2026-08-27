@@ -10,6 +10,7 @@ import { MailRoute } from "./mail.js";
 
 const apiRequest = vi.hoisted(() => vi.fn());
 const navigate = vi.hoisted(() => vi.fn());
+const downloadAttachment = vi.hoisted(() => vi.fn());
 
 vi.mock("@tanstack/react-router", async (importOriginal) => {
   const original = await importOriginal<typeof TanStackRouter>();
@@ -21,7 +22,10 @@ vi.mock("@tanstack/react-router", async (importOriginal) => {
 });
 
 vi.mock("../lib/bridge.js", () => ({
-  bridge: () => ({ api: { request: apiRequest } }),
+  bridge: () => ({
+    api: { request: apiRequest },
+    mail: { downloadAttachment },
+  }),
 }));
 
 const connectionId = "018f2f56-7c9a-7abc-8def-0123456789ac";
@@ -43,8 +47,17 @@ const connection: MailboxConnection = {
 
 describe("MailRoute", () => {
   beforeEach(() => {
+    HTMLElement.prototype.hasPointerCapture = vi.fn(() => false);
+    HTMLElement.prototype.setPointerCapture = vi.fn();
+    HTMLElement.prototype.releasePointerCapture = vi.fn();
+    HTMLElement.prototype.scrollIntoView = vi.fn();
     apiRequest.mockReset();
     navigate.mockReset();
+    downloadAttachment.mockReset();
+    downloadAttachment.mockResolvedValue({
+      ok: true,
+      data: { saved: true },
+    });
     apiRequest.mockImplementation((path: string, options?: unknown) => {
       if (path === "/v1/mail/connections") {
         return Promise.resolve({ ok: true, data: { items: [connection] } });
@@ -102,7 +115,14 @@ describe("MailRoute", () => {
                 encrypted: false,
                 previewUnavailable: false,
                 occurredAt: "2026-08-25T09:30:00.000Z",
-                attachments: [],
+                attachments: [
+                  {
+                    attachmentIndex: 0,
+                    filename: "report.txt",
+                    contentType: "text/plain",
+                    sizeBytes: 13,
+                  },
+                ],
               },
             ],
           },
@@ -120,6 +140,9 @@ describe("MailRoute", () => {
                 participants: ["security@vendor.example"],
                 occurredAt: "2026-08-25T09:30:00.000Z",
                 unread: false,
+                starred: false,
+                important: false,
+                category: "PRIMARY",
                 tracking: null,
               },
             ],
@@ -179,6 +202,53 @@ describe("MailRoute", () => {
             expectedRevision: 4,
           },
         },
+      ),
+    );
+  });
+
+  it("saves an attachment through the bounded desktop bridge", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MailRoute
+          search={{ folder: "SENT", connectionId, threadId, submissionId }}
+        />
+      </QueryClientProvider>,
+    );
+
+    await userEvent.click(
+      await screen.findByRole("button", { name: /report\.txt/i }),
+    );
+
+    expect(downloadAttachment).toHaveBeenCalledWith(
+      connectionId,
+      "message-1",
+      0,
+    );
+  });
+
+  it("applies visible read-state filters to the mailbox request", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MailRoute search={{ folder: "INBOX", connectionId }} />
+      </QueryClientProvider>,
+    );
+
+    await screen.findByText("Security issue in account recovery");
+    await userEvent.click(screen.getByLabelText("Message state"));
+    await userEvent.click(
+      await screen.findByRole("option", { name: "Unread" }),
+    );
+
+    await waitFor(() =>
+      expect(apiRequest).toHaveBeenCalledWith(
+        expect.stringContaining("readFilter=UNREAD"),
+        undefined,
       ),
     );
   });

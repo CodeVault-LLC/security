@@ -133,7 +133,7 @@ export function CaseDetailRoute({
         {canEdit ? (
           <Button
             size="sm"
-            variant="primary"
+            variant="secondary"
             onClick={() => setCreateFindingOpen(true)}
           >
             <Plus aria-hidden className="size-3" />

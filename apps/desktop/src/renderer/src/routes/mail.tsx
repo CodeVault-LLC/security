@@ -3,6 +3,7 @@ import {
   ArrowLeft,
   ChevronLeft,
   ChevronRight,
+  Download,
   Inbox,
   LockKeyhole,
   Paperclip,
@@ -10,12 +11,16 @@ import {
   Search,
   Send,
   ShieldCheck,
+  Star,
 } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import type {
   MailboxConnection,
   MailboxFolder,
+  MailCategory,
+  MailReadFilter,
+  MailThreadAttachmentPreview,
   GmailThreadPreview,
   MailThreadDetail,
   MailThreadPage,
@@ -36,7 +41,9 @@ import {
 import { PageBody, PageHeader } from "../components/app-shell.js";
 import { QueryBoundary, QueryError } from "../components/query-boundary.js";
 import { queryKeys, useApiMutation, useApiQuery } from "../lib/api.js";
+import { bridge } from "../lib/bridge.js";
 import { formatDateTime } from "../lib/dates.js";
+import { formatBytesApprox, humanise } from "../lib/format.js";
 
 const FOLDERS: Array<{
   id: MailboxFolder;
@@ -69,6 +76,8 @@ export function MailRoute({
   const navigate = useNavigate();
   const [mailQuery, setMailQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
+  const [readFilter, setReadFilter] = useState<MailReadFilter>("ALL");
+  const [category, setCategory] = useState<MailCategory | "ALL">("ALL");
   const [pageToken, setPageToken] = useState<string | undefined>();
   const [previousTokens, setPreviousTokens] = useState<
     Array<string | undefined>
@@ -98,16 +107,23 @@ export function MailRoute({
     "";
   const listParameters = new URLSearchParams({ folder: search.folder });
   if (submittedQuery !== "") listParameters.set("query", submittedQuery);
+  if (readFilter !== "ALL") listParameters.set("readFilter", readFilter);
+  if (category !== "ALL") listParameters.set("category", category);
   if (pageToken !== undefined) listParameters.set("pageToken", pageToken);
   const threads = useApiQuery<MailThreadPage>(
     queryKeys.mailboxThreads(
       selectedConnectionId,
       search.folder,
       submittedQuery,
+      readFilter,
+      category,
       pageToken,
     ),
     `/v1/mail/connections/${selectedConnectionId}/threads?${listParameters.toString()}`,
-    { enabled: selectedConnectionId !== "" },
+    {
+      enabled: selectedConnectionId !== "",
+      placeholderData: (previous) => previous,
+    },
   );
   const detail = useApiQuery<MailThreadDetail>(
     queryKeys.mailboxThread(selectedConnectionId, search.threadId ?? ""),
@@ -211,7 +227,7 @@ export function MailRoute({
                 />
               </div>
             ) : null}
-            <Button asChild size="sm" variant="secondary">
+            <Button asChild variant="secondary">
               <Link to="/settings/mail">Mail settings</Link>
             </Button>
           </>
@@ -233,7 +249,7 @@ export function MailRoute({
                 />
               </div>
             ) : (
-              <div className="grid h-full min-h-0 grid-cols-[144px_340px_minmax(0,1fr)] max-lg:grid-cols-[280px_minmax(0,1fr)] max-md:block">
+              <div className="grid h-full min-h-0 grid-cols-[156px_360px_minmax(0,1fr)] max-lg:grid-cols-[300px_minmax(0,1fr)] max-md:block">
                 <nav
                   aria-label="Mail folders"
                   className="border-r border-border bg-surface-raised/50 p-2 max-lg:col-span-2 max-lg:flex max-lg:border-b max-lg:border-r-0 max-md:flex"
@@ -270,7 +286,7 @@ export function MailRoute({
                   )}
                 >
                   <form
-                    className="border-b border-border p-2.5"
+                    className="space-y-2 border-b border-border p-2.5"
                     onSubmit={(event) => {
                       event.preventDefault();
                       resetPagination();
@@ -297,46 +313,109 @@ export function MailRoute({
                         />
                       ) : null}
                     </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Select
+                        aria-label="Message state"
+                        value={readFilter}
+                        options={[
+                          { value: "ALL", label: "All mail" },
+                          { value: "UNREAD", label: "Unread" },
+                          { value: "READ", label: "Read" },
+                          { value: "STARRED", label: "Starred" },
+                          { value: "IMPORTANT", label: "Important" },
+                        ]}
+                        onValueChange={(value) => {
+                          resetPagination();
+                          setReadFilter(value as MailReadFilter);
+                          updateSearch({ threadId: undefined });
+                        }}
+                      />
+                      <Select
+                        aria-label="Message category"
+                        value={category}
+                        options={[
+                          { value: "ALL", label: "All categories" },
+                          { value: "PRIMARY", label: "Primary" },
+                          { value: "UPDATES", label: "Updates" },
+                          { value: "FORUMS", label: "Forums" },
+                          { value: "SOCIAL", label: "Social" },
+                          { value: "PROMOTIONS", label: "Promotions" },
+                        ]}
+                        onValueChange={(value) => {
+                          resetPagination();
+                          setCategory(value as MailCategory | "ALL");
+                          updateSearch({ threadId: undefined });
+                        }}
+                      />
+                    </div>
                   </form>
-                  <QueryBoundary
-                    query={threads}
-                    loadingLabel="Loading threads…"
-                    className="m-4"
-                  >
-                    {(page) =>
-                      page.items.length === 0 ? (
-                        <div className="m-4">
-                          <EmptyState
-                            title={
-                              submittedQuery === ""
-                                ? `No ${search.folder.toLowerCase()} threads`
-                                : "No matching threads"
-                            }
-                            description={
-                              search.folder === "TRACKED"
-                                ? "Track a Gmail conversation to make it part of a disclosure case."
-                                : "Try another Gmail folder or a broader search."
-                            }
-                          />
-                        </div>
-                      ) : (
-                        <ul className="min-h-0 flex-1 overflow-y-auto">
-                          {page.items.map((thread) => (
-                            <ThreadRow
-                              key={thread.providerThreadId}
-                              thread={thread}
-                              selected={
-                                thread.providerThreadId === search.threadId
+                  {threads.isFetching && threads.data !== undefined ? (
+                    <div
+                      role="progressbar"
+                      aria-label="Refreshing conversations"
+                      className="h-0.5 overflow-hidden bg-accent/15"
+                    >
+                      <span className="block h-full w-1/3 animate-[mail-progress_1s_ease-in-out_infinite] bg-accent motion-reduce:animate-none" />
+                    </div>
+                  ) : null}
+                  {threads.data === undefined && threads.error === null ? (
+                    <MailThreadListSkeleton />
+                  ) : (
+                    <QueryBoundary
+                      query={threads}
+                      loadingLabel="Loading threads…"
+                      className="m-4"
+                    >
+                      {(page) =>
+                        page.items.length === 0 ? (
+                          <div className="m-4">
+                            <EmptyState
+                              title={
+                                submittedQuery === ""
+                                  ? `No ${search.folder.toLowerCase()} threads`
+                                  : "No matching threads"
                               }
-                              onSelect={() =>
-                                selectThread(thread.providerThreadId)
+                              description={
+                                search.folder === "TRACKED"
+                                  ? "Track a Gmail conversation to make it part of a disclosure case."
+                                  : "Try another Gmail folder or a broader search."
                               }
                             />
-                          ))}
-                        </ul>
-                      )
-                    }
-                  </QueryBoundary>
+                          </div>
+                        ) : (
+                          <div className="flex min-h-0 flex-1 flex-col">
+                            <div className="flex h-8 shrink-0 items-center justify-between border-b border-border px-3 text-[10px] text-text-muted">
+                              <span>
+                                {page.items.length} conversation
+                                {page.items.length === 1 ? "" : "s"}
+                              </span>
+                              <span>
+                                {
+                                  page.items.filter((item) => item.unread)
+                                    .length
+                                }{" "}
+                                unread
+                              </span>
+                            </div>
+                            <ul className="min-h-0 flex-1 overflow-y-auto">
+                              {page.items.map((thread) => (
+                                <ThreadRow
+                                  key={thread.providerThreadId}
+                                  thread={thread}
+                                  selected={
+                                    thread.providerThreadId === search.threadId
+                                  }
+                                  onSelect={() =>
+                                    selectThread(thread.providerThreadId)
+                                  }
+                                />
+                              ))}
+                            </ul>
+                          </div>
+                        )
+                      }
+                    </QueryBoundary>
+                  )}
                   {threads.data === undefined ||
                   (threads.data.nextPageToken === null &&
                     previousTokens.length === 0) ? null : (
@@ -396,25 +475,29 @@ export function MailRoute({
                       >
                         <ArrowLeft aria-hidden /> Back to threads
                       </Button>
-                      <QueryBoundary
-                        query={detail}
-                        loadingLabel="Opening conversation…"
-                      >
-                        {(thread) => (
-                          <ThreadReader
-                            thread={thread}
-                            targets={targets}
-                            trackingTargetId={resolvedTrackingTargetId}
-                            setTrackingTargetId={setTrackingTargetId}
-                            track={track}
-                            trackingPreview={trackingPreview}
-                            canTrack={
-                              selectedTarget !== undefined &&
-                              trackingPreview.data !== undefined
-                            }
-                          />
-                        )}
-                      </QueryBoundary>
+                      {detail.data === undefined && detail.error === null ? (
+                        <MailReaderSkeleton />
+                      ) : (
+                        <QueryBoundary
+                          query={detail}
+                          loadingLabel="Opening conversation…"
+                        >
+                          {(thread) => (
+                            <ThreadReader
+                              thread={thread}
+                              targets={targets}
+                              trackingTargetId={resolvedTrackingTargetId}
+                              setTrackingTargetId={setTrackingTargetId}
+                              track={track}
+                              trackingPreview={trackingPreview}
+                              canTrack={
+                                selectedTarget !== undefined &&
+                                trackingPreview.data !== undefined
+                              }
+                            />
+                          )}
+                        </QueryBoundary>
+                      )}
                     </div>
                   )}
                 </main>
@@ -476,9 +559,115 @@ function ThreadRow({
               {thread.tracking.caseRef}
             </span>
           )}
+          {thread.starred ? (
+            <Star
+              aria-label="Starred"
+              className="size-3 fill-warning text-warning"
+            />
+          ) : null}
+          {thread.important ? (
+            <span className="font-medium text-warning">Important</span>
+          ) : null}
+          <span className="ml-auto">{humanise(thread.category)}</span>
         </div>
       </button>
     </li>
+  );
+}
+
+function MailThreadListSkeleton(): React.JSX.Element {
+  return (
+    <div role="status" aria-label="Loading conversations" className="flex-1">
+      <span className="sr-only">Loading conversations…</span>
+      {["one", "two", "three", "four", "five", "six"].map((key) => (
+        <div
+          key={key}
+          aria-hidden
+          className="space-y-2 border-b border-border px-3 py-3"
+        >
+          <div className="h-3 w-2/3 animate-pulse rounded bg-surface-raised motion-reduce:animate-none" />
+          <div className="h-3 w-5/6 animate-pulse rounded bg-surface-raised motion-reduce:animate-none" />
+          <div className="h-2.5 w-1/3 animate-pulse rounded bg-surface-raised motion-reduce:animate-none" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MailReaderSkeleton(): React.JSX.Element {
+  return (
+    <div role="status" aria-label="Opening conversation" className="space-y-4">
+      <span className="sr-only">Opening conversation…</span>
+      <div
+        aria-hidden
+        className="h-5 w-2/3 animate-pulse rounded bg-surface motion-reduce:animate-none"
+      />
+      {["first", "second"].map((key) => (
+        <div
+          key={key}
+          aria-hidden
+          className="space-y-3 rounded-(--cv-radius-lg) border border-border bg-surface p-4"
+        >
+          <div className="h-3 w-1/4 animate-pulse rounded bg-surface-raised motion-reduce:animate-none" />
+          <div className="h-3 w-1/2 animate-pulse rounded bg-surface-raised motion-reduce:animate-none" />
+          <div className="h-20 animate-pulse rounded bg-surface-raised motion-reduce:animate-none" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AttachmentDownloadButton({
+  connectionId,
+  messageId,
+  attachment,
+}: {
+  connectionId: string;
+  messageId: string;
+  attachment: MailThreadAttachmentPreview;
+}): React.JSX.Element {
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const download = async (): Promise<void> => {
+    setSaving(true);
+    setError(null);
+    try {
+      const outcome = await bridge().mail.downloadAttachment(
+        connectionId,
+        messageId,
+        attachment.attachmentIndex,
+      );
+      if (!outcome.ok) setError(outcome.message);
+    } catch {
+      setError("The attachment could not be saved.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <Button
+        size="sm"
+        variant="secondary"
+        loading={saving}
+        title={`Save ${attachment.filename}`}
+        onClick={() => void download()}
+      >
+        <Paperclip aria-hidden />
+        <span className="max-w-64 truncate">{attachment.filename}</span>
+        <span className="text-text-muted">
+          {formatBytesApprox(attachment.sizeBytes)}
+        </span>
+        <Download aria-hidden />
+      </Button>
+      {error === null ? null : (
+        <p role="alert" className="mt-1 max-w-64 text-[10px] text-danger">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -582,13 +771,12 @@ function ThreadReader({
               {message.attachments.length === 0 ? null : (
                 <ul className="mt-3 flex flex-wrap gap-2 border-t border-border pt-3">
                   {message.attachments.map((attachment) => (
-                    <li
-                      key={`${attachment.filename}-${attachment.sizeBytes}`}
-                      className="inline-flex items-center gap-1.5 rounded-(--cv-radius) bg-surface-raised px-2 py-1.5 text-[10px] text-text-muted"
-                    >
-                      <Paperclip aria-hidden className="size-3" />
-                      {attachment.filename} ·{" "}
-                      {attachment.sizeBytes.toLocaleString()} B
+                    <li key={attachment.attachmentIndex}>
+                      <AttachmentDownloadButton
+                        connectionId={thread.mailboxConnectionId}
+                        messageId={message.providerMessageId}
+                        attachment={attachment}
+                      />
                     </li>
                   ))}
                 </ul>

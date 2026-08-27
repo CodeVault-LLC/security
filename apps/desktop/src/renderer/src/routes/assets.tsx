@@ -488,7 +488,7 @@ export function AssetDetailRoute({
               Edit
             </Button>
             <Button
-              variant="primary"
+              variant="secondary"
               size="sm"
               onClick={() => setCreateFindingOpen(true)}
             >

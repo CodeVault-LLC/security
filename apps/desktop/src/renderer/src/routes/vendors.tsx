@@ -247,7 +247,7 @@ export function VendorDetailRoute({
         ) : null}
         {editable ? (
           <Button
-            variant="primary"
+            variant="secondary"
             size="sm"
             onClick={() => {
               setEditingRoute(undefined);

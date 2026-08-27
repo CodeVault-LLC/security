@@ -34,6 +34,7 @@ import type {
   CaseArchiveSnapshot,
   PrepareCaseArchiveImportResult,
   ImportCaseArchiveResult,
+  MailAttachmentDownload,
 } from "@codevault/contracts";
 import {
   previewFolder,
@@ -1083,6 +1084,60 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
       } finally {
         await rm(temporaryDirectory, { recursive: true, force: true });
       }
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
+  handle(IPC_CHANNELS.mailDownloadAttachment, async (payload) => {
+    if (
+      typeof payload !== "object" ||
+      payload === null ||
+      !("connectionId" in payload) ||
+      typeof payload.connectionId !== "string" ||
+      !/^[0-9a-f-]{36}$/iu.test(payload.connectionId) ||
+      !("messageId" in payload) ||
+      typeof payload.messageId !== "string" ||
+      !/^[A-Za-z0-9_-]{1,500}$/.test(payload.messageId) ||
+      !("attachmentIndex" in payload) ||
+      typeof payload.attachmentIndex !== "number" ||
+      !Number.isInteger(payload.attachmentIndex) ||
+      Number(payload.attachmentIndex) < 0 ||
+      Number(payload.attachmentIndex) > 99
+    ) {
+      return failure(new Error("invalid mail attachment download request"));
+    }
+
+    const window = dependencies.window();
+    if (window === null) return failure(new Error("window unavailable"));
+
+    try {
+      const attachment = await apiClient.request<MailAttachmentDownload>(
+        `/v1/mail/connections/${payload.connectionId}/messages/${payload.messageId}/attachments/${payload.attachmentIndex}`,
+      );
+      const safeFilename = attachment.filename
+        .replaceAll("\\", "/")
+        .split("/")
+        .at(-1)
+        // eslint-disable-next-line no-control-regex -- MIME filenames are untrusted input
+        ?.replace(/[\u0000-\u001f\u007f]/g, "_");
+      if (safeFilename === undefined || safeFilename.length === 0) {
+        throw new Error("mail attachment has an invalid filename");
+      }
+      const bytes = Buffer.from(attachment.base64, "base64");
+      if (bytes.byteLength !== attachment.sizeBytes) {
+        throw new Error("mail attachment failed size verification");
+      }
+      const destination = await dialog.showSaveDialog(window, {
+        title: "Save mail attachment",
+        defaultPath: safeFilename,
+        properties: ["createDirectory", "showOverwriteConfirmation"],
+      });
+      if (destination.canceled || destination.filePath === undefined) {
+        return { ok: true as const, data: { saved: false } };
+      }
+      await writeFile(destination.filePath, bytes, { mode: 0o600 });
+      return { ok: true as const, data: { saved: true } };
     } catch (error: unknown) {
       return failure(error);
     }

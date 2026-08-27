@@ -1,12 +1,15 @@
 import { and, desc, eq, gt, isNull } from "drizzle-orm";
 import { sql } from "drizzle-orm";
-import { Type } from "@sinclair/typebox";
+import { Type, type Static } from "@sinclair/typebox";
 import { createHmac } from "node:crypto";
 
 import {
   ErrorResponse,
   GmailAuthorization,
   GmailThreadPreview,
+  MailAttachmentDownload,
+  MailCategory,
+  MailReadFilter,
   MailThreadDetail,
   MailThreadPage,
   MailTrackingTargets,
@@ -51,6 +54,15 @@ const MailThreadParam = Type.Object({
     pattern: "^[A-Za-z0-9_-]+$",
   }),
 });
+const MailAttachmentParam = Type.Object({
+  id: Uuid,
+  messageId: Type.String({
+    minLength: 1,
+    maxLength: 500,
+    pattern: "^[A-Za-z0-9_-]+$",
+  }),
+  attachmentIndex: Type.Integer({ minimum: 0, maximum: 99 }),
+});
 const MailThreadListQuery = Type.Object({
   folder: Type.Union([
     Type.Literal("INBOX"),
@@ -58,6 +70,8 @@ const MailThreadListQuery = Type.Object({
     Type.Literal("TRACKED"),
   ]),
   query: Type.Optional(Type.String({ maxLength: 300 })),
+  readFilter: Type.Optional(MailReadFilter),
+  category: Type.Optional(MailCategory),
   pageToken: Type.Optional(Type.String({ minLength: 1, maxLength: 2_000 })),
 });
 const MailTrackingPreviewQuery = Type.Object({ submissionId: Uuid });
@@ -171,6 +185,56 @@ function mailboxFailure(error: unknown): never {
     );
   }
   throw error;
+}
+
+function categoryFromLabels(labelIds: string[]) {
+  if (labelIds.includes("CATEGORY_UPDATES")) return "UPDATES" as const;
+  if (labelIds.includes("CATEGORY_FORUMS")) return "FORUMS" as const;
+  if (labelIds.includes("CATEGORY_SOCIAL")) return "SOCIAL" as const;
+  if (labelIds.includes("CATEGORY_PROMOTIONS")) return "PROMOTIONS" as const;
+  return "PRIMARY" as const;
+}
+
+function matchesMailFilters(
+  labelIds: string[],
+  readFilter: Static<typeof MailReadFilter> | undefined,
+  category: Static<typeof MailCategory> | undefined,
+): boolean {
+  const readMatches =
+    readFilter === undefined ||
+    readFilter === "ALL" ||
+    (readFilter === "UNREAD" && labelIds.includes("UNREAD")) ||
+    (readFilter === "READ" && !labelIds.includes("UNREAD")) ||
+    (readFilter === "STARRED" && labelIds.includes("STARRED")) ||
+    (readFilter === "IMPORTANT" && labelIds.includes("IMPORTANT"));
+  return (
+    readMatches &&
+    (category === undefined || categoryFromLabels(labelIds) === category)
+  );
+}
+
+function providerSearchQuery(
+  query: string | undefined,
+  readFilter: Static<typeof MailReadFilter> | undefined,
+  category: Static<typeof MailCategory> | undefined,
+): string | undefined {
+  const parts = [];
+  if (query?.trim()) parts.push(query.trim());
+  if (readFilter === "UNREAD") parts.push("is:unread");
+  if (readFilter === "READ") parts.push("is:read");
+  if (readFilter === "STARRED") parts.push("is:starred");
+  if (readFilter === "IMPORTANT") parts.push("is:important");
+  if (category !== undefined) parts.push(`category:${category.toLowerCase()}`);
+  return parts.length === 0 ? undefined : parts.join(" ");
+}
+
+function threadState(labelIds: string[]) {
+  return {
+    unread: labelIds.includes("UNREAD"),
+    starred: labelIds.includes("STARRED"),
+    important: labelIds.includes("IMPORTANT"),
+    category: categoryFromLabels(labelIds),
+  };
 }
 
 async function trackingFor(
@@ -367,6 +431,15 @@ export async function registerMailRoutes(app: AppInstance): Promise<void> {
               accessToken,
               providerMessageId,
             );
+            if (
+              !matchesMailFilters(
+                metadata.labelIds,
+                request.query.readFilter,
+                request.query.category,
+              )
+            ) {
+              continue;
+            }
             const preview = previewGmailMessage(
               metadata,
               connection.emailAddress,
@@ -394,7 +467,7 @@ export async function registerMailRoutes(app: AppInstance): Promise<void> {
               subject: preview.subject,
               participants,
               occurredAt: preview.occurredAt,
-              unread: metadata.labelIds.includes("UNREAD"),
+              ...threadState(metadata.labelIds),
               tracking,
             });
           }
@@ -404,12 +477,15 @@ export async function registerMailRoutes(app: AppInstance): Promise<void> {
           };
         }
 
+        const providerQuery = providerSearchQuery(
+          request.query.query,
+          request.query.readFilter,
+          request.query.category,
+        );
         const page = await provider.listMessages(accessToken, {
           labelId: request.query.folder,
           maxResults: 30,
-          ...(request.query.query?.trim()
-            ? { query: request.query.query.trim() }
-            : {}),
+          ...(providerQuery === undefined ? {} : { query: providerQuery }),
           ...(request.query.pageToken === undefined
             ? {}
             : { pageToken: request.query.pageToken }),
@@ -441,7 +517,7 @@ export async function registerMailRoutes(app: AppInstance): Promise<void> {
                 )
                 .slice(0, 100),
               occurredAt: preview.occurredAt,
-              unread: metadata.labelIds.includes("UNREAD"),
+              ...threadState(metadata.labelIds),
               tracking: await trackingFor(
                 app,
                 user,
@@ -455,6 +531,50 @@ export async function registerMailRoutes(app: AppInstance): Promise<void> {
           (right.occurredAt ?? "").localeCompare(left.occurredAt ?? ""),
         );
         return { items, nextPageToken: page.nextPageToken };
+      } catch (error: unknown) {
+        mailboxFailure(error);
+      }
+    },
+  );
+
+  app.get(
+    "/v1/mail/connections/:id/messages/:messageId/attachments/:attachmentIndex",
+    {
+      schema: {
+        params: MailAttachmentParam,
+        response: {
+          200: MailAttachmentDownload,
+          404: ErrorResponse,
+          503: ErrorResponse,
+        },
+      },
+      config: { rateLimit: { max: 30, timeWindow: "1 minute" } },
+    },
+    async (request) => {
+      const user = actingUser(request);
+      const { provider, accessToken } = await mailboxAccess(
+        app,
+        user.id,
+        request.params.id,
+      );
+      try {
+        const raw = await provider.getMessageRaw(
+          accessToken,
+          request.params.messageId,
+        );
+        const parsed = await parseInboundMessage(raw, {
+          providerMessageId: request.params.messageId,
+        });
+        const attachment = parsed.attachments[request.params.attachmentIndex];
+        if (attachment === undefined) {
+          throw new DomainError("NOT_FOUND", "Mail attachment was not found.");
+        }
+        return {
+          filename: attachment.filename,
+          contentType: attachment.contentType,
+          sizeBytes: attachment.content.byteLength,
+          base64: Buffer.from(attachment.content).toString("base64"),
+        };
       } catch (error: unknown) {
         mailboxFailure(error);
       }
@@ -568,7 +688,8 @@ export async function registerMailRoutes(app: AppInstance): Promise<void> {
               encrypted: parsed.encrypted,
               previewUnavailable: false,
               occurredAt: parsed.receivedAt,
-              attachments: parsed.attachments.map((attachment) => ({
+              attachments: parsed.attachments.map((attachment, index) => ({
+                attachmentIndex: index,
                 filename: attachment.filename,
                 contentType: attachment.contentType,
                 sizeBytes: attachment.content.byteLength,

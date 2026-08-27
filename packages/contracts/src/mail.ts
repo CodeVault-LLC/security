@@ -89,10 +89,32 @@ export type MailProviderMessageMetadata = Static<
 >;
 
 export const MAILBOX_FOLDERS = ["INBOX", "SENT", "TRACKED"] as const;
+export const MAIL_READ_FILTERS = [
+  "ALL",
+  "UNREAD",
+  "READ",
+  "STARRED",
+  "IMPORTANT",
+] as const;
+export const MAIL_CATEGORIES = [
+  "PRIMARY",
+  "UPDATES",
+  "FORUMS",
+  "SOCIAL",
+  "PROMOTIONS",
+] as const;
 export const MailboxFolder = Type.Union(
   MAILBOX_FOLDERS.map((value) => Type.Literal(value)),
 );
 export type MailboxFolder = Static<typeof MailboxFolder>;
+export const MailReadFilter = Type.Union(
+  MAIL_READ_FILTERS.map((value) => Type.Literal(value)),
+);
+export type MailReadFilter = Static<typeof MailReadFilter>;
+export const MailCategory = Type.Union(
+  MAIL_CATEGORIES.map((value) => Type.Literal(value)),
+);
+export type MailCategory = Static<typeof MailCategory>;
 
 export const MailThreadTracking = Type.Object(
   {
@@ -116,6 +138,9 @@ export const MailThreadSummary = Type.Object(
     }),
     occurredAt: Type.Union([Timestamp, Type.Null()]),
     unread: Type.Boolean(),
+    starred: Type.Boolean(),
+    important: Type.Boolean(),
+    category: MailCategory,
     tracking: Type.Union([MailThreadTracking, Type.Null()]),
   },
   { additionalProperties: false },
@@ -136,12 +161,27 @@ export type MailThreadPage = Static<typeof MailThreadPage>;
 
 export const MailThreadAttachmentPreview = Type.Object(
   {
+    attachmentIndex: Type.Integer({ minimum: 0, maximum: 99 }),
     filename: Type.String({ minLength: 1, maxLength: 200 }),
     contentType: Type.String({ minLength: 1, maxLength: 200 }),
     sizeBytes: Type.Integer({ minimum: 0 }),
   },
   { additionalProperties: false },
 );
+export type MailThreadAttachmentPreview = Static<
+  typeof MailThreadAttachmentPreview
+>;
+
+export const MailAttachmentDownload = Type.Object(
+  {
+    filename: Type.String({ minLength: 1, maxLength: 200 }),
+    contentType: Type.String({ minLength: 1, maxLength: 200 }),
+    sizeBytes: Type.Integer({ minimum: 0, maximum: 36_700_160 }),
+    base64: Type.String({ maxLength: 48_933_548 }),
+  },
+  { additionalProperties: false },
+);
+export type MailAttachmentDownload = Static<typeof MailAttachmentDownload>;
 
 export const MailThreadMessagePreview = Type.Object(
   {

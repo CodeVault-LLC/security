@@ -143,8 +143,19 @@ export const queryKeys = {
     connectionId: string,
     folder: string,
     query: string,
+    readFilter: string,
+    category: string,
     pageToken?: string,
-  ) => ["mailbox-threads", connectionId, folder, query, pageToken] as const,
+  ) =>
+    [
+      "mailbox-threads",
+      connectionId,
+      folder,
+      query,
+      readFilter,
+      category,
+      pageToken,
+    ] as const,
   mailboxThread: (connectionId: string, threadId: string) =>
     ["mailbox-thread", connectionId, threadId] as const,
   mailTrackingPreview: (

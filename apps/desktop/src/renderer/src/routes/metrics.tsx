@@ -22,6 +22,7 @@ import {
 } from "@codevault/ui";
 
 import { PageBody, PageHeader } from "../components/app-shell.js";
+import { buildOperationalSignals } from "../features/metrics/operational-signals.js";
 import { QueryBoundary } from "../components/query-boundary.js";
 import { queryKeys, useApiQuery } from "../lib/api.js";
 import { humanise } from "../lib/format.js";
@@ -143,6 +144,35 @@ export function MetricsRoute(): React.JSX.Element {
                   }
                 />
               </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Operational signals</CardTitle>
+                  <span className="text-[11px] text-text-muted">
+                    derived from visible records
+                  </span>
+                </CardHeader>
+                <ul className="grid grid-cols-1 divide-y divide-border md:grid-cols-2 md:divide-x md:divide-y-0 xl:grid-cols-3">
+                  {buildOperationalSignals(data).map((signal) => (
+                    <li
+                      key={signal.label}
+                      className="min-w-0 border-b border-border px-4 py-3 last:border-b-0 md:[&:nth-child(n+3)]:border-t xl:[&:nth-child(n+3)]:border-t-0 xl:[&:nth-child(n+4)]:border-t"
+                    >
+                      <div className="flex items-baseline justify-between gap-3">
+                        <span className="text-[11px] font-medium text-text-muted">
+                          {signal.label}
+                        </span>
+                        <span className="font-mono text-[18px] font-semibold tabular-nums text-text">
+                          {signal.value}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-[10px] leading-4 text-text-muted">
+                        {signal.detail}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
 
               <Card>
                 <CardHeader>
