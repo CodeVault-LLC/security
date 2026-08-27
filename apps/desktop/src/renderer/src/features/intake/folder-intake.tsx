@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
 
 import type {
   CreateFolderIntakeRequest,
@@ -24,6 +24,17 @@ interface StoredTransfer {
   uploaded: Record<string, string>;
 }
 
+const EXPIRED_SOURCE_ACCESS_MESSAGE =
+  "This preview lost access to its local source files after the desktop app restarted or the selection expired. Cancel the preview, then choose or drop the files again.";
+
+const FINDING_FILE_EXTENSIONS = [
+  ".md",
+  ".markdown",
+  ".json",
+  ".csv",
+  ".sarif",
+] as const;
+
 export function FolderIntake({
   caseId,
 }: {
@@ -45,7 +56,19 @@ export function FolderIntake({
   const [uploaded, setUploaded] = useState<Record<string, string>>(
     restored?.uploaded ?? {},
   );
+  const [sourceAccess, setSourceAccess] = useState<
+    "READY" | "CHECKING" | "EXPIRED"
+  >(
+    restored === null ||
+      restored.preview.selections.every(
+        (selection) => restored.uploaded[selection.relativePath] !== undefined,
+      )
+      ? "READY"
+      : "CHECKING",
+  );
   const [selecting, setSelecting] = useState(false);
+  const [previewingFiles, setPreviewingFiles] = useState(false);
+  const [draggingFiles, setDraggingFiles] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
@@ -71,6 +94,57 @@ export function FolderIntake({
     );
   }, [preview, selectedIds, storageKey, uploaded]);
 
+  const restoredPendingSelectionIds = useMemo(() => {
+    if (restored === null || context.data === undefined) return null;
+    const storedDigests = new Set(
+      context.data.storedArtifacts.map((artifact) => artifact.sha256),
+    );
+    return restored.preview.selections
+      .filter(
+        (selection) =>
+          restored.uploaded[selection.relativePath] === undefined &&
+          !storedDigests.has(selection.sha256),
+      )
+      .map((selection) => selection.selectionId);
+  }, [context.data, restored]);
+
+  useEffect(() => {
+    if (
+      restoredPendingSelectionIds === null ||
+      restoredPendingSelectionIds.length === 0
+    )
+      return;
+
+    const validateSelections = bridge().uploads.validateSelections;
+    const validation =
+      typeof validateSelections === "function"
+        ? validateSelections(restoredPendingSelectionIds)
+        : Promise.resolve({
+            ok: true as const,
+            data: { available: false },
+          });
+
+    let active = true;
+    void validation
+      .then((outcome) => {
+        if (!active) return;
+        if (outcome.ok && outcome.data.available) {
+          setSourceAccess("READY");
+          return;
+        }
+        setSourceAccess("EXPIRED");
+        setLocalError(EXPIRED_SOURCE_ACCESS_MESSAGE);
+      })
+      .catch(() => {
+        if (!active) return;
+        setSourceAccess("EXPIRED");
+        setLocalError(EXPIRED_SOURCE_ACCESS_MESSAGE);
+      });
+    return () => {
+      active = false;
+    };
+  }, [restoredPendingSelectionIds]);
+
   const selectedCandidates = useMemo(
     () =>
       preview?.candidates.filter((candidate) =>
@@ -79,6 +153,45 @@ export function FolderIntake({
     [preview, selectedIds],
   );
   const uploadedCount = Object.keys(uploaded).length;
+  const storedArtifacts = useMemo(
+    () => context.data?.storedArtifacts ?? [],
+    [context.data],
+  );
+  const linkedArtifacts = useMemo(() => {
+    if (preview === null) return {};
+    const byDigest = new Map(
+      storedArtifacts.map((artifact) => [artifact.sha256, artifact.id]),
+    );
+    return Object.fromEntries(
+      preview.files.flatMap((file) => {
+        const artifactId = byDigest.get(file.sha256);
+        return artifactId === undefined
+          ? []
+          : [[file.relativePath, artifactId] as const];
+      }),
+    );
+  }, [preview, storedArtifacts]);
+  const linkedCount = Object.keys(linkedArtifacts).length;
+  const effectiveSourceAccess =
+    restoredPendingSelectionIds?.length === 0 ? "READY" : sourceAccess;
+  const visibleLocalError =
+    effectiveSourceAccess === "READY" &&
+    localError === EXPIRED_SOURCE_ACCESS_MESSAGE
+      ? null
+      : localError;
+
+  const applyPreview = (nextPreview: FolderIntakePreviewResult): void => {
+    setPreview(nextPreview);
+    setSelectedIds(
+      new Set(
+        nextPreview.candidates
+          .filter((candidate) => candidate.status === "READY")
+          .map((candidate) => candidate.clientId),
+      ),
+    );
+    setUploaded({});
+    setSourceAccess("READY");
+  };
 
   const chooseFolder = async (): Promise<void> => {
     if (context.data === undefined) return;
@@ -92,29 +205,85 @@ export function FolderIntake({
         return;
       }
       if (outcome.data === null) return;
-      setPreview(outcome.data);
-      setSelectedIds(
-        new Set(
-          outcome.data.candidates
-            .filter((candidate) => candidate.status === "READY")
-            .map((candidate) => candidate.clientId),
-        ),
-      );
-      setUploaded({});
+      applyPreview(outcome.data);
     } finally {
       setSelecting(false);
     }
   };
 
+  const previewDroppedFiles = async (files: File[]): Promise<void> => {
+    if (previewingFiles || selecting) return;
+    if (context.data === undefined) {
+      setLocalError(
+        "Finding file preview is unavailable until the case finishes loading.",
+      );
+      return;
+    }
+    if (files.length === 0) {
+      setLocalError("Drop at least one finding file to preview it.");
+      return;
+    }
+    if (files.length > 500) {
+      setLocalError("Drop at most 500 finding files at once.");
+      return;
+    }
+    const unsupported = files.find(
+      (file) =>
+        !FINDING_FILE_EXTENSIONS.some((extension) =>
+          file.name.toLocaleLowerCase().endsWith(extension),
+        ),
+    );
+    if (unsupported !== undefined) {
+      setLocalError(
+        `${unsupported.name} is not a supported finding file. Drop Markdown, JSON, CSV, or SARIF files.`,
+      );
+      return;
+    }
+
+    setPreviewingFiles(true);
+    setLocalError(null);
+    setSuccess(null);
+    try {
+      const outcome = await bridge().intake.previewFiles(files, context.data);
+      if (!outcome.ok) {
+        setLocalError(
+          `${outcome.message} Choose or drop the files again to retry.`,
+        );
+        return;
+      }
+      applyPreview(outcome.data);
+    } catch (error: unknown) {
+      setLocalError(
+        `${error instanceof Error ? error.message : "The finding files could not be previewed."} Choose or drop the files again to retry.`,
+      );
+    } finally {
+      setPreviewingFiles(false);
+    }
+  };
+
+  const dropFiles = (event: DragEvent<HTMLElement>): void => {
+    event.preventDefault();
+    setDraggingFiles(false);
+    if (previewingFiles || selecting) return;
+    void previewDroppedFiles(Array.from(event.dataTransfer.files));
+  };
+
   const uploadAndCommit = async (): Promise<void> => {
-    if (preview === null || selectedCandidates.length === 0) return;
+    if (
+      preview === null ||
+      selectedCandidates.length === 0 ||
+      effectiveSourceAccess !== "READY"
+    )
+      return;
     setUploading(true);
     setLocalError(null);
     try {
       const remaining = preview.selections.filter(
-        (selection) => uploaded[selection.relativePath] === undefined,
+        (selection) =>
+          uploaded[selection.relativePath] === undefined &&
+          linkedArtifacts[selection.relativePath] === undefined,
       );
-      let completed = uploaded;
+      let completed = { ...linkedArtifacts, ...uploaded };
       if (remaining.length > 0) {
         const outcome = await bridge().uploads.start({
           caseId,
@@ -129,26 +298,36 @@ export function FolderIntake({
           })),
         });
         if (!outcome.ok) {
+          if (outcome.details?.code === "UPLOAD_SELECTION_UNAVAILABLE") {
+            setSourceAccess("EXPIRED");
+            setLocalError(EXPIRED_SOURCE_ACCESS_MESSAGE);
+            return;
+          }
           setLocalError(
-            `${outcome.message} Retry the unfinished uploads. If the file selection expired, cancel this preview and select the folder again.`,
+            `${outcome.message} Retry the unfinished uploads. If the selection expired, cancel this preview and choose the files or folder again.`,
           );
           return;
         }
-        completed = { ...uploaded };
+        completed = { ...linkedArtifacts, ...uploaded };
+        const newlyUploaded = { ...uploaded };
         const failures: string[] = [];
         for (const item of outcome.data.items) {
           const selection = preview.selections.find(
             (candidate) => candidate.selectionId === item.selectionId,
           );
           if (selection === undefined) continue;
-          if (item.artifactId === null) failures.push(selection.relativePath);
-          else completed[selection.relativePath] = item.artifactId;
+          if (item.artifactId === null) {
+            failures.push(
+              `${selection.relativePath}: ${safeUploadError(item.error)}`,
+            );
+          } else {
+            completed[selection.relativePath] = item.artifactId;
+            newlyUploaded[selection.relativePath] = item.artifactId;
+          }
         }
-        setUploaded(completed);
+        setUploaded(newlyUploaded);
         if (failures.length > 0) {
-          setLocalError(
-            `${failures.length} original file upload${failures.length === 1 ? "" : "s"} failed. Retry to continue.`,
-          );
+          setLocalError(`${failures.join(" ")} Retry to continue.`);
           return;
         }
       }
@@ -192,6 +371,7 @@ export function FolderIntake({
       setPreview(null);
       setSelectedIds(new Set());
       setUploaded({});
+      setSourceAccess("READY");
     } catch (error: unknown) {
       setLocalError(
         `${error instanceof Error ? error.message : "The intake batch was not created."} Your preview and completed uploads are still available.`,
@@ -218,28 +398,98 @@ export function FolderIntake({
       setPreview(null);
       setSelectedIds(new Set());
       setUploaded({});
+      setSourceAccess("READY");
     } finally {
       setCleaning(false);
     }
   };
 
   return (
-    <section className="border-t border-border pt-3" aria-label="Folder intake">
+    <section
+      className="border-t border-border pt-3"
+      aria-label="File and folder intake"
+    >
       {preview === null ? (
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="space-y-2">
           <p className="max-w-[68ch] text-[11px] text-text-muted">
-            Map Markdown, JSON, CSV, SARIF, captures, images, and attachments
-            into reviewable drafts. Selecting a folder does not change the case.
+            Drop finding files from anywhere, or select a research folder. Both
+            paths open a preview. The case changes only after you create and
+            accept the drafts.
           </p>
-          <Button
-            size="sm"
-            variant="secondary"
-            loading={selecting}
-            disabled={context.data === undefined}
-            onClick={() => void chooseFolder()}
-          >
-            Preview folder intake
-          </Button>
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <label
+              className={`flex min-h-16 cursor-pointer flex-col items-center justify-center rounded-(--cv-radius) border border-dashed px-4 py-3 text-center transition-colors motion-reduce:transition-none has-[:focus-visible]:border-focus has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-1 has-[:focus-visible]:outline-focus ${
+                draggingFiles
+                  ? "border-focus bg-surface-hover"
+                  : "border-border-strong bg-surface hover:bg-surface-hover"
+              } ${context.data === undefined ? "cursor-not-allowed opacity-50" : ""}`}
+              aria-disabled={context.data === undefined}
+              aria-busy={previewingFiles}
+              onDragEnter={(event) => {
+                event.preventDefault();
+                if (
+                  context.data !== undefined &&
+                  !previewingFiles &&
+                  !selecting
+                ) {
+                  setDraggingFiles(true);
+                }
+              }}
+              onDragOver={(event) => {
+                event.preventDefault();
+                event.dataTransfer.dropEffect =
+                  context.data === undefined || previewingFiles || selecting
+                    ? "none"
+                    : "copy";
+              }}
+              onDragLeave={(event) => {
+                if (
+                  event.relatedTarget instanceof Node &&
+                  event.currentTarget.contains(event.relatedTarget)
+                ) {
+                  return;
+                }
+                setDraggingFiles(false);
+              }}
+              onDrop={dropFiles}
+            >
+              <input
+                className="sr-only"
+                type="file"
+                multiple
+                accept={FINDING_FILE_EXTENSIONS.join(",")}
+                disabled={context.data === undefined || previewingFiles}
+                aria-label="Choose finding files"
+                onChange={(event) => {
+                  const files = Array.from(event.currentTarget.files ?? []);
+                  event.currentTarget.value = "";
+                  void previewDroppedFiles(files);
+                }}
+              />
+              <span
+                className="text-[12px] font-medium text-text"
+                aria-live="polite"
+              >
+                {previewingFiles
+                  ? "Reading finding files..."
+                  : draggingFiles
+                    ? "Drop files to preview"
+                    : "Drop finding files here"}
+              </span>
+              <span className="mt-0.5 text-[11px] text-text-muted">
+                Markdown, JSON, CSV, or SARIF. You can also choose files.
+              </span>
+            </label>
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={selecting}
+              disabled={context.data === undefined || previewingFiles}
+              onClick={() => void chooseFolder()}
+            >
+              Preview folder intake
+            </Button>
+          </div>
         </div>
       ) : (
         <div className="space-y-3">
@@ -248,8 +498,8 @@ export function FolderIntake({
               <h3 className="text-[12px] font-semibold">{preview.rootName}</h3>
               <p className="mt-0.5 text-[11px] text-text-muted">
                 {preview.files.length} original files ·{" "}
-                {formatBytesApprox(preview.totalBytes)} · {uploadedCount}{" "}
-                uploaded
+                {formatBytesApprox(preview.totalBytes)} · {linkedCount} already
+                stored · {uploadedCount} newly uploaded
               </p>
             </div>
             <Button
@@ -258,7 +508,7 @@ export function FolderIntake({
               loading={cleaning}
               onClick={() => void cancelPreview()}
             >
-              Cancel folder intake
+              Cancel intake preview
             </Button>
           </div>
 
@@ -279,46 +529,141 @@ export function FolderIntake({
             </div>
           )}
 
-          <fieldset>
-            <legend className="text-[11px] font-medium">
-              Proposed findings
-            </legend>
-            <div className="mt-1 max-h-72 divide-y divide-border overflow-auto rounded-(--cv-radius) border border-border">
-              {preview.candidates.map((candidate) => (
-                <label
-                  key={candidate.clientId}
-                  className="flex cursor-pointer items-start gap-2 px-2.5 py-2 hover:bg-surface-hover"
-                >
-                  <input
-                    type="checkbox"
-                    className="mt-0.5"
-                    checked={selectedIds.has(candidate.clientId)}
-                    onChange={(event) =>
-                      setSelectedIds((current) => {
-                        const next = new Set(current);
-                        if (event.target.checked) next.add(candidate.clientId);
-                        else next.delete(candidate.clientId);
-                        return next;
-                      })
-                    }
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[12px] font-medium">
-                      {candidate.draft.title}
-                    </span>
-                    <Mono className="block truncate text-[10px] text-text-muted">
-                      {candidate.sourcePath}
-                    </Mono>
-                    {candidate.duplicateReasons.length === 0 ? null : (
-                      <span className="mt-1 block text-[11px] text-warning">
-                        {candidate.duplicateReasons.join(" ")}
-                      </span>
-                    )}
-                  </span>
-                </label>
-              ))}
+          {linkedCount === 0 ? null : (
+            <p className="rounded-(--cv-radius) bg-info/10 px-2.5 py-2 text-[11px] text-info">
+              {linkedCount} source file{linkedCount === 1 ? " is" : "s are"}{" "}
+              already stored in this case and will be reused. This is a
+              source-file match, not a finding match.
+            </p>
+          )}
+
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <h4 className="text-[11px] font-medium">Proposed findings</h4>
+              <span className="text-[10px] text-text-muted">
+                Include only the drafts you want to create
+              </span>
             </div>
-          </fieldset>
+            <div className="max-h-80 overflow-auto rounded-(--cv-radius) border border-border">
+              {preview.candidates.length === 0 ? (
+                <p className="px-3 py-4 text-[11px] text-text-muted">
+                  No proposed findings were found. Cancel this preview and
+                  choose another file or folder.
+                </p>
+              ) : null}
+              {preview.candidates.length === 0 ? null : (
+                <table
+                  className="w-full min-w-[680px] table-fixed text-left"
+                  aria-label="Proposed findings"
+                >
+                  <thead className="sticky top-0 z-10 bg-surface-subtle text-[10px] font-medium text-text-muted">
+                    <tr className="border-b border-border">
+                      <th scope="col" className="w-20 px-2.5 py-1.5">
+                        <label className="flex cursor-pointer items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            aria-label="Include all findings"
+                            checked={
+                              selectedCandidates.length ===
+                              preview.candidates.length
+                            }
+                            ref={(input) => {
+                              if (input !== null) {
+                                input.indeterminate =
+                                  selectedCandidates.length > 0 &&
+                                  selectedCandidates.length <
+                                    preview.candidates.length;
+                              }
+                            }}
+                            onChange={(event) =>
+                              setSelectedIds(
+                                event.target.checked
+                                  ? new Set(
+                                      preview.candidates.map(
+                                        (candidate) => candidate.clientId,
+                                      ),
+                                    )
+                                  : new Set(),
+                              )
+                            }
+                          />
+                          Include
+                        </label>
+                      </th>
+                      <th scope="col" className="w-[46%] px-2.5 py-1.5">
+                        Finding
+                      </th>
+                      <th scope="col" className="px-2.5 py-1.5">
+                        Review
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {preview.candidates.map((candidate) => {
+                      const findingReasons = candidate.duplicateReasons.filter(
+                        (reason) =>
+                          reason.startsWith("A finding") ||
+                          reason.startsWith("Another proposal"),
+                      );
+                      return (
+                        <tr
+                          key={candidate.clientId}
+                          className={
+                            selectedIds.has(candidate.clientId)
+                              ? "bg-surface"
+                              : "bg-surface-subtle/40 text-text-muted"
+                          }
+                        >
+                          <td className="px-2.5 py-2 align-top">
+                            <input
+                              type="checkbox"
+                              aria-label={`Include ${candidate.draft.title}`}
+                              checked={selectedIds.has(candidate.clientId)}
+                              onChange={(event) =>
+                                setSelectedIds((current) => {
+                                  const next = new Set(current);
+                                  if (event.target.checked)
+                                    next.add(candidate.clientId);
+                                  else next.delete(candidate.clientId);
+                                  return next;
+                                })
+                              }
+                            />
+                          </td>
+                          <td className="px-2.5 py-2 align-top">
+                            <span className="block text-[12px] font-medium text-text">
+                              {candidate.draft.title}
+                            </span>
+                            <Mono className="mt-0.5 block truncate text-[10px] text-text-muted">
+                              {candidate.sourcePath}
+                            </Mono>
+                          </td>
+                          <td className="px-2.5 py-2 align-top text-[11px]">
+                            <div className="flex flex-wrap gap-1">
+                              {findingReasons.length === 0 ? (
+                                <span className="rounded-sm bg-success/10 px-1.5 py-0.5 font-medium text-success">
+                                  Ready
+                                </span>
+                              ) : (
+                                <span className="rounded-sm bg-warning/10 px-1.5 py-0.5 font-medium text-warning">
+                                  Possible duplicate
+                                </span>
+                              )}
+                            </div>
+                            {findingReasons.length === 0 ? null : (
+                              <p className="mt-1 text-text-muted">
+                                {findingReasons.join(" ")}
+                              </p>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
             <p className="text-[11px] text-text-muted" aria-live="polite">
@@ -329,7 +674,10 @@ export function FolderIntake({
               size="sm"
               variant="primary"
               loading={uploading || commit.isPending}
-              disabled={selectedCandidates.length === 0}
+              disabled={
+                selectedCandidates.length === 0 ||
+                effectiveSourceAccess !== "READY"
+              }
               onClick={() => void uploadAndCommit()}
             >
               Create {selectedCandidates.length} intake draft
@@ -339,9 +687,9 @@ export function FolderIntake({
         </div>
       )}
 
-      {localError === null ? null : (
+      {visibleLocalError === null ? null : (
         <div className="mt-2">
-          <InlineError>{localError}</InlineError>
+          <InlineError>{visibleLocalError}</InlineError>
         </div>
       )}
       {success === null ? null : (
@@ -357,6 +705,12 @@ export function FolderIntake({
       )}
     </section>
   );
+}
+
+function safeUploadError(error: string | null): string {
+  const message = error?.trim();
+  if (message === undefined || message === "") return "The upload failed.";
+  return message.slice(0, 300);
 }
 
 function restoreTransfer(storageKey: string): StoredTransfer | null {

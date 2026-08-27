@@ -114,6 +114,50 @@ describe("finding exchange", () => {
     ]);
   });
 
+  it("imports a multiline SARIF message as a title and summary", () => {
+    const title =
+      "Expensive AI routes lack per-client quotas, rate limits, and concurrency controls";
+    const summary =
+      "After authentication, generation requests can start provider calls without tenant limits. ".repeat(
+        3,
+      );
+    const sarif = JSON.stringify({
+      version: "2.1.0",
+      runs: [
+        {
+          tool: {
+            driver: {
+              name: "Codex Security",
+              rules: [
+                {
+                  id: "resource-exhaustion.ai-routes-no-tenant-limits",
+                  shortDescription: {
+                    text: "Resource exhaustion: AI routes have no tenant limits",
+                  },
+                },
+              ],
+            },
+          },
+          results: [
+            {
+              ruleId: "resource-exhaustion.ai-routes-no-tenant-limits",
+              message: { text: `${title}\n\n${summary}` },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(parseFindingsSarif(sarif)).toEqual([
+      {
+        title,
+        summaryMarkdown: summary.trim(),
+        cweIds: [],
+        visibility: "INTERNAL",
+      },
+    ]);
+  });
+
   it("round-trips CodeVault fields through SARIF properties", () => {
     expect(parseFindingsSarif(exportFindingsSarif(findings))).toEqual(findings);
   });

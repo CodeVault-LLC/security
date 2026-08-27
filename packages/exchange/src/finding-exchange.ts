@@ -173,16 +173,21 @@ export function parseFindingsSarif(input: string): ExchangeFinding[] {
       }
       const rule = sarifRule(resultValue, rules, rulesById);
       const message = nestedRecord(resultValue, "message");
+      const parsedMessage = splitSarifMessage(
+        stringField(message, "text") ?? stringField(message, "markdown") ?? "",
+      );
+      const ruleDescription = sarifDescription(rule, "shortDescription");
       const title =
-        stringField(message, "text") ??
-        stringField(message, "markdown") ??
-        sarifDescription(rule, "shortDescription") ??
-        stringField(rule, "name") ??
+        validSarifTitle(parsedMessage.title) ??
+        validSarifTitle(ruleDescription) ??
+        validSarifTitle(stringField(rule, "name")) ??
+        parsedMessage.title ??
         "";
       const codevault = nestedRecord(resultValue, "properties", "codevault");
       const summary =
         stringField(codevault, "summaryMarkdown") ??
-        distinctText(sarifDescription(rule, "shortDescription"), title);
+        distinctText(parsedMessage.body, title) ??
+        distinctText(ruleDescription, title);
       const technical =
         stringField(codevault, "technicalMarkdown") ??
         sarifLocations(resultValue);
@@ -482,6 +487,29 @@ function sarifDescription(
   field: "shortDescription" | "fullDescription",
 ): string | undefined {
   return stringField(nestedRecord(value, field), "text");
+}
+
+function splitSarifMessage(value: string): {
+  title: string | undefined;
+  body: string | undefined;
+} {
+  const lines = value.trim().split(/\r?\n/u);
+  const titleIndex = lines.findIndex((line) => line.trim() !== "");
+  if (titleIndex === -1) return { title: undefined, body: undefined };
+
+  const title = lines[titleIndex]!.trim();
+  const body = lines
+    .slice(titleIndex + 1)
+    .join("\n")
+    .trim();
+  return { title, body: body === "" ? undefined : body };
+}
+
+function validSarifTitle(value: string | undefined): string | undefined {
+  const length = value?.trim().length ?? 0;
+  return length >= MIN_INTAKE_TITLE_LENGTH && length <= MAX_INTAKE_TITLE_LENGTH
+    ? value
+    : undefined;
 }
 
 function sarifLocations(result: Record<string, unknown>): string | undefined {

@@ -226,6 +226,16 @@ export type CreateFolderIntakeRequest = Static<
 export const FolderIntakeContext = Type.Object({
   findingTitles: Type.Array(Type.String()),
   artifactDigests: Type.Array(Sha256),
+  storedArtifacts: Type.Array(
+    Type.Object(
+      {
+        id: Uuid,
+        filename: Type.String({ minLength: 1, maxLength: 255 }),
+        sha256: Sha256,
+      },
+      { additionalProperties: false },
+    ),
+  ),
 });
 export type FolderIntakeContext = Static<typeof FolderIntakeContext>;
 

@@ -5,6 +5,8 @@ import type {
   FindingDetail,
   IntakeItem,
 } from "@codevault/contracts";
+import { generateObjectKey, uuidv7 } from "@codevault/core/crypto";
+import { schema } from "@codevault/db";
 
 import {
   createHarness,
@@ -81,6 +83,58 @@ describeIntegration("finding intake", () => {
       headers: owner.headers,
     });
     expect(findings.json<{ items: FindingDetail[] }>().items).toHaveLength(0);
+  });
+
+  it("offers only stored source files for folder-intake reuse", async () => {
+    const deletedArtifactId = uuidv7();
+    const storedArtifactId = uuidv7();
+    await harness.dbHandle.db.insert(schema.artifacts).values([
+      {
+        id: deletedArtifactId,
+        caseId: researchCase.id,
+        filename: "failed-results.sarif",
+        objectKey: generateObjectKey(researchCase.id, deletedArtifactId),
+        mimeType: "application/sarif+json",
+        sizeBytes: 128,
+        sha256: "c".repeat(64),
+        artifactKind: "OTHER",
+        visibility: "INTERNAL",
+        status: "DELETED",
+        uploadedBy: owner.id,
+        deletedAt: new Date().toISOString(),
+      },
+      {
+        id: storedArtifactId,
+        caseId: researchCase.id,
+        filename: "stored-results.sarif",
+        objectKey: generateObjectKey(researchCase.id, storedArtifactId),
+        mimeType: "application/sarif+json",
+        sizeBytes: 256,
+        sha256: "d".repeat(64),
+        artifactKind: "OTHER",
+        visibility: "INTERNAL",
+        status: "STORED",
+        uploadedBy: owner.id,
+      },
+    ]);
+
+    const response = await harness.app.inject({
+      method: "GET",
+      url: `/v1/intake/folder-context?caseId=${researchCase.id}`,
+      headers: owner.headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      artifactDigests: ["d".repeat(64)],
+      storedArtifacts: [
+        {
+          id: storedArtifactId,
+          filename: "stored-results.sarif",
+          sha256: "d".repeat(64),
+        },
+      ],
+    });
   });
 
   it("creates one audited folder batch without accepting any proposal", async () => {

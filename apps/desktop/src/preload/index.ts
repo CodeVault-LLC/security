@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 import {
   IPC_CHANNELS,
@@ -132,6 +132,11 @@ const api: CodeVaultDesktopApi = {
       ipcRenderer.invoke(IPC_CHANNELS.uploadsStart, request) as ReturnType<
         CodeVaultDesktopApi["uploads"]["start"]
       >,
+    validateSelections: (selectionIds) =>
+      ipcRenderer.invoke(
+        IPC_CHANNELS.uploadsValidateSelections,
+        selectionIds,
+      ) as ReturnType<CodeVaultDesktopApi["uploads"]["validateSelections"]>,
     discard: (artifactIds) =>
       ipcRenderer.invoke(
         IPC_CHANNELS.uploadsDiscard,
@@ -147,6 +152,11 @@ const api: CodeVaultDesktopApi = {
         IPC_CHANNELS.intakeSelectFolder,
         context,
       ) as ReturnType<CodeVaultDesktopApi["intake"]["selectFolder"]>,
+    previewFiles: (files, context) =>
+      ipcRenderer.invoke(IPC_CHANNELS.intakePreviewFiles, {
+        context,
+        paths: files.map((file) => webUtils.getPathForFile(file)),
+      }) as ReturnType<CodeVaultDesktopApi["intake"]["previewFiles"]>,
   },
 
   caseArchives: {

@@ -13,6 +13,13 @@ type PendingSelection = {
   expiresAt: number;
 };
 
+export class UploadSelectionUnavailableError extends Error {
+  constructor() {
+    super("The upload selection expired or changed session.");
+    this.name = "UploadSelectionUnavailableError";
+  }
+}
+
 function hasSameOwner(left: SelectionOwner, right: SelectionOwner): boolean {
   return (
     left.userId === right.userId &&
@@ -80,7 +87,7 @@ export class UploadSelectionStore {
     const resolved = selectionIds.map((selectionId) => {
       const pending = this.selections.get(selectionId);
       if (!pending || !hasSameOwner(pending.owner, owner)) {
-        throw new Error("The upload selection expired or changed session.");
+        throw new UploadSelectionUnavailableError();
       }
       return pending.selection;
     });
@@ -103,9 +110,22 @@ export class UploadSelectionStore {
     return selectionIds.map((selectionId) => {
       const pending = this.selections.get(selectionId);
       if (!pending || !hasSameOwner(pending.owner, owner)) {
-        throw new Error("The upload selection expired or changed session.");
+        throw new UploadSelectionUnavailableError();
       }
       return pending.selection;
+    });
+  }
+
+  areAvailable(
+    selectionIds: readonly string[],
+    owner: SelectionOwner,
+    now = Date.now(),
+  ): boolean {
+    this.prune(now);
+    if (new Set(selectionIds).size !== selectionIds.length) return false;
+    return selectionIds.every((selectionId) => {
+      const pending = this.selections.get(selectionId);
+      return pending !== undefined && hasSameOwner(pending.owner, owner);
     });
   }
 
