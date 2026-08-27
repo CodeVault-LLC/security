@@ -1,6 +1,6 @@
 # Feature register
 
-This register is the current product inventory for `0.1.0-alpha.8`. Design
+This register is the current product inventory for `0.1.0-alpha.9`. Design
 documents explain decisions, but their task lists do not report implementation
 status. Update this file when code changes a feature state.
 
