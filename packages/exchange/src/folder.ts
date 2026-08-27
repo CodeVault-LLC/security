@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, readdir, readFile } from "node:fs/promises";
-import { extname, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, relative, resolve, sep } from "node:path";
 
 import type { IntakeDraft } from "@codevault/contracts";
 
@@ -62,12 +62,80 @@ export interface FolderIntakePreview {
   totalBytes: number;
 }
 
+export interface ExplicitFilePreview {
+  preview: FolderIntakePreview;
+  sources: Array<{
+    absolutePath: string;
+    relativePath: string;
+  }>;
+}
+
 export async function previewFolder(
   root: string,
   options: FolderPreviewOptions = {},
 ): Promise<FolderIntakePreview> {
   const absoluteRoot = resolve(root);
   const paths = await walk(absoluteRoot, options);
+  return previewSources(
+    absoluteRoot.split(sep).at(-1) ?? "folder",
+    paths.map((path) => ({
+      absolutePath: path,
+      relativePath: toArchivePath(relative(absoluteRoot, path)),
+    })),
+    options,
+  );
+}
+
+/** Preview only the files explicitly selected by the user. */
+export async function previewFiles(
+  paths: readonly string[],
+  options: FolderPreviewOptions = {},
+): Promise<ExplicitFilePreview> {
+  const uniquePaths = [...new Set(paths.map((path) => resolve(path)))];
+  if (uniquePaths.length === 0) {
+    throw new Error("Select at least one finding file.");
+  }
+  const maxFiles = options.maxFiles ?? DEFAULT_MAX_FILES;
+  if (uniquePaths.length > maxFiles) {
+    throw new Error(`Select at most ${maxFiles} files at once.`);
+  }
+
+  const relativePaths = droppedRelativePaths(uniquePaths);
+  const sources = await Promise.all(
+    uniquePaths.map(async (absolutePath, index) => {
+      const info = await lstat(absolutePath);
+      if (!info.isFile() || info.isSymbolicLink()) {
+        throw new Error(
+          "Only files can be dropped. Use folder intake to select a folder.",
+        );
+      }
+      return {
+        absolutePath,
+        relativePath: relativePaths[index]!,
+      };
+    }),
+  );
+  sources.sort((left, right) =>
+    left.relativePath.localeCompare(right.relativePath),
+  );
+
+  return {
+    preview: await previewSources(
+      sources.length === 1
+        ? sources[0]!.relativePath
+        : `${sources.length} dropped files`,
+      sources,
+      options,
+    ),
+    sources,
+  };
+}
+
+async function previewSources(
+  rootName: string,
+  sources: readonly { absolutePath: string; relativePath: string }[],
+  options: FolderPreviewOptions,
+): Promise<FolderIntakePreview> {
   const files: FolderPreviewFile[] = [];
   const candidates: FolderIntakeCandidate[] = [];
   const attachments: FolderAttachment[] = [];
@@ -76,14 +144,14 @@ export async function previewFolder(
   const existingTitles = new Set(
     (options.existingTitles ?? []).map(normalizeTitle),
   );
-  const selectedTitles = new Set<string>();
   const existingDigests = new Set(options.existingDigests ?? []);
   let totalBytes = 0;
 
-  for (const path of paths) {
+  for (const source of sources) {
     throwIfAborted(options.signal);
+    const path = source.absolutePath;
     const info = await lstat(path);
-    const relativePath = toArchivePath(relative(absoluteRoot, path));
+    const relativePath = source.relativePath;
     const sha256 = await hashFile(path, options.signal);
     totalBytes += info.size;
     const firstDigestPath = selectedDigests.get(sha256) ?? null;
@@ -130,19 +198,14 @@ export async function previewFolder(
             "A finding with this normalized title already exists in the case.",
           );
         }
-        if (selectedTitles.has(normalizedTitle)) {
-          duplicateReasons.push(
-            "Another selected finding has the same normalized title.",
-          );
-        }
         if (existingDigests.has(sha256)) {
           duplicateReasons.push(
-            "A file with the same SHA-256 digest already exists in the case.",
+            "The source file is already stored in this case; this is not a finding match.",
           );
         }
         if (firstDigestPath !== null) {
           duplicateReasons.push(
-            "Another selected file has the same SHA-256 digest.",
+            "Another source file in this import has the same SHA-256 digest.",
           );
         }
         candidates.push({
@@ -150,10 +213,9 @@ export async function previewFolder(
           sourcePath: relativePath,
           sourceSha256: sha256,
           draft: toIntakeDraft(item),
-          status: duplicateReasons.length === 0 ? "READY" : "DUPLICATE",
+          status: existingTitles.has(normalizedTitle) ? "DUPLICATE" : "READY",
           duplicateReasons,
         });
-        selectedTitles.add(normalizedTitle);
       }
       files.push({
         relativePath,
@@ -173,14 +235,56 @@ export async function previewFolder(
     }
   }
 
+  const titleCounts = new Map<string, number>();
+  for (const candidate of candidates) {
+    const normalizedTitle = normalizeTitle(candidate.draft.title);
+    titleCounts.set(
+      normalizedTitle,
+      (titleCounts.get(normalizedTitle) ?? 0) + 1,
+    );
+  }
+  for (const candidate of candidates) {
+    if ((titleCounts.get(normalizeTitle(candidate.draft.title)) ?? 0) < 2) {
+      continue;
+    }
+    candidate.duplicateReasons.push(
+      "Another proposal in this import has the same normalized title.",
+    );
+    candidate.status = "DUPLICATE";
+  }
+
   return {
-    rootName: absoluteRoot.split(sep).at(-1) ?? "folder",
+    rootName,
     files,
     candidates,
     attachments,
     errors,
     totalBytes,
   };
+}
+
+function droppedRelativePaths(paths: readonly string[]): string[] {
+  const basenameCounts = new Map<string, number>();
+  for (const path of paths) {
+    const name = basename(path);
+    basenameCounts.set(name, (basenameCounts.get(name) ?? 0) + 1);
+  }
+
+  const used = new Set<string>();
+  return paths.map((path) => {
+    const name = basename(path);
+    let candidate =
+      basenameCounts.get(name) === 1
+        ? name
+        : `${basename(dirname(path))}/${name}`;
+    let prefix = 2;
+    while (used.has(candidate)) {
+      candidate = `${prefix}-${name}`;
+      prefix += 1;
+    }
+    used.add(candidate);
+    return candidate;
+  });
 }
 
 async function walk(

@@ -37,6 +37,7 @@ import type {
   MailAttachmentDownload,
 } from "@codevault/contracts";
 import {
+  previewFiles,
   previewFolder,
   readCvcase,
   writeCvcase,
@@ -74,7 +75,10 @@ import {
   normalizeServerUrl,
 } from "./security.js";
 import type { SessionStore } from "./session-store.js";
-import { UploadSelectionStore } from "./upload-selections.js";
+import {
+  UploadSelectionStore,
+  UploadSelectionUnavailableError,
+} from "./upload-selections.js";
 import { runWebAuthnCeremony } from "./webauthn.js";
 
 /**
@@ -881,6 +885,86 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
   });
 
+  handle(IPC_CHANNELS.intakePreviewFiles, async (payload) => {
+    const request = payload as {
+      context?: {
+        findingTitles?: unknown;
+        artifactDigests?: unknown;
+      };
+      paths?: unknown;
+    };
+    const context = request.context;
+    if (
+      context === undefined ||
+      !Array.isArray(context.findingTitles) ||
+      context.findingTitles.length > 10_000 ||
+      context.findingTitles.some((title) => typeof title !== "string") ||
+      !Array.isArray(context.artifactDigests) ||
+      context.artifactDigests.length > 100_000 ||
+      context.artifactDigests.some(
+        (digest) =>
+          typeof digest !== "string" || !/^[0-9a-f]{64}$/u.test(digest),
+      ) ||
+      !Array.isArray(request.paths) ||
+      request.paths.length === 0 ||
+      request.paths.length > 500 ||
+      request.paths.some((path) => typeof path !== "string" || path === "")
+    ) {
+      return failure(new Error("invalid finding file preview request"));
+    }
+    const owner = sessionStore.current();
+    if (owner === null) {
+      return failure(new Error("finding file preview is unavailable"));
+    }
+
+    try {
+      const result = await previewFiles(request.paths as string[], {
+        existingTitles: context.findingTitles,
+        existingDigests: context.artifactDigests,
+        maxFiles: 500,
+      });
+      const currentOwner = sessionStore.current();
+      if (
+        currentOwner === null ||
+        currentOwner.userId !== owner.userId ||
+        currentOwner.serverUrl !== owner.serverUrl ||
+        currentOwner.token !== owner.token
+      ) {
+        return failure(
+          new Error("the session changed during finding file preview"),
+        );
+      }
+      const selections = [];
+      for (const file of result.preview.files) {
+        const source = result.sources.find(
+          (candidate) => candidate.relativePath === file.relativePath,
+        );
+        if (source === undefined) {
+          return failure(new Error("finding file preview lost its source"));
+        }
+        const selected = uploadSelections.issue(
+          await hashSelection(source.absolutePath),
+          owner,
+        );
+        selections.push({
+          selectionId: selected.selectionId,
+          filename: selected.filename,
+          sizeBytes: selected.sizeBytes,
+          mimeType: selected.mimeType,
+          sha256: selected.sha256,
+          relativePath: file.relativePath,
+          disposition: file.disposition,
+        });
+      }
+      return {
+        ok: true as const,
+        data: { ...result.preview, selections },
+      };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
   handle(IPC_CHANNELS.caseArchivesExport, async (payload) => {
     if (typeof payload !== "string" || !/^[0-9a-f-]{36}$/iu.test(payload)) {
       return failure(new Error("invalid case archive export request"));
@@ -1244,8 +1328,39 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
 
       return { ok: true as const, data: result };
     } catch (error: unknown) {
+      if (error instanceof UploadSelectionUnavailableError) {
+        return {
+          ok: false as const,
+          category: "VALIDATION",
+          message:
+            "The local file selection expired or belongs to an earlier desktop session.",
+          requestId: null,
+          details: { code: "UPLOAD_SELECTION_UNAVAILABLE" },
+        };
+      }
       return failure(error);
     }
+  });
+
+  handle(IPC_CHANNELS.uploadsValidateSelections, async (payload) => {
+    if (
+      !Array.isArray(payload) ||
+      payload.length === 0 ||
+      payload.length > 5_000 ||
+      payload.some(
+        (selectionId) =>
+          typeof selectionId !== "string" ||
+          !/^[0-9a-f]{8}-[0-9a-f-]{27}$/iu.test(selectionId),
+      )
+    ) {
+      return failure(new Error("invalid upload selection validation request"));
+    }
+    const owner = sessionStore.current();
+    if (owner === null) return failure(new Error("missing upload session"));
+    return {
+      ok: true as const,
+      data: { available: uploadSelections.areAvailable(payload, owner) },
+    };
   });
 
   handle(IPC_CHANNELS.uploadsDiscard, async (payload) => {

@@ -107,6 +107,11 @@ export interface UploadBatchResult {
 export interface FolderIntakeContextInput {
   findingTitles: string[];
   artifactDigests: string[];
+  storedArtifacts: Array<{
+    id: string;
+    filename: string;
+    sha256: string;
+  }>;
 }
 
 export interface FolderIntakePreviewResult {
@@ -288,6 +293,10 @@ export interface CodeVaultDesktopApi {
     /** Opens the native picker and hashes each selection out of process. */
     select(): Promise<UploadSelection[]>;
     start(request: StartUploadRequest): Promise<ApiOutcome<UploadBatchResult>>;
+    /** Checks that restored opaque file capabilities still belong to this session. */
+    validateSelections(
+      selectionIds: string[],
+    ): Promise<ApiOutcome<{ available: boolean }>>;
     /** Deletes uploaded artifacts that were never attached to a record. */
     discard(artifactIds: string[]): Promise<ApiOutcome<{ ok: true }>>;
     onProgress(listener: (progress: UploadProgress) => void): () => void;
@@ -298,6 +307,11 @@ export interface CodeVaultDesktopApi {
     selectFolder(
       context: FolderIntakeContextInput,
     ): Promise<ApiOutcome<FolderIntakePreviewResult | null>>;
+    /** Maps files supplied by a native drag or file picker without exposing paths. */
+    previewFiles(
+      files: File[],
+      context: FolderIntakeContextInput,
+    ): Promise<ApiOutcome<FolderIntakePreviewResult>>;
   };
 
   caseArchives: {
@@ -450,9 +464,11 @@ export const IPC_CHANNELS = {
   apiRequest: "api:request",
   uploadsSelect: "uploads:select",
   uploadsStart: "uploads:start",
+  uploadsValidateSelections: "uploads:validate-selections",
   uploadsDiscard: "uploads:discard",
   uploadsProgress: "uploads:progress",
   intakeSelectFolder: "intake:select-folder",
+  intakePreviewFiles: "intake:preview-files",
   caseArchivesExport: "case-archives:export",
   caseArchivesImport: "case-archives:import",
   reportsDownloadExport: "reports:download-export",

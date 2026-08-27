@@ -389,13 +389,23 @@ export async function registerIntakeRoutes(app: AppInstance): Promise<void> {
           .from(schema.findings)
           .where(eq(schema.findings.caseId, request.query.caseId)),
         app.db
-          .selectDistinct({ sha256: schema.artifacts.sha256 })
+          .selectDistinct({
+            id: schema.artifacts.id,
+            filename: schema.artifacts.filename,
+            sha256: schema.artifacts.sha256,
+          })
           .from(schema.artifacts)
-          .where(eq(schema.artifacts.caseId, request.query.caseId)),
+          .where(
+            and(
+              eq(schema.artifacts.caseId, request.query.caseId),
+              eq(schema.artifacts.status, "STORED"),
+            ),
+          ),
       ]);
       return {
         findingTitles: findings.map((item) => item.title),
         artifactDigests: artifacts.map((item) => item.sha256),
+        storedArtifacts: artifacts,
       };
     },
   );

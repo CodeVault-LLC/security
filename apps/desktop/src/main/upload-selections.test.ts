@@ -78,6 +78,24 @@ describe("upload selection capabilities", () => {
     ).toThrow(/expired/u);
   });
 
+  it("checks availability without consuming the capability", () => {
+    const store = new UploadSelectionStore();
+    const issued = store.issue(selection, firstOwner, 1_000);
+
+    expect(store.areAvailable([issued.selectionId], firstOwner, 1_001)).toBe(
+      true,
+    );
+    expect(store.areAvailable([issued.selectionId], secondOwner, 1_001)).toBe(
+      false,
+    );
+    expect(store.consume([issued.selectionId], firstOwner, 1_002)).toEqual([
+      issued,
+    ]);
+    expect(store.areAvailable([issued.selectionId], firstOwner, 1_003)).toBe(
+      false,
+    );
+  });
+
   it("rejects duplicate identifiers without consuming the capability", () => {
     const store = new UploadSelectionStore();
     const issued = store.issue(selection, firstOwner, 1_000);

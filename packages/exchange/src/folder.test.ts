@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { previewFolder } from "./folder.js";
+import { previewFiles, previewFolder } from "./folder.js";
 
 describe("previewFolder", () => {
   it("maps Markdown, JSON, CSV, SARIF, and attachments without claiming canonical truth", async () => {
@@ -93,7 +93,7 @@ describe("previewFolder", () => {
       "A finding with this normalized title already exists in the case.",
     );
     expect(preview.candidates[1]?.duplicateReasons).toContain(
-      "Another selected file has the same SHA-256 digest.",
+      "Another source file in this import has the same SHA-256 digest.",
     );
     expect(
       preview.candidates.every((item) => item.status === "DUPLICATE"),
@@ -113,11 +113,37 @@ describe("previewFolder", () => {
 
     const preview = await previewFolder(root);
 
-    expect(preview.candidates[0]?.status).toBe("READY");
-    expect(preview.candidates[1]?.status).toBe("DUPLICATE");
-    expect(preview.candidates[1]?.duplicateReasons).toContain(
-      "Another selected finding has the same normalized title.",
+    expect(
+      preview.candidates.every((candidate) => candidate.status === "DUPLICATE"),
+    ).toBe(true);
+    expect(
+      preview.candidates.every((candidate) =>
+        candidate.duplicateReasons.includes(
+          "Another proposal in this import has the same normalized title.",
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("does not treat a stored source file as an existing finding", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codevault-folder-"));
+    const path = join(root, "finding.md");
+    await writeFile(
+      path,
+      "# Source file match only\n\nDifferent finding state.",
     );
+    const first = await previewFolder(root);
+
+    const preview = await previewFolder(root, {
+      existingDigests: [first.files[0]!.sha256],
+    });
+
+    expect(preview.candidates[0]).toMatchObject({
+      status: "READY",
+      duplicateReasons: [
+        "The source file is already stored in this case; this is not a finding match.",
+      ],
+    });
   });
 
   it("reports mapping errors without dropping the original file", async () => {
@@ -165,5 +191,40 @@ describe("previewFolder", () => {
     expect(preview.candidates).toEqual([]);
     expect(preview.files[0]?.disposition).toBe("MAPPING_ERROR");
     expect(preview.errors[0]).toContain("valid CWE identifier");
+  });
+});
+
+describe("previewFiles", () => {
+  it("maps only the explicitly dropped files", async () => {
+    const root = await mkdtemp(join(tmpdir(), "codevault-files-"));
+    const selected = join(root, "scanner.sarif");
+    await writeFile(
+      selected,
+      JSON.stringify({
+        version: "2.1.0",
+        runs: [
+          {
+            tool: { driver: { name: "Codex Security" } },
+            results: [
+              { message: { text: "Dropped SARIF finding is imported" } },
+            ],
+          },
+        ],
+      }),
+    );
+    await writeFile(
+      join(root, "unselected.md"),
+      "# This sibling must not be imported\n\nSibling body.",
+    );
+
+    const result = await previewFiles([selected]);
+
+    expect(result.preview.rootName).toBe("scanner.sarif");
+    expect(result.preview.candidates.map((item) => item.draft.title)).toEqual([
+      "Dropped SARIF finding is imported",
+    ]);
+    expect(result.sources).toEqual([
+      { absolutePath: selected, relativePath: "scanner.sarif" },
+    ]);
   });
 });
