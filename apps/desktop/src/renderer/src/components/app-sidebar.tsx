@@ -13,7 +13,6 @@ import {
   Mail,
   Settings,
   ShieldAlert,
-  ShieldCheck,
   Send,
   Users,
 } from "lucide-react";
@@ -210,19 +209,9 @@ export function AppSidebar({
             <div aria-hidden className="mx-2 mb-1 border-t border-border" />
           )}
           {renderItem({
-            to: "/organization/users",
-            label: "Users",
+            to: "/organization",
+            label: "Organization",
             icon: <Users aria-hidden className="size-4" />,
-          })}
-          {renderItem({
-            to: "/organization/settings",
-            label: "General",
-            icon: <Settings aria-hidden className="size-4" />,
-          })}
-          {renderItem({
-            to: "/organization/security",
-            label: "Policy & access",
-            icon: <ShieldCheck aria-hidden className="size-4" />,
           })}
         </div>
 

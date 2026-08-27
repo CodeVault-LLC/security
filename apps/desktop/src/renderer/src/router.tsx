@@ -259,6 +259,13 @@ const organizationUsersRoute = createRoute({
   path: "/organization/users",
   component: OrganizationUsersRoute,
 });
+const organizationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/organization",
+  beforeLoad: () => {
+    throw redirect({ to: "/organization/users" });
+  },
+});
 const organizationUserDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/organization/users/$userId",
@@ -311,6 +318,7 @@ const routeTree = rootRoute.addChildren([
   securitySettingsRoute,
   mailSettingsRoute,
   accountRoute,
+  organizationRoute,
   organizationUsersRoute,
   organizationUserDetailRoute,
   organizationSettingsRoute,

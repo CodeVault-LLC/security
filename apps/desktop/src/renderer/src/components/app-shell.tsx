@@ -41,11 +41,6 @@ function initialSidebarExpanded(): boolean {
 
 function workspaceLabel(pathname: string): string {
   if (pathname === "/") return "Home";
-  if (pathname.startsWith("/organization/users")) return "Organization users";
-  if (pathname.startsWith("/organization/settings"))
-    return "Organization settings";
-  if (pathname.startsWith("/organization/security"))
-    return "Organization policy";
   if (pathname.startsWith("/organization")) return "Organization";
   if (pathname.startsWith("/settings")) return "Personal settings";
   if (pathname.startsWith("/cases")) return "Cases";
