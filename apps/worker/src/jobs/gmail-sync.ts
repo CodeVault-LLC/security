@@ -74,6 +74,47 @@ export async function syncMailboxHistory(
   throw new Error("Gmail history pagination exceeded the safety limit.");
 }
 
+export interface TrackedThreadSyncDependencies {
+  accessToken: string;
+  threadId: string;
+  getThreadMessageIds(accessToken: string, threadId: string): Promise<string[]>;
+  getMessageMetadata(
+    accessToken: string,
+    messageId: string,
+  ): Promise<ProviderMessageMetadata>;
+  getMessageRaw(accessToken: string, messageId: string): Promise<Uint8Array>;
+  persistTracked(input: {
+    metadata: ProviderMessageMetadata;
+    raw: Uint8Array;
+  }): Promise<void>;
+}
+
+export async function syncTrackedThread(
+  dependencies: TrackedThreadSyncDependencies,
+): Promise<void> {
+  const messageIds = await dependencies.getThreadMessageIds(
+    dependencies.accessToken,
+    dependencies.threadId,
+  );
+  if (messageIds.length > 200) {
+    throw new Error("Tracked Gmail thread exceeds the 200-message limit.");
+  }
+  for (const messageId of messageIds) {
+    const metadata = await dependencies.getMessageMetadata(
+      dependencies.accessToken,
+      messageId,
+    );
+    if (metadata.threadId !== dependencies.threadId) {
+      throw new Error("Gmail returned inconsistent thread metadata.");
+    }
+    const raw = await dependencies.getMessageRaw(
+      dependencies.accessToken,
+      messageId,
+    );
+    await dependencies.persistTracked({ metadata, raw });
+  }
+}
+
 function digest(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -93,6 +134,7 @@ function artifactKind(
 async function runOneMailbox(
   context: WorkerContext,
   connectionId: string,
+  dataThreadId?: string,
 ): Promise<void> {
   if (!context.config.gmail.enabled) throw new Error("Gmail is disabled.");
   const gmailConfig = context.config.gmail;
@@ -124,11 +166,40 @@ async function runOneMailbox(
   const access = await provider.refreshAccessToken(refreshToken);
 
   const trackedSubmission = async (threadId: string) => {
+    const [linked] = await context.db
+      .select({
+        submissionId: schema.submissionMailThreads.submissionId,
+        submissionRef: schema.submissions.ref,
+        caseId: schema.submissions.caseId,
+        caseRef: schema.cases.ref,
+        caseOwnerId: schema.cases.ownerId,
+        organizationId: schema.cases.organizationId,
+        linkedAt: schema.submissionMailThreads.createdAt,
+      })
+      .from(schema.submissionMailThreads)
+      .innerJoin(
+        schema.submissions,
+        eq(schema.submissions.id, schema.submissionMailThreads.submissionId),
+      )
+      .innerJoin(schema.cases, eq(schema.cases.id, schema.submissions.caseId))
+      .where(
+        and(
+          eq(schema.submissionMailThreads.mailboxConnectionId, connection.id),
+          eq(schema.submissionMailThreads.providerThreadId, threadId),
+        ),
+      )
+      .limit(1);
+    if (linked !== undefined) return linked;
+
     const [tracked] = await context.db
       .select({
         submissionId: schema.correspondenceMessages.submissionId,
+        submissionRef: schema.submissions.ref,
         caseId: schema.submissions.caseId,
+        caseRef: schema.cases.ref,
+        caseOwnerId: schema.cases.ownerId,
         organizationId: schema.cases.organizationId,
+        linkedAt: sql<string | null>`null`,
       })
       .from(schema.correspondenceMessages)
       .innerJoin(
@@ -164,6 +235,10 @@ async function runOneMailbox(
     const parsed = await parseInboundMessage(raw, {
       providerMessageId: metadata.id,
     });
+    const direction =
+      parsed.from.toLowerCase() === connection.emailAddress.toLowerCase()
+        ? ("OUTBOUND" as const)
+        : ("INBOUND" as const);
     const rawArtifactId = uuidv7();
     const rawObjectKey = generateObjectKey(tracked.caseId, rawArtifactId);
     const attachmentArtifacts = parsed.attachments.map((attachment) => {
@@ -229,7 +304,7 @@ async function runOneMailbox(
           id: messageId,
           submissionId: tracked.submissionId,
           mailboxConnectionId: connection.id,
-          direction: "INBOUND",
+          direction,
           providerMessageId: metadata.id,
           providerThreadId: metadata.threadId,
           rfcMessageId: parsed.rfcMessageId,
@@ -242,9 +317,10 @@ async function runOneMailbox(
           bodyText: parsed.bodyText,
           bodyEncrypted: parsed.encrypted ? "OPENPGP" : "PLAIN",
           rawArtifactId,
-          classification: "UNREVIEWED",
+          classification: direction === "INBOUND" ? "UNREVIEWED" : "OTHER",
           visibility: "VENDOR",
-          receivedAt: parsed.receivedAt,
+          receivedAt: direction === "INBOUND" ? parsed.receivedAt : null,
+          sentAt: direction === "OUTBOUND" ? parsed.receivedAt : null,
         });
         if (attachmentArtifacts.length > 0) {
           await tx.insert(schema.correspondenceMessageAttachments).values(
@@ -257,7 +333,10 @@ async function runOneMailbox(
         }
         await tx.insert(schema.auditEvents).values({
           organizationId: tracked.organizationId,
-          action: "correspondence.inbound_received",
+          action:
+            direction === "INBOUND"
+              ? "correspondence.inbound_received"
+              : "correspondence.outbound_imported",
           entityType: "correspondence_message",
           entityId: messageId,
           caseId: tracked.caseId,
@@ -269,6 +348,38 @@ async function runOneMailbox(
             attachmentCount: attachmentArtifacts.length,
           },
         });
+        const arrivedAfterLink =
+          tracked.linkedAt !== null && parsed.receivedAt > tracked.linkedAt;
+        if (
+          direction === "INBOUND" &&
+          (dataThreadId === undefined || arrivedAfterLink)
+        ) {
+          const members = await tx
+            .select({ userId: schema.caseMembers.userId })
+            .from(schema.caseMembers)
+            .where(eq(schema.caseMembers.caseId, tracked.caseId));
+          const recipients = new Set([
+            tracked.caseOwnerId,
+            connection.userId,
+            ...members.map((member) => member.userId),
+          ]);
+          await tx.insert(schema.securityNotifications).values(
+            [...recipients].map((userId) => ({
+              organizationId: tracked.organizationId,
+              userId,
+              eventType: "VENDOR_REPLY_RECEIVED",
+              details: {
+                caseId: tracked.caseId,
+                caseRef: tracked.caseRef,
+                submissionId: tracked.submissionId,
+                submissionRef: tracked.submissionRef,
+                messageId,
+                subject: parsed.subject,
+                from: parsed.from,
+              },
+            })),
+          );
+        }
         return attachmentArtifacts.map((item) => item.id);
       });
       for (const artifactId of artifactIds) {
@@ -315,6 +426,26 @@ async function runOneMailbox(
     });
   };
 
+  if (dataThreadId !== undefined) {
+    if ((await trackedSubmission(dataThreadId)) === null) return;
+    await syncTrackedThread({
+      accessToken: access.accessToken,
+      threadId: dataThreadId,
+      getThreadMessageIds: (token, threadId) =>
+        provider.getThreadMessageIds(token, threadId),
+      getMessageMetadata: (token, messageId) =>
+        provider.getMessageMetadata(token, messageId),
+      getMessageRaw: (token, messageId) =>
+        provider.getMessageRaw(token, messageId),
+      persistTracked,
+    });
+    await advanceCursor(
+      connection.historyId ??
+        (await provider.getProfileHistoryId(access.accessToken)),
+    );
+    return;
+  }
+
   if (connection.historyId === null) {
     await advanceCursor(await provider.getProfileHistoryId(access.accessToken));
     return;
@@ -340,7 +471,7 @@ async function runOneMailbox(
       throw error;
     }
     // The History cursor expired. Rescan only threads CodeVault already owns.
-    const trackedThreads = await context.db
+    const correspondenceThreads = await context.db
       .selectDistinct({
         threadId: schema.correspondenceMessages.providerThreadId,
       })
@@ -351,11 +482,22 @@ async function runOneMailbox(
           sql`${schema.correspondenceMessages.providerThreadId} IS NOT NULL`,
         ),
       );
-    for (const tracked of trackedThreads) {
-      if (tracked.threadId === null) continue;
+    const linkedThreads = await context.db
+      .select({ threadId: schema.submissionMailThreads.providerThreadId })
+      .from(schema.submissionMailThreads)
+      .where(
+        eq(schema.submissionMailThreads.mailboxConnectionId, connection.id),
+      );
+    const trackedThreadIds = new Set([
+      ...correspondenceThreads.flatMap((tracked) =>
+        tracked.threadId === null ? [] : [tracked.threadId],
+      ),
+      ...linkedThreads.map((tracked) => tracked.threadId),
+    ]);
+    for (const threadId of trackedThreadIds) {
       for (const messageId of await provider.getThreadMessageIds(
         access.accessToken,
-        tracked.threadId,
+        threadId,
       )) {
         const metadata = await provider.getMessageMetadata(
           access.accessToken,
@@ -393,7 +535,7 @@ export async function runGmailSync(
       : [{ id: data.connectionId }];
   for (const { id } of ids) {
     try {
-      await runOneMailbox(context, id);
+      await runOneMailbox(context, id, data.threadId);
     } catch (error: unknown) {
       const reauth =
         error instanceof MailProviderError &&
@@ -410,6 +552,7 @@ export async function runGmailSync(
         })
         .where(eq(schema.mailboxConnections.id, id));
       context.log(`Gmail sync failed for connection ${id}`);
+      if (data.threadId !== undefined) throw error;
     }
   }
 }

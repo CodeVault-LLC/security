@@ -40,11 +40,18 @@ import {
   Select,
   severityChartSegments,
   StackedBar,
+  Tabs,
+  TabsList,
+  TabsTrigger,
   Textarea,
   TrendChart,
 } from "@codevault/ui";
 
 import { PageHeader } from "../components/app-shell.js";
+import {
+  CursorPagination,
+  useCursorPagination,
+} from "../components/cursor-pagination.js";
 import {
   RegistrySearchDialog,
   registryResultToAssetDraft,
@@ -79,6 +86,8 @@ interface Paginated<T> {
   nextCursor: string | null;
 }
 
+const COLLECTION_PAGE_SIZE = 50;
+
 /**
  * What each identifier scheme actually is.
  *
@@ -103,16 +112,24 @@ export function AssetsRoute(): React.JSX.Element {
   const user = useSession((state) => state.user);
   const [createOpen, setCreateOpen] = useState(routeSearch.create);
   const [kindFilter, setKindFilter] = useState<string>("");
-  const [limit, setLimit] = useState(200);
   const vendorFilter = routeSearch.vendorId;
+  const pagination = useCursorPagination(`${kindFilter}:${vendorFilter ?? ""}`);
 
-  const assetQuery = new URLSearchParams({ limit: String(limit) });
+  const assetQuery = new URLSearchParams({
+    limit: String(COLLECTION_PAGE_SIZE),
+  });
 
   if (kindFilter.length > 0) assetQuery.set("kind", kindFilter);
   if (vendorFilter !== undefined) assetQuery.set("vendorId", vendorFilter);
+  if (pagination.cursor !== null) assetQuery.set("cursor", pagination.cursor);
 
   const assets = useApiQuery<Paginated<AssetSummary>>(
-    queryKeys.assets({ kind: kindFilter, vendorId: vendorFilter, limit }),
+    queryKeys.assets({
+      kind: kindFilter,
+      vendorId: vendorFilter,
+      limit: COLLECTION_PAGE_SIZE,
+      cursor: pagination.cursor,
+    }),
     `/v1/assets?${assetQuery.toString()}`,
   );
 
@@ -383,17 +400,14 @@ export function AssetsRoute(): React.JSX.Element {
               </li>
             ))}
           </ul>
-          {assets.data?.nextCursor === null ? null : (
-            <div className="flex justify-center border-t border-border p-3">
-              <Button
-                variant="secondary"
-                loading={assets.isFetching}
-                onClick={() => setLimit((current) => current + 200)}
-              >
-                Load more assets
-              </Button>
-            </div>
-          )}
+          <CursorPagination
+            label="Asset"
+            pageIndex={pagination.pageIndex}
+            nextCursor={assets.data?.nextCursor ?? null}
+            loading={assets.isFetching}
+            onPrevious={pagination.previous}
+            onNext={pagination.next}
+          />
         </div>
       )}
 
@@ -417,6 +431,7 @@ export function AssetDetailRoute({
   const [identifierOpen, setIdentifierOpen] = useState(false);
   const [versionOpen, setVersionOpen] = useState(false);
   const [relationshipOpen, setRelationshipOpen] = useState(false);
+  const [assetTab, setAssetTab] = useState("overview");
   const asset = useApiQuery<AssetDetail>(
     queryKeys.asset(assetId),
     `/v1/assets/${assetId}`,
@@ -455,325 +470,351 @@ export function AssetDetailRoute({
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader
-        title={data.name}
-        description={`${data.ref} · ${humanise(data.kind)} · ${data.vendor?.name ?? data.legacyVendorName ?? "Vendor unknown"}${data.version === null ? "" : ` · ${data.version}`}`}
-        actions={
+      <header className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-3">
+        <AssetKindIcon kind={data.kind} />
+        <Mono className="shrink-0 text-text-muted">{data.ref}</Mono>
+        <h1 className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+          {data.name}
+        </h1>
+        {data.version === null ? null : (
+          <Mono className="hidden text-text-muted md:inline">
+            {data.version}
+          </Mono>
+        )}
+        {editable ? (
           <>
-            <Button asChild variant="secondary">
-              <Link
-                to="/findings"
-                search={{ assetId: data.id, assetName: data.name }}
-              >
-                View findings
-              </Link>
+            <Button variant="ghost" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil aria-hidden className="size-3.5" />
+              Edit
             </Button>
-            {editable ? (
-              <>
-                <Button variant="secondary" onClick={() => setEditOpen(true)}>
-                  <Pencil aria-hidden className="size-3.5" />
-                  Edit asset
-                </Button>
-                <Button
-                  variant="primary"
-                  onClick={() => setCreateFindingOpen(true)}
-                >
-                  <FilePlus2 aria-hidden className="size-3.5" />
-                  New finding
-                </Button>
-              </>
-            ) : null}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setCreateFindingOpen(true)}
+            >
+              <FilePlus2 aria-hidden className="size-3.5" />
+              New finding
+            </Button>
           </>
-        }
-      />
+        ) : null}
+      </header>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <Card className="xl:col-span-2">
-            <CardHeader>
-              <CardTitle>Findings</CardTitle>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-text-muted">
-                  {metrics.data === undefined
-                    ? ""
-                    : `${metrics.data.total} against this asset`}
-                </span>
-                <Button asChild variant="ghost" size="sm">
-                  <Link
-                    to="/findings"
-                    search={{ assetId: data.id, assetName: data.name }}
-                  >
-                    View findings
-                  </Link>
-                </Button>
-              </div>
-            </CardHeader>
-            <CardBody>
-              {metrics.error !== null ? (
-                <ErrorState
-                  title={errorHeading(metrics.error)}
-                  description={metrics.error.message}
-                  action={
-                    <Button
-                      variant="secondary"
-                      loading={metrics.isFetching}
-                      onClick={() => void metrics.refetch()}
-                    >
-                      Try again
+      <Tabs
+        value={assetTab}
+        onValueChange={setAssetTab}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="findings">
+            Findings {metrics.data?.total ?? data.findingCount}
+          </TabsTrigger>
+          <TabsTrigger value="relationships">
+            Relationships {data.relationships.length}
+          </TabsTrigger>
+        </TabsList>
+
+        <div role="tabpanel" className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {assetTab === "findings" ? (
+              <Card className="xl:col-span-2">
+                <CardHeader>
+                  <CardTitle>Findings</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-text-muted">
+                      {metrics.data === undefined
+                        ? ""
+                        : `${metrics.data.total} against this asset`}
+                    </span>
+                    <Button asChild variant="ghost" size="sm">
+                      <Link
+                        to="/findings"
+                        search={{ assetId: data.id, assetName: data.name }}
+                      >
+                        View findings
+                      </Link>
                     </Button>
-                  }
-                />
-              ) : metrics.isLoading ? (
-                <LoadingState className="py-2" />
-              ) : metrics.data === undefined ? null : metrics.data.total ===
-                0 ? (
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-[12px] text-text-muted">
-                    No findings are recorded against this asset yet.
-                  </p>
-                  {editable ? (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setCreateFindingOpen(true)}
-                    >
-                      <Plus aria-hidden className="size-3.5" />
-                      New finding
-                    </Button>
-                  ) : null}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                  <div className="lg:col-span-1">
-                    <StackedBar
-                      caption={`Findings against ${data.name} by severity`}
-                      segments={severityChartSegments(metrics.data.severity)}
-                    />
                   </div>
-
-                  <div className="lg:col-span-1">
-                    <TrendChart
-                      caption={`Findings opened against ${data.name}`}
-                      buckets={metrics.data.trend.map((point) =>
-                        formatBucket(
-                          point.bucketStart,
-                          metrics.data?.bucket ?? "week",
-                        ),
-                      )}
-                      series={[
-                        {
-                          key: "opened",
-                          label: "Opened",
-                          color: "--cv-accent",
-                          points: metrics.data.trend.map(
-                            (point) => point.opened,
-                          ),
-                        },
-                      ]}
+                </CardHeader>
+                <CardBody>
+                  {metrics.error !== null ? (
+                    <ErrorState
+                      title={errorHeading(metrics.error)}
+                      description={metrics.error.message}
+                      action={
+                        <Button
+                          variant="secondary"
+                          loading={metrics.isFetching}
+                          onClick={() => void metrics.refetch()}
+                        >
+                          Try again
+                        </Button>
+                      }
                     />
-                  </div>
+                  ) : metrics.isLoading ? (
+                    <LoadingState className="py-2" />
+                  ) : metrics.data === undefined ? null : metrics.data.total ===
+                    0 ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-[12px] text-text-muted">
+                        No findings are recorded against this asset yet.
+                      </p>
+                      {editable ? (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => setCreateFindingOpen(true)}
+                        >
+                          <Plus aria-hidden className="size-3.5" />
+                          New finding
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+                      <div className="lg:col-span-1">
+                        <StackedBar
+                          caption={`Findings against ${data.name} by severity`}
+                          segments={severityChartSegments(
+                            metrics.data.severity,
+                          )}
+                        />
+                      </div>
 
-                  <div className="flex flex-col justify-center gap-2 lg:col-span-1">
-                    {/* Pairs with the dashboard's "unverified affected
+                      <div className="lg:col-span-1">
+                        <TrendChart
+                          caption={`Findings opened against ${data.name}`}
+                          buckets={metrics.data.trend.map((point) =>
+                            formatBucket(
+                              point.bucketStart,
+                              metrics.data?.bucket ?? "week",
+                            ),
+                          )}
+                          series={[
+                            {
+                              key: "opened",
+                              label: "Opened",
+                              color: "--cv-accent",
+                              points: metrics.data.trend.map(
+                                (point) => point.opened,
+                              ),
+                            },
+                          ]}
+                        />
+                      </div>
+
+                      <div className="flex flex-col justify-center gap-2 lg:col-span-1">
+                        {/* Pairs with the dashboard's "unverified affected
                         versions" alert, so the two agree about what is
                         outstanding rather than counting it differently. */}
-                    <Meter
-                      label="Version ranges verified"
-                      value={metrics.data.affectedRanges.verified}
-                      total={metrics.data.affectedRanges.total}
-                    />
-                    {metrics.data.affectedRanges.inferredUnverified ===
-                    0 ? null : (
-                      <p className="text-[11px] text-warning">
-                        {metrics.data.affectedRanges.inferredUnverified}{" "}
-                        inferred range
-                        {metrics.data.affectedRanges.inferredUnverified === 1
-                          ? " has"
-                          : "s have"}{" "}
-                        never been verified.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </CardBody>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Identifiers</CardTitle>
-              {editable ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIdentifierOpen(true)}
-                >
-                  <Plus aria-hidden className="size-3.5" />
-                  Add identifier
-                </Button>
-              ) : null}
-            </CardHeader>
-            {data.identifiers.length === 0 ? (
-              <CardBody className="text-[12px] text-text-muted">
-                None recorded. A PURL or CPE makes prior-art matching far more
-                accurate than a product name.
-              </CardBody>
-            ) : (
-              <ul className="divide-y divide-border">
-                {data.identifiers.map((identifier) => (
-                  <li
-                    key={identifier.id}
-                    className="flex items-center gap-2 px-3 py-1.5 text-[12px]"
-                  >
-                    <span className="w-28 shrink-0 text-text-muted">
-                      {identifier.scheme}
-                    </span>
-                    <Mono className="min-w-0 flex-1 truncate">
-                      {identifier.value}
-                    </Mono>
-                    {identifier.primary ? (
-                      <span className="text-[10px] uppercase text-accent">
-                        Primary
-                      </span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Versions</CardTitle>
-              {editable ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setVersionOpen(true)}
-                >
-                  <Plus aria-hidden className="size-3.5" />
-                  Add version
-                </Button>
-              ) : null}
-            </CardHeader>
-            {data.versions.length === 0 ? (
-              <CardBody className="text-[12px] text-text-muted">
-                No versions recorded.
-              </CardBody>
-            ) : (
-              <ul className="divide-y divide-border">
-                {data.versions.map((version) => (
-                  <li
-                    key={version.id}
-                    className="flex items-center gap-2 px-3 py-1.5 text-[12px]"
-                  >
-                    <Mono className="flex-1">{version.version}</Mono>
-                    <span className="text-text-muted">
-                      {formatDate(version.releasedAt)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card className="xl:col-span-2">
-            <CardHeader>
-              <CardTitle>Relationships</CardTitle>
-              {editable ? (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setRelationshipOpen(true)}
-                >
-                  <Plus aria-hidden className="size-3.5" />
-                  Add relationship
-                </Button>
-              ) : null}
-            </CardHeader>
-            {data.relationships.length === 0 ? (
-              <CardBody className="text-[12px] text-text-muted">
-                No relationships. A device relates to its firmware; firmware
-                contains components; a service runs on a host.
-              </CardBody>
-            ) : (
-              <ul className="divide-y divide-border">
-                {data.relationships.map((relationship) => (
-                  <li
-                    key={relationship.id}
-                    className="flex items-center gap-2 px-3 py-1.5 text-[12px]"
-                  >
-                    <span className="w-32 shrink-0 text-text-muted">
-                      {humanise(relationship.relationship)}
-                    </span>
-                    <AssetKindIcon kind={relationship.toAssetKind} />
-                    <Link
-                      to={`/assets/${relationship.toAssetId}`}
-                      className="min-w-0 flex-1 truncate hover:underline"
-                    >
-                      {relationship.toAssetName}
-                    </Link>
-                    {relationship.note === null ? null : (
-                      <span className="text-text-muted">
-                        {relationship.note}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          <Card className="xl:col-span-2">
-            <CardHeader>
-              <CardTitle>Details</CardTitle>
-            </CardHeader>
-            <CardBody className="grid grid-cols-1 gap-x-6 gap-y-3 text-[12px] lg:grid-cols-2">
-              <DetailItem label="Vendor">
-                {data.vendor === null ? (
-                  <span className="text-text-muted">
-                    {data.legacyVendorName ?? "Not linked"}
-                  </span>
-                ) : (
-                  <Link
-                    to={`/vendors/${data.vendor.id}`}
-                    className="font-medium text-accent hover:underline"
-                  >
-                    {data.vendor.name}
-                  </Link>
-                )}
-              </DetailItem>
-              <DetailItem label="Version or model">
-                {data.version ?? "Not recorded"}
-              </DetailItem>
-              <DetailItem label="Notes" className="lg:col-span-2">
-                <span className="whitespace-pre-wrap text-pretty">
-                  {data.notes ?? "No notes recorded."}
-                </span>
-              </DetailItem>
-              {Object.keys(data.metadata).length === 0 ? null : (
-                <DetailItem label="Metadata" className="lg:col-span-2">
-                  <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {Object.entries(data.metadata).map(([key, value]) => (
-                      <div
-                        key={key}
-                        className="grid grid-cols-[9rem_1fr] gap-2"
-                      >
-                        <dt className="text-text-muted">{humanise(key)}</dt>
-                        <dd className="min-w-0 break-words font-mono">
-                          {typeof value === "string"
-                            ? value
-                            : JSON.stringify(value)}
-                        </dd>
+                        <Meter
+                          label="Version ranges verified"
+                          value={metrics.data.affectedRanges.verified}
+                          total={metrics.data.affectedRanges.total}
+                        />
+                        {metrics.data.affectedRanges.inferredUnverified ===
+                        0 ? null : (
+                          <p className="text-[11px] text-warning">
+                            {metrics.data.affectedRanges.inferredUnverified}{" "}
+                            inferred range
+                            {metrics.data.affectedRanges.inferredUnverified ===
+                            1
+                              ? " has"
+                              : "s have"}{" "}
+                            never been verified.
+                          </p>
+                        )}
                       </div>
+                    </div>
+                  )}
+                </CardBody>
+              </Card>
+            ) : null}
+
+            {assetTab === "overview" ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Identifiers</CardTitle>
+                  {editable ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setIdentifierOpen(true)}
+                    >
+                      <Plus aria-hidden className="size-3.5" />
+                      Add identifier
+                    </Button>
+                  ) : null}
+                </CardHeader>
+                {data.identifiers.length === 0 ? (
+                  <CardBody className="text-[12px] text-text-muted">
+                    None recorded. A PURL or CPE makes prior-art matching far
+                    more accurate than a product name.
+                  </CardBody>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {data.identifiers.map((identifier) => (
+                      <li
+                        key={identifier.id}
+                        className="flex items-center gap-2 px-3 py-1.5 text-[12px]"
+                      >
+                        <span className="w-28 shrink-0 text-text-muted">
+                          {identifier.scheme}
+                        </span>
+                        <Mono className="min-w-0 flex-1 truncate">
+                          {identifier.value}
+                        </Mono>
+                        {identifier.primary ? (
+                          <span className="text-[10px] uppercase text-accent">
+                            Primary
+                          </span>
+                        ) : null}
+                      </li>
                     ))}
-                  </dl>
-                </DetailItem>
-              )}
-            </CardBody>
-          </Card>
+                  </ul>
+                )}
+              </Card>
+            ) : null}
+
+            {assetTab === "overview" ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Versions</CardTitle>
+                  {editable ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setVersionOpen(true)}
+                    >
+                      <Plus aria-hidden className="size-3.5" />
+                      Add version
+                    </Button>
+                  ) : null}
+                </CardHeader>
+                {data.versions.length === 0 ? (
+                  <CardBody className="text-[12px] text-text-muted">
+                    No versions recorded.
+                  </CardBody>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {data.versions.map((version) => (
+                      <li
+                        key={version.id}
+                        className="flex items-center gap-2 px-3 py-1.5 text-[12px]"
+                      >
+                        <Mono className="flex-1">{version.version}</Mono>
+                        <span className="text-text-muted">
+                          {formatDate(version.releasedAt)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            ) : null}
+
+            {assetTab === "relationships" ? (
+              <Card className="xl:col-span-2">
+                <CardHeader>
+                  <CardTitle>Relationships</CardTitle>
+                  {editable ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setRelationshipOpen(true)}
+                    >
+                      <Plus aria-hidden className="size-3.5" />
+                      Add relationship
+                    </Button>
+                  ) : null}
+                </CardHeader>
+                {data.relationships.length === 0 ? (
+                  <CardBody className="text-[12px] text-text-muted">
+                    No relationships. A device relates to its firmware; firmware
+                    contains components; a service runs on a host.
+                  </CardBody>
+                ) : (
+                  <ul className="divide-y divide-border">
+                    {data.relationships.map((relationship) => (
+                      <li
+                        key={relationship.id}
+                        className="flex items-center gap-2 px-3 py-1.5 text-[12px]"
+                      >
+                        <span className="w-32 shrink-0 text-text-muted">
+                          {humanise(relationship.relationship)}
+                        </span>
+                        <AssetKindIcon kind={relationship.toAssetKind} />
+                        <Link
+                          to={`/assets/${relationship.toAssetId}`}
+                          className="min-w-0 flex-1 truncate hover:underline"
+                        >
+                          {relationship.toAssetName}
+                        </Link>
+                        {relationship.note === null ? null : (
+                          <span className="text-text-muted">
+                            {relationship.note}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
+            ) : null}
+
+            {assetTab === "overview" ? (
+              <Card className="xl:col-span-2">
+                <CardHeader>
+                  <CardTitle>Details</CardTitle>
+                </CardHeader>
+                <CardBody className="grid grid-cols-1 gap-x-6 gap-y-3 text-[12px] lg:grid-cols-2">
+                  <DetailItem label="Vendor">
+                    {data.vendor === null ? (
+                      <span className="text-text-muted">
+                        {data.legacyVendorName ?? "Not linked"}
+                      </span>
+                    ) : (
+                      <Link
+                        to={`/vendors/${data.vendor.id}`}
+                        className="font-medium text-accent hover:underline"
+                      >
+                        {data.vendor.name}
+                      </Link>
+                    )}
+                  </DetailItem>
+                  <DetailItem label="Version or model">
+                    {data.version ?? "Not recorded"}
+                  </DetailItem>
+                  <DetailItem label="Notes" className="lg:col-span-2">
+                    <span className="whitespace-pre-wrap text-pretty">
+                      {data.notes ?? "No notes recorded."}
+                    </span>
+                  </DetailItem>
+                  {Object.keys(data.metadata).length === 0 ? null : (
+                    <DetailItem label="Metadata" className="lg:col-span-2">
+                      <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        {Object.entries(data.metadata).map(([key, value]) => (
+                          <div
+                            key={key}
+                            className="grid grid-cols-[9rem_1fr] gap-2"
+                          >
+                            <dt className="text-text-muted">{humanise(key)}</dt>
+                            <dd className="min-w-0 break-words font-mono">
+                              {typeof value === "string"
+                                ? value
+                                : JSON.stringify(value)}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </DetailItem>
+                  )}
+                </CardBody>
+              </Card>
+            ) : null}
+          </div>
         </div>
-      </div>
+      </Tabs>
       <EditAssetDialog
         asset={data}
         open={editOpen}

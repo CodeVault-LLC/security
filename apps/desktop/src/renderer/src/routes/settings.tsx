@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import {
   Bot,
   Check,
@@ -9,7 +9,7 @@ import {
   RefreshCw,
   Smartphone,
 } from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
   AiProviderPolicy,
@@ -19,11 +19,14 @@ import type {
   OrganizationUser,
   WebAuthnCredentialSummary,
 } from "@codevault/contracts";
-import { Button, cn, Input, Label } from "@codevault/ui";
+import { Button, Checkbox, cn, Input, Label } from "@codevault/ui";
 
-import { PageBody } from "../components/app-shell.js";
 import { Avatar } from "../components/avatar.js";
 import { QueryError } from "../components/query-boundary.js";
+import {
+  PersonalSettingsPage as PersonalPage,
+  SettingsSection,
+} from "../components/settings-layout.js";
 import { useAiProviderPreference } from "../hooks/use-ai-provider-preference.js";
 import { useTheme } from "../hooks/use-theme.js";
 import {
@@ -34,119 +37,6 @@ import { queryKeys, useApiMutation, useApiQuery } from "../lib/api.js";
 import { bridge } from "../lib/bridge.js";
 import { formatDateTime } from "../lib/dates.js";
 import { useSession } from "../lib/session.js";
-
-const SETTINGS_GROUPS = [
-  {
-    label: "Account",
-    items: [
-      { to: "/settings/profile", label: "Profile" },
-      { to: "/settings/security", label: "Security" },
-    ],
-  },
-  {
-    label: "Application",
-    items: [
-      { to: "/settings/appearance", label: "Appearance" },
-      { to: "/settings/ai", label: "AI" },
-      { to: "/settings/mail", label: "Mail" },
-    ],
-  },
-] as const;
-
-function SettingsNav(): React.JSX.Element {
-  const pathname = useRouterState({
-    select: (state) => state.location.pathname,
-  });
-
-  return (
-    <nav
-      aria-label="Settings"
-      className="-mx-1 flex gap-1 overflow-x-auto border-b border-border px-1 pb-2 lg:mx-0 lg:flex-col lg:gap-7 lg:overflow-visible lg:border-b-0 lg:px-0 lg:pb-0"
-    >
-      {SETTINGS_GROUPS.map((group) => (
-        <div key={group.label} className="contents lg:block">
-          <p className="mb-1 hidden px-2 text-[11px] font-medium text-text-muted lg:block">
-            {group.label}
-          </p>
-          <div className="contents lg:flex lg:flex-col lg:gap-0.5">
-            {group.items.map((item) => {
-              const active = pathname === item.to;
-
-              return (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  aria-current={active ? "page" : undefined}
-                  className={cn(
-                    "flex min-h-10 shrink-0 items-center rounded-(--cv-radius) px-3 text-[13px] font-medium",
-                    "transition-[background-color,color,transform] duration-150 ease-out active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
-                    "focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus",
-                    active
-                      ? "bg-surface-hover text-text"
-                      : "text-text-muted hover:bg-surface-hover hover:text-text",
-                  )}
-                >
-                  {item.label}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </nav>
-  );
-}
-
-function PersonalPage(props: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  return (
-    <div className="flex h-full flex-col">
-      <PageBody className="bg-background [scrollbar-gutter:stable]">
-        <div className="mx-auto grid max-w-6xl gap-8 py-2 lg:grid-cols-[176px_minmax(0,780px)] lg:gap-14 lg:py-5">
-          <aside className="lg:sticky lg:top-5 lg:self-start">
-            <h1 className="mb-5 text-balance text-[18px] font-semibold tracking-[-0.02em]">
-              Settings
-            </h1>
-            <SettingsNav />
-          </aside>
-          <div className="min-w-0" aria-labelledby="settings-page-title">
-            <header className="pb-7 lg:pt-0.5">
-              <h2
-                id="settings-page-title"
-                className="text-balance text-[19px] font-semibold tracking-[-0.02em]"
-              >
-                {props.title}
-              </h2>
-              <p className="mt-1.5 max-w-[68ch] text-pretty text-[13px] leading-5 text-text-muted">
-                {props.description}
-              </p>
-            </header>
-            <div>{props.children}</div>
-          </div>
-        </div>
-      </PageBody>
-    </div>
-  );
-}
-
-function SettingsSection(props: {
-  title: string;
-  children: React.ReactNode;
-}): React.JSX.Element {
-  const titleId = useId();
-
-  return (
-    <section aria-labelledby={titleId} className="border-t border-border py-7">
-      <h3 id={titleId} className="text-[14px] font-semibold">
-        {props.title}
-      </h3>
-      <div className="mt-4 min-w-0">{props.children}</div>
-    </section>
-  );
-}
 
 function InlineDisclosure(props: {
   open: boolean;
@@ -249,7 +139,7 @@ export function PersonalProfileRoute(): React.JSX.Element {
             <Label htmlFor="personal-display-name">Display name</Label>
             <Input
               id="personal-display-name"
-              className="mt-1.5 h-10"
+              className="mt-1.5"
               value={displayName}
               aria-describedby={
                 profileIsValid ? undefined : "personal-display-name-hint"
@@ -286,7 +176,6 @@ export function PersonalProfileRoute(): React.JSX.Element {
             <div className="mt-5 flex flex-wrap items-center gap-3">
               <Button
                 variant="primary"
-                className="h-10 px-4"
                 loading={update.isPending}
                 disabled={!profileIsValid || !profileIsDirty}
                 aria-describedby={
@@ -460,10 +349,10 @@ export function PersonalAppearanceRoute(): React.JSX.Element {
                 <label
                   key={theme.value}
                   className={cn(
-                    "group relative cursor-pointer rounded-xl border p-2",
-                    "transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100",
+                    "group relative cursor-pointer rounded-(--cv-radius-lg) border p-2",
+                    "transition-[background-color,border-color,transform] duration-150 ease-out active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
                     selected
-                      ? "border-accent bg-accent/6 shadow-[0_0_0_1px_var(--cv-accent)]"
+                      ? "border-accent bg-accent/6"
                       : "border-border bg-surface hover:border-border-strong hover:bg-surface-raised",
                   )}
                 >
@@ -475,7 +364,7 @@ export function PersonalAppearanceRoute(): React.JSX.Element {
                     className="peer sr-only"
                     onChange={() => setPreference(theme.value)}
                   />
-                  <span className="absolute inset-0 rounded-xl peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus" />
+                  <span className="absolute inset-0 rounded-(--cv-radius-lg) peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus" />
                   <ColorSchemePreview value={theme.value} />
                   <span className="mt-2 flex min-h-6 items-center justify-between px-1 text-[13px] font-medium">
                     {theme.label}
@@ -509,10 +398,10 @@ export function PersonalAppearanceRoute(): React.JSX.Element {
                 <label
                   key={option.value}
                   className={cn(
-                    "relative flex min-h-20 cursor-pointer items-center gap-4 rounded-xl border px-4 py-3",
-                    "transition-[background-color,border-color,box-shadow,transform] duration-150 ease-out active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100",
+                    "relative flex min-h-20 cursor-pointer items-center gap-4 rounded-(--cv-radius-lg) border px-4 py-3",
+                    "transition-[background-color,border-color,transform] duration-150 ease-out active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
                     selected
-                      ? "border-accent bg-accent/6 shadow-[0_0_0_1px_var(--cv-accent)]"
+                      ? "border-accent bg-accent/6"
                       : "border-border bg-surface hover:border-border-strong hover:bg-surface-raised",
                   )}
                 >
@@ -524,7 +413,7 @@ export function PersonalAppearanceRoute(): React.JSX.Element {
                     className="peer sr-only"
                     onChange={() => setAccent(option.value)}
                   />
-                  <span className="absolute inset-0 rounded-xl peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus" />
+                  <span className="absolute inset-0 rounded-(--cv-radius-lg) peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus" />
                   <span className="flex -space-x-2" aria-hidden>
                     {option.swatches.map((swatch) => (
                       <span
@@ -752,7 +641,7 @@ export function PersonalAiRoute(): React.JSX.Element {
           </p>
           <Button
             variant="secondary"
-            className="h-10 shrink-0 px-3"
+            className="shrink-0"
             loading={refreshing}
             onClick={() => void loadProviders()}
           >
@@ -1193,7 +1082,7 @@ export function PersonalSecurityRoute(): React.JSX.Element {
             <Label htmlFor="current-password">Current password</Label>
             <Input
               id="current-password"
-              className="mt-1.5 h-10"
+              className="mt-1.5"
               type="password"
               autoComplete="current-password"
               value={currentPassword}
@@ -1207,7 +1096,7 @@ export function PersonalSecurityRoute(): React.JSX.Element {
             <Label htmlFor="new-password">New password</Label>
             <Input
               id="new-password"
-              className="mt-1.5 h-10"
+              className="mt-1.5"
               type="password"
               autoComplete="new-password"
               value={newPassword}
@@ -1227,7 +1116,6 @@ export function PersonalSecurityRoute(): React.JSX.Element {
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <Button
               variant="primary"
-              className="h-10 px-4"
               loading={changePassword.isPending}
               disabled={!passwordIsValid}
               aria-describedby="password-consequence"
@@ -1300,7 +1188,7 @@ export function PersonalSecurityRoute(): React.JSX.Element {
             </p>
             <Button
               variant="secondary"
-              className="mt-3 h-10"
+              className="mt-3"
               loading={sessions.isFetching}
               onClick={() => void sessions.refetch()}
             >
@@ -1358,7 +1246,7 @@ export function PersonalSecurityRoute(): React.JSX.Element {
                           }
                         }}
                         variant="ghost"
-                        className="h-10 shrink-0 px-3 text-danger hover:bg-danger/10 hover:text-danger"
+                        className="shrink-0 text-danger hover:bg-danger/10 hover:text-danger"
                         aria-expanded={confirming}
                         aria-controls={`revoke-confirmation-${session.id}`}
                         onClick={() => {
@@ -1394,7 +1282,6 @@ export function PersonalSecurityRoute(): React.JSX.Element {
                               }
                             }}
                             variant="secondary"
-                            className="h-10"
                             disabled={revoke.isPending}
                             onClick={() => {
                               revoke.reset();
@@ -1406,7 +1293,6 @@ export function PersonalSecurityRoute(): React.JSX.Element {
                           </Button>
                           <Button
                             variant="danger"
-                            className="h-10 px-3"
                             loading={
                               revoke.isPending &&
                               revoke.variables === session.id
@@ -1635,7 +1521,7 @@ export function PersonalMailRoute(): React.JSX.Element {
                               }
                             }}
                             variant="ghost"
-                            className="h-10 shrink-0 px-3 text-danger hover:bg-danger/10 hover:text-danger"
+                            className="shrink-0 text-danger hover:bg-danger/10 hover:text-danger"
                             aria-expanded={confirming}
                             aria-controls={`disconnect-confirmation-${connection.id}`}
                             onClick={() => {
@@ -1677,7 +1563,6 @@ export function PersonalMailRoute(): React.JSX.Element {
                                 }
                               }}
                               variant="secondary"
-                              className="h-10"
                               disabled={disconnectMailbox.isPending}
                               onClick={() => {
                                 disconnectMailbox.reset();
@@ -1689,7 +1574,6 @@ export function PersonalMailRoute(): React.JSX.Element {
                             </Button>
                             <Button
                               variant="danger"
-                              className="h-10 px-3"
                               loading={
                                 disconnectMailbox.isPending &&
                                 disconnectMailbox.variables?.id ===
@@ -1729,18 +1613,18 @@ export function PersonalMailRoute(): React.JSX.Element {
               </ul>
             )}
 
-            <label className="mt-5 flex min-h-11 cursor-pointer items-start gap-3 py-1">
-              <input
-                type="checkbox"
-                className="mt-0.5 size-4 shrink-0 accent-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+            <div className="mt-5 flex min-h-11 items-start gap-3 py-1">
+              <Checkbox
+                id="mail-track-replies"
+                className="mt-0.5"
                 checked={trackReplies}
-                onChange={(event) => {
+                onCheckedChange={(value) => {
                   setError(null);
                   connectGmail.reset();
-                  setTrackReplies(event.target.checked);
+                  setTrackReplies(value === true);
                 }}
               />
-              <span>
+              <label htmlFor="mail-track-replies" className="cursor-pointer">
                 <span className="block text-[13px] font-medium">
                   Track replies to CodeVault-created threads
                 </span>
@@ -1748,13 +1632,12 @@ export function PersonalMailRoute(): React.JSX.Element {
                   Requests Gmail read-only access. Enable it only if your
                   organization has approved that access.
                 </span>
-              </span>
-            </label>
+              </label>
+            </div>
 
             <div className="mt-5 flex flex-wrap items-center gap-2">
               <Button
                 variant="primary"
-                className="h-10 px-4"
                 loading={connectGmail.isPending}
                 onClick={connect}
               >
@@ -1764,7 +1647,6 @@ export function PersonalMailRoute(): React.JSX.Element {
               </Button>
               <Button
                 variant="ghost"
-                className="h-10 px-3"
                 loading={mailConnections.isFetching}
                 onClick={() => void mailConnections.refetch()}
               >

@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Plus } from "lucide-react";
+import { MoreHorizontal, Plus } from "lucide-react";
 import { useState } from "react";
 
 import type {
@@ -14,6 +14,9 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
   EmptyState,
   ErrorState,
   LoadingState,
@@ -118,67 +121,64 @@ export function CaseDetailRoute({
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-b border-border px-4 py-3">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between xl:gap-4">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <Mono className="text-text-muted">{data.ref}</Mono>
-              <StateBadge kind="validation" state={data.status} />
-              <span className="text-[11px] text-text-muted">
-                {humanise(data.profile)}
-              </span>
-              {data.restricted ? (
-                <span className="text-[11px] text-danger">Restricted</span>
-              ) : null}
-              {canEdit ? null : (
-                <span className="text-[11px] text-text-muted">Read only</span>
-              )}
+      <header className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-3">
+        <Mono className="shrink-0 text-text-muted">{data.ref}</Mono>
+        <h1 className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+          {data.title}
+        </h1>
+        <StateBadge kind="validation" state={data.status} />
+        {data.restricted ? (
+          <span className="text-[11px] text-danger">Restricted</span>
+        ) : null}
+        {canEdit ? (
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={() => setCreateFindingOpen(true)}
+          >
+            <Plus aria-hidden className="size-3" />
+            New finding
+          </Button>
+        ) : (
+          <span className="text-[11px] text-text-muted">Read only</span>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="size-8 px-0"
+              aria-label="More case actions"
+              title="More actions"
+            >
+              <MoreHorizontal aria-hidden className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64 p-2">
+            <div className="flex flex-col items-stretch gap-1 [&_button]:w-full [&_button]:justify-start">
+              <CaseHandoffBriefButton
+                researchCase={data}
+                findings={findings.data?.items}
+                readiness={readiness.data}
+              />
+              <ExportCaseArchiveButton caseId={caseId} />
+              {canEdit ? <DuplicateCaseButton source={data} /> : null}
             </div>
-            <h1 className="mt-1 text-[18px] font-semibold leading-tight tracking-[-0.015em] text-balance">
-              {data.title}
-            </h1>
-            {data.summary === null ? null : (
-              <p className="mt-0.5 max-w-3xl text-[12px] text-text-muted">
-                {data.summary}
-              </p>
-            )}
-          </div>
-
-          <div className="flex shrink-0 flex-wrap items-start gap-2 self-start">
-            <CaseHandoffBriefButton
-              researchCase={data}
-              findings={findings.data?.items}
-              readiness={readiness.data}
-            />
-            <ExportCaseArchiveButton caseId={caseId} />
-            {canEdit ? (
-              <>
-                <DuplicateCaseButton source={data} />
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => setCreateFindingOpen(true)}
-                >
-                  <Plus aria-hidden className="size-3" />
-                  New finding
-                </Button>
-              </>
-            ) : null}
-          </div>
-        </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </header>
 
       <Tabs defaultValue="overview" className="flex min-h-0 flex-1 flex-col">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="findings">Findings</TabsTrigger>
-          <TabsTrigger value="intake">Intake</TabsTrigger>
-          <TabsTrigger value="evidence">Evidence</TabsTrigger>
           {data.disclosureEnabled ? (
             <TabsTrigger value="disclosure">Disclosure</TabsTrigger>
           ) : null}
           <TabsTrigger value="reports">Reports</TabsTrigger>
-          <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsTrigger value="intake">Intake</TabsTrigger>
+          <TabsTrigger value="evidence">Evidence</TabsTrigger>
+          <TabsTrigger value="activity">History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview" className="p-4">

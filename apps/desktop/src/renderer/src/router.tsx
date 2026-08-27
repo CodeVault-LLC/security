@@ -16,6 +16,7 @@ import { DashboardRoute } from "./routes/dashboard.js";
 import { FindingDetailRoute } from "./routes/finding-detail.js";
 import { FindingsRoute } from "./routes/findings.js";
 import { MetricsRoute } from "./routes/metrics.js";
+import { MailRoute } from "./routes/mail.js";
 import { NotificationsRoute } from "./routes/notifications.js";
 import {
   ActivityRoute,
@@ -156,9 +157,19 @@ const reportDetailRoute = createRoute({
 const submissionDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/submissions/$submissionId",
+  validateSearch: (search: Record<string, unknown>) => ({
+    messageId:
+      typeof search.messageId === "string" ? search.messageId : undefined,
+  }),
   component: function SubmissionDetailPage() {
     const { submissionId } = useParams({ from: "/submissions/$submissionId" });
-    return <SubmissionDetailRoute submissionId={submissionId} />;
+    const { messageId } = submissionDetailRoute.useSearch();
+    return (
+      <SubmissionDetailRoute
+        submissionId={submissionId}
+        {...(messageId === undefined ? {} : { focusMessageId: messageId })}
+      />
+    );
   },
 });
 
@@ -184,6 +195,25 @@ const notificationsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/notifications",
   component: NotificationsRoute,
+});
+
+const mailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/mail",
+  validateSearch: (search: Record<string, unknown>) => ({
+    folder:
+      search.folder === "SENT" || search.folder === "TRACKED"
+        ? search.folder
+        : ("INBOX" as const),
+    connectionId:
+      typeof search.connectionId === "string" ? search.connectionId : undefined,
+    threadId: typeof search.threadId === "string" ? search.threadId : undefined,
+    submissionId:
+      typeof search.submissionId === "string" ? search.submissionId : undefined,
+  }),
+  component: function MailPage() {
+    return <MailRoute search={mailRoute.useSearch()} />;
+  },
 });
 
 const settingsRoute = createRoute({
@@ -229,6 +259,13 @@ const organizationUsersRoute = createRoute({
   path: "/organization/users",
   component: OrganizationUsersRoute,
 });
+const organizationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/organization",
+  beforeLoad: () => {
+    throw redirect({ to: "/organization/users" });
+  },
+});
 const organizationUserDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/organization/users/$userId",
@@ -273,6 +310,7 @@ const routeTree = rootRoute.addChildren([
   activityRoute,
   metricsRoute,
   notificationsRoute,
+  mailRoute,
   settingsRoute,
   profileSettingsRoute,
   appearanceSettingsRoute,
@@ -280,6 +318,7 @@ const routeTree = rootRoute.addChildren([
   securitySettingsRoute,
   mailSettingsRoute,
   accountRoute,
+  organizationRoute,
   organizationUsersRoute,
   organizationUserDetailRoute,
   organizationSettingsRoute,

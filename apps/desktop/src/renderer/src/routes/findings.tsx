@@ -28,6 +28,10 @@ import {
 } from "@codevault/ui";
 
 import { PageHeader } from "../components/app-shell.js";
+import {
+  CursorPagination,
+  useCursorPagination,
+} from "../components/cursor-pagination.js";
 import { CreateFindingDialog } from "../features/findings/create-finding-dialog.js";
 import {
   applyFindingView,
@@ -55,6 +59,7 @@ interface Paginated<T> {
 }
 
 const ROW_HEIGHT = 72;
+const COLLECTION_PAGE_SIZE = 50;
 
 /**
  * The sentinel for "no filter".
@@ -81,12 +86,23 @@ export function FindingsRoute(): React.JSX.Element {
   const [priorArtState, setPriorArtState] =
     useState<FindingFilterState["priorArtState"]>("");
   const [severity, setSeverity] = useState<FindingFilterState["severity"]>("");
-  const [limit, setLimit] = useState(200);
 
   const debouncedSearch = useDebouncedValue(search, 220);
+  const paginationIdentity = [
+    debouncedSearch.trim(),
+    validationState,
+    remediationState,
+    disclosureState,
+    priorArtState,
+    severity,
+    routeSearch.assetId ?? "",
+  ].join(":");
+  const pagination = useCursorPagination(paginationIdentity);
 
   const query = useMemo(() => {
-    const params = new URLSearchParams({ limit: String(limit) });
+    const params = new URLSearchParams({
+      limit: String(COLLECTION_PAGE_SIZE),
+    });
 
     if (debouncedSearch.trim().length > 0) {
       params.set("query", debouncedSearch.trim());
@@ -116,6 +132,10 @@ export function FindingsRoute(): React.JSX.Element {
       params.set("assetId", routeSearch.assetId);
     }
 
+    if (pagination.cursor !== null) {
+      params.set("cursor", pagination.cursor);
+    }
+
     return params.toString();
   }, [
     debouncedSearch,
@@ -125,7 +145,7 @@ export function FindingsRoute(): React.JSX.Element {
     priorArtState,
     severity,
     routeSearch.assetId,
-    limit,
+    pagination.cursor,
   ]);
 
   const findings = useApiQuery<Paginated<FindingSummary>>(
@@ -438,17 +458,14 @@ export function FindingsRoute(): React.JSX.Element {
               );
             })}
           </div>
-          {findings.data?.nextCursor === null ? null : (
-            <div className="flex justify-center border-t border-border p-3">
-              <Button
-                variant="secondary"
-                loading={findings.isFetching}
-                onClick={() => setLimit((current) => current + 200)}
-              >
-                Load more findings
-              </Button>
-            </div>
-          )}
+          <CursorPagination
+            label="Finding"
+            pageIndex={pagination.pageIndex}
+            nextCursor={findings.data?.nextCursor ?? null}
+            loading={findings.isFetching}
+            onPrevious={pagination.previous}
+            onNext={pagination.next}
+          />
         </div>
       )}
 

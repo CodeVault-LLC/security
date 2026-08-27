@@ -1,9 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
-import type { CorrespondenceMessage } from "@codevault/contracts";
+import type {
+  CorrespondenceMessage,
+  SubmissionDetail,
+} from "@codevault/contracts";
 
 import { queryKeys } from "../../lib/api.js";
 import { CorrespondenceThread } from "./correspondence-thread.js";
@@ -54,6 +57,34 @@ const message: CorrespondenceMessage = {
   revision: 1,
 };
 
+const submission = {
+  id: message.submissionId,
+  status: "SENT",
+  revision: 1,
+  routeSnapshot: {
+    routeId: "018f2f56-7c9a-7abc-8def-0123456789af",
+    routeRevision: 1,
+    vendorId: "018f2f56-7c9a-7abc-8def-0123456789b0",
+    capturedAt: "2026-08-26T08:00:00.000Z",
+    route: {
+      name: "Vendor security",
+      type: "EMAIL",
+      to: ["security@vendor.example"],
+      cc: [],
+      subjectTemplate: "Security report",
+      maximumAttachmentBytes: 25_000_000,
+      acknowledgementBusinessDays: 5,
+      updateCadenceDays: null,
+      requiredFields: [],
+      encryptionPolicy: "OPTIONAL",
+      publicKeyId: null,
+    },
+  },
+} satisfies Pick<
+  SubmissionDetail,
+  "id" | "status" | "revision" | "routeSnapshot"
+>;
+
 describe("buildCorrespondenceTranscript", () => {
   it("includes locally decrypted content and auditable message metadata", () => {
     const transcript = buildCorrespondenceTranscript({
@@ -97,15 +128,12 @@ describe("CorrespondenceThread transcript export", () => {
     });
     client.setQueryData(queryKeys.correspondence(message.submissionId), {
       items: [{ ...message, encrypted: false, bodyText: "Stored response." }],
+      linkedThread: null,
       sync: null,
     });
     render(
       <QueryClientProvider client={client}>
-        <CorrespondenceThread
-          submissionId={message.submissionId}
-          submissionStatus="SENT"
-          submissionRevision={1}
-        />
+        <CorrespondenceThread submission={submission} canEdit />
       </QueryClientProvider>,
     );
 
@@ -119,5 +147,61 @@ describe("CorrespondenceThread transcript export", () => {
         expect.stringContaining("Stored response."),
       ),
     );
+  });
+
+  it("focuses a linked reply without exposing write actions to a reader", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { staleTime: Number.POSITIVE_INFINITY } },
+    });
+    client.setQueryData(queryKeys.correspondence(message.submissionId), {
+      items: [{ ...message, encrypted: false, bodyText: "Stored response." }],
+      linkedThread: {
+        providerThreadId: "thread-1",
+        linkedAt: "2026-08-26T08:00:00.000Z",
+      },
+      sync: null,
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <CorrespondenceThread
+          submission={submission}
+          canEdit={false}
+          focusMessageId={message.id}
+        />
+      </QueryClientProvider>,
+    );
+
+    const reply = document.getElementById(
+      `correspondence-message-${message.id}`,
+    );
+    await waitFor(() => expect(document.activeElement).toBe(reply));
+    expect(
+      screen.queryByRole("button", { name: "Draft reply in this thread" }),
+    ).toBeNull();
+    expect(screen.queryByLabelText("Message classification")).toBeNull();
+
+    const exportButton = screen.getByRole("button", {
+      name: "Export transcript",
+    });
+    exportButton.focus();
+    await act(async () => {
+      client.setQueryData(queryKeys.correspondence(message.submissionId), {
+        items: [
+          {
+            ...message,
+            encrypted: false,
+            bodyText: "Stored response.",
+            revision: 2,
+          },
+        ],
+        linkedThread: {
+          providerThreadId: "thread-1",
+          linkedAt: "2026-08-26T08:00:00.000Z",
+        },
+        sync: null,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    expect(document.activeElement).toBe(exportButton);
   });
 });

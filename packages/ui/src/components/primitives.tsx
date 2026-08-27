@@ -1,9 +1,12 @@
+import * as CheckboxPrimitive from "@radix-ui/react-checkbox";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
-import { AlertTriangle, Loader2 } from "lucide-react";
+import { AlertTriangle, Check, Loader2 } from "lucide-react";
 import {
   forwardRef,
   type ButtonHTMLAttributes,
+  type ComponentPropsWithoutRef,
+  type ComponentRef,
   type HTMLAttributes,
   type InputHTMLAttributes,
   type LabelHTMLAttributes,
@@ -119,6 +122,31 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     );
   },
 );
+
+/** A compact Shadcn-style checkbox backed by the Radix state model. */
+export const Checkbox = forwardRef<
+  ComponentRef<typeof CheckboxPrimitive.Root>,
+  ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root>
+>(function Checkbox({ className, ...props }, ref) {
+  return (
+    <CheckboxPrimitive.Root
+      ref={ref}
+      className={cn(
+        "peer flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-border-strong bg-surface text-accent-contrast",
+        "transition-[background-color,border-color,color] duration-100 hover:border-accent",
+        "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus",
+        "data-[state=checked]:border-accent data-[state=checked]:bg-accent",
+        "disabled:cursor-not-allowed disabled:bg-surface-raised disabled:opacity-50",
+        className,
+      )}
+      {...props}
+    >
+      <CheckboxPrimitive.Indicator className="flex items-center justify-center">
+        <Check aria-hidden className="size-3" strokeWidth={2.5} />
+      </CheckboxPrimitive.Indicator>
+    </CheckboxPrimitive.Root>
+  );
+});
 
 /**
  * A row of buttons joined into one control.

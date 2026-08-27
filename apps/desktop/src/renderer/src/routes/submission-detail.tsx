@@ -37,8 +37,10 @@ import { canWrite, useSession } from "../lib/session.js";
 
 export function SubmissionDetailRoute({
   submissionId,
+  focusMessageId,
 }: {
   submissionId: string;
+  focusMessageId?: string;
 }): React.JSX.Element {
   const user = useSession((state) => state.user);
   const [error, setError] = useState<string | null>(null);
@@ -253,9 +255,9 @@ export function SubmissionDetailRoute({
             }
           />
           <CorrespondenceThread
-            submissionId={submission.id}
-            submissionStatus={submission.status}
-            submissionRevision={submission.revision}
+            submission={submission}
+            canEdit={canWrite(user)}
+            {...(focusMessageId === undefined ? {} : { focusMessageId })}
           />
           <Card>
             <CardHeader>

@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { CheckCircle2, CircleOff, LockKeyhole, RotateCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 import {
   AI_EFFORT_LEVELS,
@@ -24,6 +24,7 @@ import {
   CardBody,
   CardHeader,
   CardTitle,
+  Checkbox,
   cn,
   FieldDescription,
   FieldError,
@@ -35,9 +36,9 @@ import {
   Spinner,
 } from "@codevault/ui";
 
-import { PageBody, PageHeader } from "../components/app-shell.js";
 import { Avatar } from "../components/avatar.js";
 import { QueryError } from "../components/query-boundary.js";
+import { OrganizationSettingsPage as OrganizationPage } from "../components/settings-layout.js";
 import { normalizeAiProviderStatuses } from "../lib/ai-providers.js";
 import { useApiMutation, useApiQuery } from "../lib/api.js";
 import { bridge } from "../lib/bridge.js";
@@ -46,46 +47,6 @@ import { useSession } from "../lib/session.js";
 
 function useIsAdmin(): boolean {
   return useSession((state) => state.user?.role) === "ADMIN";
-}
-
-function OrganizationSettingsNav(): React.JSX.Element {
-  const items = [
-    {
-      to: "/organization/settings" as const,
-      label: "General",
-    },
-    {
-      to: "/organization/security" as const,
-      label: "Policy & access",
-    },
-  ];
-
-  return (
-    <nav
-      aria-label="Organization settings"
-      className="shrink-0 border-b border-border bg-surface px-5"
-    >
-      <div className="flex min-w-max items-center gap-1">
-        {items.map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            activeOptions={{ exact: true }}
-            activeProps={{
-              className: "border-accent text-text",
-            }}
-            inactiveProps={{
-              className:
-                "border-transparent text-text-muted hover:border-border-strong hover:text-text",
-            }}
-            className="flex min-h-11 items-center border-b-2 px-3 text-[12px] font-medium transition-[border-color,color] duration-100 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus"
-          >
-            {item.label}
-          </Link>
-        ))}
-      </div>
-    </nav>
-  );
 }
 
 function PolicyCheckbox({
@@ -101,8 +62,10 @@ function PolicyCheckbox({
   description?: string;
   onChange: (checked: boolean) => void;
 }): React.JSX.Element {
+  const checkboxId = useId();
+
   return (
-    <label
+    <div
       className={cn(
         "flex min-h-10 items-start gap-2 rounded-(--cv-radius) px-2 py-1.5 text-[12px]",
         disabled
@@ -110,22 +73,111 @@ function PolicyCheckbox({
           : "cursor-pointer hover:bg-surface-hover",
       )}
     >
-      <input
-        type="checkbox"
+      <Checkbox
+        id={checkboxId}
         checked={checked}
         disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-        className="mt-0.5 size-4 shrink-0 accent-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+        onCheckedChange={(value) => onChange(value === true)}
+        className="mt-0.5"
       />
-      <span className="min-w-0">
+      <label htmlFor={checkboxId} className="min-w-0 cursor-inherit">
         <span className="block font-medium text-text">{label}</span>
         {description === undefined ? null : (
           <span className="mt-0.5 block text-[11px] leading-4 text-text-muted">
             {description}
           </span>
         )}
-      </span>
-    </label>
+      </label>
+    </div>
+  );
+}
+
+const ORGANIZATION_ROLES = [
+  { value: "ADMIN", label: "Admin" },
+  { value: "MEMBER", label: "Member" },
+  { value: "VIEWER", label: "Viewer" },
+] as const;
+
+function OrganizationRolePicker({
+  value,
+  onChange,
+  disabled = false,
+  legend = "Organization role",
+}: {
+  value: OrganizationUser["role"];
+  onChange: (value: OrganizationUser["role"]) => void;
+  disabled?: boolean;
+  legend?: string;
+}): React.JSX.Element {
+  const groupId = useId();
+
+  return (
+    <fieldset disabled={disabled}>
+      <legend className="text-[12px] font-medium text-text">{legend}</legend>
+      <div className="mt-1 grid h-9 grid-cols-3 divide-x divide-border overflow-hidden rounded-(--cv-radius) border border-border-strong bg-surface">
+        {ORGANIZATION_ROLES.map((role) => (
+          <label
+            key={role.value}
+            className={cn(
+              "relative cursor-pointer",
+              disabled && "cursor-not-allowed opacity-50",
+            )}
+          >
+            <input
+              type="radio"
+              name={groupId}
+              value={role.value}
+              checked={value === role.value}
+              disabled={disabled}
+              className="peer sr-only"
+              onChange={() => onChange(role.value)}
+            />
+            <span className="flex h-full items-center justify-center px-2 text-[11px] font-medium text-text-muted transition-[background-color,color] duration-100 hover:bg-surface-hover hover:text-text peer-checked:bg-accent/10 peer-checked:text-accent peer-focus-visible:outline-2 peer-focus-visible:-outline-offset-2 peer-focus-visible:outline-focus">
+              {role.label}
+            </span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function PolicyCheckChip({
+  checked,
+  disabled,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  label: string;
+  onChange: (checked: boolean) => void;
+}): React.JSX.Element {
+  const checkboxId = useId();
+
+  return (
+    <div
+      className={cn(
+        "inline-flex min-h-9 items-center gap-1.5 rounded-(--cv-radius) border px-2 text-[11px] font-medium",
+        checked
+          ? "border-accent/45 bg-accent/10 text-accent"
+          : "border-border bg-surface text-text-muted",
+        disabled ? "cursor-not-allowed opacity-60" : "hover:bg-surface-hover",
+      )}
+    >
+      <Checkbox
+        id={checkboxId}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={(value) => onChange(value === true)}
+      />
+      <label
+        htmlFor={checkboxId}
+        className={cn("cursor-pointer", disabled && "cursor-not-allowed")}
+      >
+        {label}
+      </label>
+    </div>
   );
 }
 
@@ -316,41 +368,27 @@ function OrganizationAiPolicyEditor({
               {CONTENT_VISIBILITIES.map((visibility) => {
                 const checked = values.allowedVisibility.includes(visibility);
                 return (
-                  <label
+                  <PolicyCheckChip
                     key={visibility}
-                    className={cn(
-                      "inline-flex min-h-8 items-center gap-1.5 rounded-(--cv-radius) border px-2 text-[11px] font-medium",
-                      checked
-                        ? "border-accent/45 bg-accent/10 text-accent"
-                        : "border-border bg-surface text-text-muted",
-                      admin
-                        ? "cursor-pointer hover:bg-surface-hover"
-                        : "cursor-not-allowed opacity-60",
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={!admin}
-                      onChange={(event) =>
-                        change(
-                          "allowedVisibility",
-                          event.target.checked
-                            ? [
-                                ...new Set([
-                                  ...values.allowedVisibility,
-                                  visibility,
-                                ]),
-                              ]
-                            : values.allowedVisibility.filter(
-                                (item) => item !== visibility,
-                              ),
-                        )
-                      }
-                      className="size-3.5 accent-accent"
-                    />
-                    {visibility.toLowerCase()}
-                  </label>
+                    checked={checked}
+                    disabled={!admin}
+                    label={visibility.toLowerCase()}
+                    onChange={(nextChecked) =>
+                      change(
+                        "allowedVisibility",
+                        nextChecked
+                          ? [
+                              ...new Set([
+                                ...values.allowedVisibility,
+                                visibility,
+                              ]),
+                            ]
+                          : values.allowedVisibility.filter(
+                              (item) => item !== visibility,
+                            ),
+                      )
+                    }
+                  />
                 );
               })}
             </div>
@@ -398,36 +436,22 @@ function OrganizationAiPolicyEditor({
               {AI_EFFORT_LEVELS.map((effort) => {
                 const checked = values.allowedEfforts.includes(effort);
                 return (
-                  <label
+                  <PolicyCheckChip
                     key={effort}
-                    className={cn(
-                      "inline-flex min-h-8 items-center gap-1.5 rounded-(--cv-radius) border px-2 text-[11px]",
-                      checked
-                        ? "border-accent/45 bg-accent/10 text-accent"
-                        : "border-border text-text-muted",
-                      admin
-                        ? "cursor-pointer hover:bg-surface-hover"
-                        : "cursor-not-allowed opacity-60",
-                    )}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      disabled={!admin}
-                      onChange={(event) =>
-                        change(
-                          "allowedEfforts",
-                          event.target.checked
-                            ? [...new Set([...values.allowedEfforts, effort])]
-                            : values.allowedEfforts.filter(
-                                (item) => item !== effort,
-                              ),
-                        )
-                      }
-                      className="size-3.5 accent-accent"
-                    />
-                    {effort}
-                  </label>
+                    checked={checked}
+                    disabled={!admin}
+                    label={effort}
+                    onChange={(nextChecked) =>
+                      change(
+                        "allowedEfforts",
+                        nextChecked
+                          ? [...new Set([...values.allowedEfforts, effort])]
+                          : values.allowedEfforts.filter(
+                              (item) => item !== effort,
+                            ),
+                      )
+                    }
+                  />
                 );
               })}
             </div>
@@ -723,16 +747,15 @@ export function OrganizationUsersRoute(): React.JSX.Element {
     () => [["organization", "invitations"]],
   );
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
-        title="Organization users"
-        description="Manage membership, roles, account status, and pending invitations."
-      />
-      <PageBody className="space-y-4">
+    <OrganizationPage
+      title="Members"
+      description="Manage membership, roles, account status, and pending invitations."
+    >
+      <div className="space-y-4">
         <Card>
           <CardHeader>
             <div>
-              <CardTitle>Members</CardTitle>
+              <CardTitle>Member directory</CardTitle>
               <p className="mt-0.5 text-[11px] text-text-muted">
                 Active members can see the organization directory and every case
                 their role permits.
@@ -812,7 +835,7 @@ export function OrganizationUsersRoute(): React.JSX.Element {
               </div>
             </CardHeader>
             <CardBody>
-              <div className="grid items-end gap-3 md:grid-cols-[minmax(14rem,1fr)_12rem_auto]">
+              <div className="grid items-end gap-3 md:grid-cols-[minmax(14rem,1fr)_minmax(18rem,auto)_auto]">
                 <div>
                   <Label htmlFor="organization-invite-email">
                     Organization email
@@ -838,16 +861,10 @@ export function OrganizationUsersRoute(): React.JSX.Element {
                   )}
                 </div>
                 <div>
-                  <Label>Role</Label>
-                  <Select
-                    aria-label="Invitation role"
-                    value={role}
-                    onValueChange={setRole}
-                    options={[
-                      { value: "ADMIN", label: "Administrator" },
-                      { value: "MEMBER", label: "Member" },
-                      { value: "VIEWER", label: "Viewer" },
-                    ]}
+                  <OrganizationRolePicker
+                    legend="Invitation role"
+                    value={role as OrganizationUser["role"]}
+                    onChange={setRole}
                   />
                 </div>
                 <Button
@@ -932,8 +949,8 @@ export function OrganizationUsersRoute(): React.JSX.Element {
             </CardBody>
           </Card>
         ) : null}
-      </PageBody>
-    </div>
+      </div>
+    </OrganizationPage>
   );
 }
 
@@ -967,17 +984,16 @@ export function OrganizationUserDetailRoute(props: {
     roleDraft !== user.data.role;
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
-        title={user.data?.displayName ?? "Organization user"}
-        description="Review this member's organization access, account state, and recent activity."
-      />
-      <PageBody className="mx-auto w-full max-w-5xl space-y-4">
+    <OrganizationPage
+      title={user.data?.displayName ?? "Organization member"}
+      description="Review this member's organization access, account state, and recent activity."
+    >
+      <div className="max-w-5xl space-y-4">
         <Link
           to="/organization/users"
           className="inline-flex min-h-8 items-center rounded-(--cv-radius) text-[12px] font-medium text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
         >
-          ← Organization users
+          ← Members
         </Link>
         <QueryError query={user} />
         <Card>
@@ -1031,23 +1047,17 @@ export function OrganizationUserDetailRoute(props: {
               {admin ? (
                 <section className="grid gap-3 border-t border-border px-4 py-4 md:grid-cols-[minmax(14rem,1fr)_auto] md:items-end">
                   <div className="max-w-sm">
-                    <Label htmlFor="organization-user-role">
-                      Organization role
-                    </Label>
                     <FieldDescription>
                       Controls which organization records and administration
                       actions this member can access.
                     </FieldDescription>
                     <div className="mt-2">
-                      <Select
-                        aria-label="Organization role"
-                        value={roleDraft ?? user.data.role}
-                        onValueChange={setRoleDraft}
-                        options={[
-                          { value: "ADMIN", label: "Administrator" },
-                          { value: "MEMBER", label: "Member" },
-                          { value: "VIEWER", label: "Viewer" },
-                        ]}
+                      <OrganizationRolePicker
+                        value={
+                          (roleDraft ??
+                            user.data.role) as OrganizationUser["role"]
+                        }
+                        onChange={setRoleDraft}
                       />
                     </div>
                   </div>
@@ -1109,36 +1119,43 @@ export function OrganizationUserDetailRoute(props: {
               </p>
             </div>
             <span className="text-[11px] tabular-nums text-text-muted">
-              {activity.data?.items.length ?? 0} events
+              {activity.data === undefined
+                ? "— events"
+                : `${activity.data.items.length} events`}
             </span>
           </CardHeader>
           <QueryError query={activity} className="m-3" />
-          <CardBody className="p-0">
-            <ul className="divide-y divide-border text-[12px]">
-              {activity.data?.items.map((event) => (
-                <li
-                  key={event.id}
-                  className="grid min-h-11 items-center gap-2 px-4 py-2 sm:grid-cols-[11rem_minmax(0,1fr)_9rem]"
-                >
-                  <span className="text-[11px] text-text-muted">
-                    {formatDateTime(event.occurredAt)}
-                  </span>
-                  <Mono className="truncate">{event.action}</Mono>
-                  <span className="truncate text-[11px] text-text-muted sm:text-right">
-                    {event.entityType}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            {activity.data?.items.length === 0 ? (
-              <p className="px-4 py-5 text-[12px] text-text-muted">
-                No activity recorded.
-              </p>
-            ) : null}
-          </CardBody>
+          {activity.isError ? null : activity.isLoading ||
+            activity.data === undefined ? (
+            <LoadingState label="Loading recent activity…" />
+          ) : (
+            <CardBody className="p-0">
+              <ul className="divide-y divide-border text-[12px]">
+                {activity.data.items.map((event) => (
+                  <li
+                    key={event.id}
+                    className="grid min-h-11 items-center gap-2 px-4 py-2 sm:grid-cols-[11rem_minmax(0,1fr)_9rem]"
+                  >
+                    <span className="text-[11px] text-text-muted">
+                      {formatDateTime(event.occurredAt)}
+                    </span>
+                    <Mono className="truncate">{event.action}</Mono>
+                    <span className="truncate text-[11px] text-text-muted sm:text-right">
+                      {event.entityType}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              {activity.data.items.length === 0 ? (
+                <p className="px-4 py-5 text-[12px] text-text-muted">
+                  No activity recorded.
+                </p>
+              ) : null}
+            </CardBody>
+          )}
         </Card>
-      </PageBody>
-    </div>
+      </div>
+    </OrganizationPage>
   );
 }
 
@@ -1200,13 +1217,11 @@ export function OrganizationSettingsRoute(): React.JSX.Element {
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
-        title="Organization settings"
-        description="Manage the organization identity, report attribution, security requirements, and provider access."
-      />
-      <OrganizationSettingsNav />
-      <PageBody className="mx-auto w-full max-w-5xl">
+    <OrganizationPage
+      title="General"
+      description="Manage the organization identity and report attribution used across the workspace."
+    >
+      <div className="max-w-5xl">
         <QueryError query={organization} className="mb-4" />
         {organization.isError ? null : organization.isLoading ||
           organization.data === undefined ? (
@@ -1215,7 +1230,7 @@ export function OrganizationSettingsRoute(): React.JSX.Element {
           <Card>
             <CardHeader className="items-start py-3">
               <div>
-                <CardTitle>General</CardTitle>
+                <CardTitle>Identity and attribution</CardTitle>
                 <p className="mt-0.5 text-[11px] text-text-muted">
                   These values identify the organization in the application and
                   generated reports.
@@ -1381,8 +1396,8 @@ export function OrganizationSettingsRoute(): React.JSX.Element {
             )}
           </Card>
         )}
-      </PageBody>
-    </div>
+      </div>
+    </OrganizationPage>
   );
 }
 
@@ -1512,13 +1527,11 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
   );
 
   return (
-    <div className="flex h-full flex-col">
-      <PageHeader
-        title="Organization settings"
-        description="Set the authentication, session, integration, and AI requirements enforced across the organization."
-      />
-      <OrganizationSettingsNav />
-      <PageBody className="mx-auto w-full max-w-6xl space-y-4">
+    <OrganizationPage
+      title="Security & access"
+      description="Set the authentication, session, integration, and AI requirements enforced across the organization."
+    >
+      <div className="space-y-4">
         <QueryError query={policy} />
         {policy.isError ? null : policy.isLoading ||
           policy.data === undefined ? (
@@ -1722,7 +1735,7 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
           </Card>
         )}
         <OrganizationAiPolicies />
-      </PageBody>
-    </div>
+      </div>
+    </OrganizationPage>
   );
 }

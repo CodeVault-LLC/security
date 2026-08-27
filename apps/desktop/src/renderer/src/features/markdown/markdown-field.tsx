@@ -1,5 +1,5 @@
 import { Button } from "@codevault/ui";
-import { Maximize2, Minimize2, Pilcrow } from "lucide-react";
+import { Eye, Maximize2, Minimize2, Pencil, Pilcrow } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Command } from "./commands.js";
@@ -36,6 +36,8 @@ export interface MarkdownFieldProps {
   placeholder?: string;
   /** Editor height when not in focus mode. */
   minHeight?: string;
+  /** Fill the height supplied by the parent workspace. */
+  fill?: boolean;
   showLineNumbers?: boolean;
   /** Debounced autosave, off when there is no `onSave`. */
   autosaveMs?: number;
@@ -57,6 +59,7 @@ export function MarkdownField({
   caseId,
   placeholder = "Markdown. Tables, diagrams and callouts all render in the report.",
   minHeight = "18rem",
+  fill = false,
   showLineNumbers = false,
   autosaveMs = 1_200,
   saving = false,
@@ -149,70 +152,74 @@ export function MarkdownField({
 
   const body = (
     <div
-      className={`flex min-h-0 flex-col rounded-(--cv-radius) border border-border bg-surface ${
-        focusMode ? "h-full" : ""
+      className={`relative flex min-h-0 flex-col rounded-(--cv-radius) border border-border bg-surface ${
+        focusMode ? "h-full" : fill ? "flex-1 rounded-none border-0" : ""
       } focus-within:border-focus focus-within:ring-1 focus-within:ring-focus/30`}
     >
-      <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
-        {(["write", "preview"] as const).map((item) => (
+      <div className="absolute bottom-2 right-3 z-20 flex items-center gap-0.5 rounded-(--cv-radius) border border-border bg-surface-raised/95 p-0.5 shadow-sm backdrop-blur">
+        {status === null ? null : (
+          <span className={`px-1.5 text-[10.5px] ${status.tone}`}>
+            {status.text}
+          </span>
+        )}
+        {readOnly ? null : (
           <button
-            key={item}
             type="button"
-            onClick={() => setMode(item)}
-            aria-pressed={mode === item}
-            className={`min-h-10 rounded-(--cv-radius) px-3 text-[11px] capitalize focus-visible:outline-2 focus-visible:outline-focus ${
-              mode === item
+            disabled={mode === "preview"}
+            aria-pressed={showFormatting}
+            title="Formatting"
+            aria-label="Formatting"
+            onClick={() => setShowFormatting((current) => !current)}
+            className={`flex size-8 items-center justify-center rounded-(--cv-radius) focus-visible:outline-2 focus-visible:outline-focus disabled:pointer-events-none disabled:opacity-40 ${
+              showFormatting
                 ? "bg-surface-hover text-text"
                 : "text-text-muted hover:text-text"
             }`}
           >
-            {item}
+            <Pilcrow aria-hidden className="size-3.5" />
           </button>
-        ))}
-
-        <div className="ml-auto flex items-center gap-2">
-          {status === null ? null : (
-            <span className={`text-[11px] ${status.tone}`}>{status.text}</span>
+        )}
+        <button
+          type="button"
+          onClick={() =>
+            setMode((current) => (current === "write" ? "preview" : "write"))
+          }
+          title={mode === "write" ? "Preview Markdown" : "Return to editor"}
+          aria-label={
+            mode === "write" ? "Preview Markdown" : "Return to editor"
+          }
+          className="flex size-8 items-center justify-center rounded-(--cv-radius) text-text-muted hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-focus"
+        >
+          {mode === "write" ? (
+            <Eye aria-hidden className="size-3.5" />
+          ) : (
+            <Pencil aria-hidden className="size-3.5" />
           )}
-          {readOnly ? null : (
-            <button
-              type="button"
-              disabled={mode === "preview"}
-              aria-pressed={showFormatting}
-              onClick={() => setShowFormatting((current) => !current)}
-              className={`flex min-h-10 items-center gap-1.5 rounded-(--cv-radius) px-2.5 text-[11px] focus-visible:outline-2 focus-visible:outline-focus disabled:pointer-events-none disabled:opacity-40 ${
-                showFormatting
-                  ? "bg-surface-hover text-text"
-                  : "text-text-muted hover:text-text"
-              }`}
-            >
-              <Pilcrow aria-hidden className="size-3.5" />
-              Format
-            </button>
-          )}
-          {readOnly ? null : (
-            <button
-              type="button"
-              onClick={() => setFocusMode((current) => !current)}
-              title={focusMode ? "Leave focus mode (Esc)" : "Focus mode"}
-              aria-label={focusMode ? "Leave focus mode" : "Focus mode"}
-              className="flex size-10 items-center justify-center rounded-(--cv-radius) text-text-muted hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-focus"
-            >
-              {focusMode ? (
-                <Minimize2 aria-hidden className="size-3.5" />
-              ) : (
-                <Maximize2 aria-hidden className="size-3.5" />
-              )}
-            </button>
-          )}
-        </div>
+        </button>
+        {readOnly ? null : (
+          <button
+            type="button"
+            onClick={() => setFocusMode((current) => !current)}
+            title={focusMode ? "Leave focus mode (Esc)" : "Focus mode"}
+            aria-label={focusMode ? "Leave focus mode" : "Focus mode"}
+            className="flex size-8 items-center justify-center rounded-(--cv-radius) text-text-muted hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-focus"
+          >
+            {focusMode ? (
+              <Minimize2 aria-hidden className="size-3.5" />
+            ) : (
+              <Maximize2 aria-hidden className="size-3.5" />
+            )}
+          </button>
+        )}
       </div>
 
       {readOnly || !showFormatting || mode === "preview" ? null : (
-        <MarkdownToolbar
-          onCommand={runCommand}
-          onInsertMenu={() => setMenuOpen(true)}
-        />
+        <div className="absolute bottom-12 right-3 z-20 max-w-[calc(100%-1.5rem)] overflow-hidden rounded-(--cv-radius) border border-border bg-surface shadow-lg">
+          <MarkdownToolbar
+            onCommand={runCommand}
+            onInsertMenu={() => setMenuOpen(true)}
+          />
+        </div>
       )}
 
       {recovered === null ? null : (
@@ -244,10 +251,12 @@ export function MarkdownField({
       )}
 
       <div
-        className={focusMode ? "min-h-0 flex-1 overflow-auto" : "overflow-auto"}
+        className={
+          focusMode || fill ? "min-h-0 flex-1 overflow-auto" : "overflow-auto"
+        }
         // A fixed height rather than a minimum: the editor scrolls internally,
         // so a long attack path does not push the rest of the page away.
-        style={focusMode ? undefined : { height: minHeight }}
+        style={focusMode || fill ? undefined : { height: minHeight }}
       >
         {mode === "write" ? (
           <MarkdownEditor

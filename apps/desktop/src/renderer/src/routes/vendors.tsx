@@ -27,9 +27,16 @@ import {
   InlineError,
   LoadingState,
   Mono,
+  Tabs,
+  TabsList,
+  TabsTrigger,
 } from "@codevault/ui";
 
 import { PageHeader } from "../components/app-shell.js";
+import {
+  CursorPagination,
+  useCursorPagination,
+} from "../components/cursor-pagination.js";
 import { PublicKeyPanel } from "../features/vendors/public-key-panel.js";
 import { RouteEditor } from "../features/vendors/route-editor.js";
 import { VendorDialog } from "../features/vendors/vendor-dialog.js";
@@ -49,15 +56,30 @@ interface AssetPage {
   nextCursor: string | null;
 }
 
+const COLLECTION_PAGE_SIZE = 50;
+
 export function VendorsRoute(): React.JSX.Element {
   const user = useSession((state) => state.user);
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const [limit, setLimit] = useState(200);
   const debouncedQuery = useDebouncedValue(query, 220);
+  const pagination = useCursorPagination(debouncedQuery.trim());
+  const vendorParams = new URLSearchParams({
+    limit: String(COLLECTION_PAGE_SIZE),
+  });
+  if (debouncedQuery.trim().length > 0) {
+    vendorParams.set("query", debouncedQuery.trim());
+  }
+  if (pagination.cursor !== null) {
+    vendorParams.set("cursor", pagination.cursor);
+  }
   const vendors = useApiQuery<VendorPage>(
-    queryKeys.vendors({ query: debouncedQuery, limit }),
-    `/v1/vendors?limit=${limit}${debouncedQuery.trim().length === 0 ? "" : `&query=${encodeURIComponent(debouncedQuery.trim())}`}`,
+    queryKeys.vendors({
+      query: debouncedQuery,
+      limit: COLLECTION_PAGE_SIZE,
+      cursor: pagination.cursor,
+    }),
+    `/v1/vendors?${vendorParams.toString()}`,
   );
   const editable = canWrite(user);
 
@@ -157,17 +179,14 @@ export function VendorsRoute(): React.JSX.Element {
               </li>
             ))}
           </ul>
-          {vendors.data?.nextCursor === null ? null : (
-            <div className="flex justify-center border-t border-border p-3">
-              <Button
-                variant="secondary"
-                loading={vendors.isFetching}
-                onClick={() => setLimit((current) => current + 200)}
-              >
-                Load more vendors
-              </Button>
-            </div>
-          )}
+          <CursorPagination
+            label="Vendor"
+            pageIndex={pagination.pageIndex}
+            nextCursor={vendors.data?.nextCursor ?? null}
+            loading={vendors.isFetching}
+            onPrevious={pagination.previous}
+            onNext={pagination.next}
+          />
         </div>
       )}
       <VendorDialog open={createOpen} onOpenChange={setCreateOpen} />
@@ -191,6 +210,7 @@ export function VendorDetailRoute({
   );
   const [routeEditorOpen, setRouteEditorOpen] = useState(false);
   const [editingRoute, setEditingRoute] = useState<VendorRoute | undefined>();
+  const [vendorTab, setVendorTab] = useState("overview");
 
   if (vendor.isLoading) return <LoadingState label="Loading vendor…" />;
   if (vendor.error !== null || vendor.data === undefined) {
@@ -217,199 +237,227 @@ export function VendorDetailRoute({
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader
-        title={data.name}
-        description={`${data.ref} · ${data.assetCount} linked asset${data.assetCount === 1 ? "" : "s"}`}
-        actions={
-          editable ? (
-            <Button
-              variant="primary"
-              onClick={() => {
-                setEditingRoute(undefined);
-                setRouteEditorOpen(true);
-              }}
-            >
-              <Plus aria-hidden className="size-3.5" />
-              Add disclosure route
-            </Button>
-          ) : undefined
-        }
-      />
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <header className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border bg-surface px-3">
+        <Mono className="shrink-0 text-text-muted">{data.ref}</Mono>
+        <h1 className="min-w-0 flex-1 truncate text-[13px] font-semibold">
+          {data.name}
+        </h1>
         {data.builtIn ? (
-          <div className="mb-4 rounded-(--cv-radius) border border-warning/40 bg-warning/10 p-3 text-[12px] text-warning">
-            <strong>Starter data — verify before use.</strong> Confirm the
-            recipient, portal requirements, current limits, and any encryption
-            fingerprint against the official source before a confidential
-            disclosure.
-          </div>
+          <span className="text-[11px] text-warning">Verify before use</span>
         ) : null}
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Identity</CardTitle>
-            </CardHeader>
-            <CardBody className="space-y-2 text-[12px]">
-              <IdentityRow label="Stable ID" value={data.slug} mono />
-              <IdentityRow label="Website" value={data.websiteUrl} link />
-              <IdentityRow
-                label="Official source"
-                value={data.sourceUrl}
-                link
-              />
-              <IdentityRow
-                label="Source reviewed"
-                value={formatDate(data.sourceReviewedAt)}
-              />
-              <IdentityRow
-                label="Status"
-                value={
-                  data.archivedAt === null
-                    ? "Active"
-                    : `Archived ${formatDate(data.archivedAt)}`
-                }
-              />
-            </CardBody>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>Linked assets</CardTitle>
-              <Button asChild variant="ghost" size="sm">
-                <Link
-                  to="/assets"
-                  search={{ vendorId: data.id, vendorName: data.name }}
-                >
-                  View all
-                </Link>
-              </Button>
-            </CardHeader>
-            {linkedAssets.error !== null ? (
-              <CardBody className="space-y-2">
-                <InlineError>
-                  Linked assets could not be loaded.{" "}
-                  {linkedAssets.error.message}
-                </InlineError>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  loading={linkedAssets.isFetching}
-                  onClick={() => void linkedAssets.refetch()}
-                >
-                  Try again
-                </Button>
-              </CardBody>
-            ) : linkedAssets.isLoading ? (
-              <LoadingState label="Loading linked assets…" className="py-4" />
-            ) : (linkedAssets.data?.items.length ?? 0) === 0 ? (
-              <CardBody className="space-y-3">
-                <p className="text-[12px] text-text-muted">
-                  No assets currently point to this vendor.
-                </p>
-                {editable ? (
-                  <Button asChild variant="secondary" size="sm">
+        {editable ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              setEditingRoute(undefined);
+              setRouteEditorOpen(true);
+            }}
+          >
+            <Plus aria-hidden className="size-3.5" />
+            Add route
+          </Button>
+        ) : null}
+      </header>
+      <Tabs
+        value={vendorTab}
+        onValueChange={setVendorTab}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="assets">Assets {data.assetCount}</TabsTrigger>
+          <TabsTrigger value="disclosure">
+            Disclosure {data.routes.length}
+          </TabsTrigger>
+        </TabsList>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          {data.builtIn ? (
+            <div className="mb-4 rounded-(--cv-radius) border border-warning/40 bg-warning/10 p-3 text-[12px] text-warning">
+              <strong>Starter data — verify before use.</strong> Confirm the
+              recipient, portal requirements, current limits, and any encryption
+              fingerprint against the official source before a confidential
+              disclosure.
+            </div>
+          ) : null}
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+            {vendorTab === "overview" ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Identity</CardTitle>
+                </CardHeader>
+                <CardBody className="space-y-2 text-[12px]">
+                  <IdentityRow label="Stable ID" value={data.slug} mono />
+                  <IdentityRow label="Website" value={data.websiteUrl} link />
+                  <IdentityRow
+                    label="Official source"
+                    value={data.sourceUrl}
+                    link
+                  />
+                  <IdentityRow
+                    label="Source reviewed"
+                    value={formatDate(data.sourceReviewedAt)}
+                  />
+                  <IdentityRow
+                    label="Status"
+                    value={
+                      data.archivedAt === null
+                        ? "Active"
+                        : `Archived ${formatDate(data.archivedAt)}`
+                    }
+                  />
+                </CardBody>
+              </Card>
+            ) : null}
+            {vendorTab === "assets" ? (
+              <Card className="xl:col-span-2">
+                <CardHeader>
+                  <CardTitle>Linked assets</CardTitle>
+                  <Button asChild variant="ghost" size="sm">
                     <Link
                       to="/assets"
-                      search={{
-                        vendorId: data.id,
-                        vendorName: data.name,
-                        create: true,
-                      }}
+                      search={{ vendorId: data.id, vendorName: data.name }}
                     >
-                      <Plus aria-hidden className="size-3.5" />
-                      New linked asset
+                      View all
                     </Link>
                   </Button>
-                ) : null}
-              </CardBody>
-            ) : (
-              <>
-                <ul className="divide-y divide-border">
-                  {linkedAssets.data?.items.map((asset) => (
-                    <li key={asset.id}>
-                      <Link
-                        to={`/assets/${asset.id}`}
-                        className="grid min-h-12 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 px-3 py-2 text-[12px] hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
-                      >
-                        <AssetKindIcon kind={asset.kind} />
-                        <span className="min-w-0">
-                          <span className="block truncate font-medium">
-                            {asset.name}
-                          </span>
-                          <Mono className="text-[10.5px] text-text-muted">
-                            {asset.ref}
-                          </Mono>
-                        </span>
-                        <span className="text-[11px] text-text-muted">
-                          {asset.findingCount} finding
-                          {asset.findingCount === 1 ? "" : "s"}
-                        </span>
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-                <CardBody className="border-t border-border py-2 text-[11px] text-text-muted">
-                  Showing {linkedAssets.data?.items.length ?? 0} of{" "}
-                  {data.assetCount} linked asset
-                  {data.assetCount === 1 ? "" : "s"}. Disclosure routes are
-                  selected per submission, not on the asset.
-                </CardBody>
-              </>
-            )}
-          </Card>
-          <Card className="xl:col-span-2">
-            <CardHeader>
-              <CardTitle>Disclosure routes</CardTitle>
-            </CardHeader>
-            {data.routes.length === 0 ? (
-              <EmptyState
-                title="No disclosure routes recorded"
-                description={
-                  editable
-                    ? "Add the official email or manual portal used for coordinated disclosure."
-                    : "A workspace editor must add and verify the vendor's disclosure route."
-                }
-                action={
-                  editable ? (
+                </CardHeader>
+                {linkedAssets.error !== null ? (
+                  <CardBody className="space-y-2">
+                    <InlineError>
+                      Linked assets could not be loaded.{" "}
+                      {linkedAssets.error.message}
+                    </InlineError>
                     <Button
                       variant="secondary"
-                      onClick={() => {
-                        setEditingRoute(undefined);
-                        setRouteEditorOpen(true);
-                      }}
+                      size="sm"
+                      loading={linkedAssets.isFetching}
+                      onClick={() => void linkedAssets.refetch()}
                     >
-                      <Plus aria-hidden className="size-3.5" />
-                      Add disclosure route
+                      Try again
                     </Button>
-                  ) : undefined
-                }
-              />
-            ) : (
-              <div className="divide-y divide-border">
-                {data.routes.map((route) => (
-                  <RouteRecord
-                    key={route.id}
-                    route={route}
-                    editable={editable}
-                    onEdit={() => {
-                      setEditingRoute(route);
-                      setRouteEditorOpen(true);
-                    }}
+                  </CardBody>
+                ) : linkedAssets.isLoading ? (
+                  <LoadingState
+                    label="Loading linked assets…"
+                    className="py-4"
                   />
-                ))}
-              </div>
-            )}
-          </Card>
-          <Card className="xl:col-span-2">
-            <CardHeader>
-              <CardTitle>Public keys</CardTitle>
-              <KeyRound aria-hidden className="size-4 text-text-muted" />
-            </CardHeader>
-            <CardBody>
-              <PublicKeyPanel vendorId={data.id} canEdit={editable} />
-            </CardBody>
-          </Card>
+                ) : (linkedAssets.data?.items.length ?? 0) === 0 ? (
+                  <CardBody className="space-y-3">
+                    <p className="text-[12px] text-text-muted">
+                      No assets currently point to this vendor.
+                    </p>
+                    {editable ? (
+                      <Button asChild variant="secondary" size="sm">
+                        <Link
+                          to="/assets"
+                          search={{
+                            vendorId: data.id,
+                            vendorName: data.name,
+                            create: true,
+                          }}
+                        >
+                          <Plus aria-hidden className="size-3.5" />
+                          New linked asset
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </CardBody>
+                ) : (
+                  <>
+                    <ul className="divide-y divide-border">
+                      {linkedAssets.data?.items.map((asset) => (
+                        <li key={asset.id}>
+                          <Link
+                            to={`/assets/${asset.id}`}
+                            className="grid min-h-12 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2 px-3 py-2 text-[12px] hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus"
+                          >
+                            <AssetKindIcon kind={asset.kind} />
+                            <span className="min-w-0">
+                              <span className="block truncate font-medium">
+                                {asset.name}
+                              </span>
+                              <Mono className="text-[10.5px] text-text-muted">
+                                {asset.ref}
+                              </Mono>
+                            </span>
+                            <span className="text-[11px] text-text-muted">
+                              {asset.findingCount} finding
+                              {asset.findingCount === 1 ? "" : "s"}
+                            </span>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                    <CardBody className="border-t border-border py-2 text-[11px] text-text-muted">
+                      Showing {linkedAssets.data?.items.length ?? 0} of{" "}
+                      {data.assetCount} linked asset
+                      {data.assetCount === 1 ? "" : "s"}. Disclosure routes are
+                      selected per submission, not on the asset.
+                    </CardBody>
+                  </>
+                )}
+              </Card>
+            ) : null}
+            {vendorTab === "disclosure" ? (
+              <Card className="xl:col-span-2">
+                <CardHeader>
+                  <CardTitle>Disclosure routes</CardTitle>
+                </CardHeader>
+                {data.routes.length === 0 ? (
+                  <EmptyState
+                    title="No disclosure routes recorded"
+                    description={
+                      editable
+                        ? "Add the official email or manual portal used for coordinated disclosure."
+                        : "A workspace editor must add and verify the vendor's disclosure route."
+                    }
+                    action={
+                      editable ? (
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            setEditingRoute(undefined);
+                            setRouteEditorOpen(true);
+                          }}
+                        >
+                          <Plus aria-hidden className="size-3.5" />
+                          Add disclosure route
+                        </Button>
+                      ) : undefined
+                    }
+                  />
+                ) : (
+                  <div className="divide-y divide-border">
+                    {data.routes.map((route) => (
+                      <RouteRecord
+                        key={route.id}
+                        route={route}
+                        editable={editable}
+                        onEdit={() => {
+                          setEditingRoute(route);
+                          setRouteEditorOpen(true);
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </Card>
+            ) : null}
+            {vendorTab === "disclosure" ? (
+              <Card className="xl:col-span-2">
+                <CardHeader>
+                  <CardTitle>Public keys</CardTitle>
+                  <KeyRound aria-hidden className="size-4 text-text-muted" />
+                </CardHeader>
+                <CardBody>
+                  <PublicKeyPanel vendorId={data.id} canEdit={editable} />
+                </CardBody>
+              </Card>
+            ) : null}
+          </div>
         </div>
-      </div>
+      </Tabs>
       <RouteEditor
         key={`${editingRoute?.id ?? "new"}-${String(routeEditorOpen)}`}
         vendor={data}

@@ -168,6 +168,10 @@ export interface ReportExportDownloadResult {
   sha256: string | null;
 }
 
+export interface MailAttachmentDownloadResult {
+  saved: boolean;
+}
+
 export interface SigningKeySummary {
   fingerprint: string;
   userIds: string[];
@@ -309,6 +313,15 @@ export interface CodeVaultDesktopApi {
     ): Promise<ApiOutcome<ReportExportDownloadResult>>;
   };
 
+  mail: {
+    /** Saves one Gmail attachment through the operating system picker. */
+    downloadAttachment(
+      connectionId: string,
+      messageId: string,
+      attachmentIndex: number,
+    ): Promise<ApiOutcome<MailAttachmentDownloadResult>>;
+  };
+
   audit: {
     /** Saves a locally assembled, case-scoped audit CSV. */
     saveCsv(
@@ -443,6 +456,7 @@ export const IPC_CHANNELS = {
   caseArchivesExport: "case-archives:export",
   caseArchivesImport: "case-archives:import",
   reportsDownloadExport: "reports:download-export",
+  mailDownloadAttachment: "mail:download-attachment",
   auditSaveCsv: "audit:save-csv",
   caseHandoffSaveBrief: "case-handoff:save-brief",
   publicAdvisorySave: "public-advisory:save",

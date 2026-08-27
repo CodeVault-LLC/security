@@ -296,343 +296,350 @@ export function ScoringPanel({
   }).length;
 
   return (
-    <div className="grid grid-cols-1 gap-4 p-4 xl:grid-cols-2">
-      <Card>
-        <CardHeader>
-          <CardTitle>Build an assessment</CardTitle>
-          <Select
-            aria-label="Scoring scheme"
-            value={scheme}
-            onValueChange={(value) => {
-              const next = value as Scheme;
+    <div className="min-h-full bg-surface">
+      <div className="flex min-h-12 items-center gap-2 border-b border-border px-4 py-2">
+        <span className="text-[11px] font-medium text-text-muted">
+          Current assessment
+        </span>
+        <SeverityBadge severity={finding.severity} score={finding.score} />
+        <span className="ml-auto text-[11px] text-text-muted">
+          {finding.scores.length} recorded
+        </span>
+      </div>
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <Card className="rounded-none border-0 xl:border-r">
+          <CardHeader>
+            <CardTitle>Assessment</CardTitle>
+            <Select
+              aria-label="Scoring scheme"
+              value={scheme}
+              onValueChange={(value) => {
+                const next = value as Scheme;
 
-              setScheme(next);
-              if (next !== "EVSS") {
-                setMetrics(DEFAULTS[next]);
-              }
-            }}
-            className="w-40 sm:w-52"
-            options={[...SCHEME_OPTIONS]}
-          />
-        </CardHeader>
+                setScheme(next);
+                if (next !== "EVSS") {
+                  setMetrics(DEFAULTS[next]);
+                }
+              }}
+              className="w-40 sm:w-52"
+              options={[...SCHEME_OPTIONS]}
+            />
+          </CardHeader>
 
-        <CardBody className="space-y-2">
-          {scheme === "EVSS" ? (
-            <div className="space-y-3">
-              <div>
-                <label
-                  className="mb-1 block text-[12px] text-text-muted"
-                  htmlFor="evss-score"
-                >
-                  EVSS score (0–10)
-                </label>
-                <Input
-                  id="evss-score"
-                  type="number"
-                  min="0"
-                  max="10"
-                  step="0.1"
-                  value={externalScore}
-                  onChange={(event) => setExternalScore(event.target.value)}
-                  disabled={!canEdit}
-                />
-              </div>
-              <div>
-                <label
-                  className="mb-1 block text-[12px] text-text-muted"
-                  htmlFor="evss-source"
-                >
-                  Edgescan source
-                </label>
-                <Input
-                  id="evss-source"
-                  value={externalSource}
-                  onChange={(event) => setExternalSource(event.target.value)}
-                  placeholder="Edgescan report or integration"
-                  disabled={!canEdit}
-                />
-              </div>
-              <p className="text-[11px] text-text-muted">
-                EVSS is proprietary, so CodeVault records the supplied value and
-                provenance; it does not recreate Edgescan’s formula.
-              </p>
-            </div>
-          ) : (
-            SCHEME_METRICS[scheme].map((metric, index, allMetrics) => (
-              <Fragment key={metric.code}>
-                {index === 0 ||
-                allMetrics[index - 1]?.group !== metric.group ? (
-                  <p className="pt-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
-                    {metric.group}
-                  </p>
-                ) : null}
-                <div className="grid grid-cols-1 gap-1 sm:grid-cols-[150px_1fr] sm:items-center sm:gap-2">
+          <CardBody className="space-y-2">
+            {scheme === "EVSS" ? (
+              <div className="space-y-3">
+                <div>
                   <label
-                    className="text-[12px] text-text-muted"
-                    title={metric.name}
-                    htmlFor={`metric-${metric.code}`}
+                    className="mb-1 block text-[12px] text-text-muted"
+                    htmlFor="evss-score"
                   >
-                    <Mono>{metric.code}</Mono> {metric.name}
+                    EVSS score (0–10)
                   </label>
-                  <Select
-                    aria-label={metric.name}
-                    value={metrics[metric.code]}
-                    onValueChange={(value) =>
-                      setMetrics((current) => ({
-                        ...current,
-                        [metric.code]: value,
-                      }))
-                    }
+                  <Input
+                    id="evss-score"
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.1"
+                    value={externalScore}
+                    onChange={(event) => setExternalScore(event.target.value)}
                     disabled={!canEdit}
-                    options={metric.values.map((value) => ({
-                      value: value.code,
-                      label: `${value.code} · ${value.label}`,
-                      description: value.description,
-                    }))}
                   />
                 </div>
-              </Fragment>
-            ))
-          )}
-
-          <div className="mt-3 rounded-(--cv-radius) border border-border bg-surface-raised p-2">
-            <div className="flex items-center gap-2">
-              {proposed.severity === null ? (
-                <span className="font-mono text-[12px] font-semibold">
-                  {proposed.label ?? "Unscored"}
-                </span>
-              ) : (
-                <SeverityBadge
-                  severity={proposed.severity}
-                  score={proposed.score}
-                />
-              )}
-              {proposed.vector === null ? null : (
-                <Mono className="min-w-0 flex-1 truncate text-text-muted">
-                  {proposed.vector}
-                </Mono>
-              )}
-            </div>
-            <p className="mt-1 text-[11px] text-text-muted">
-              {scheme === "EVSS"
-                ? "Shown as a preview. The server validates the value and retains its source."
-                : "Shown as a preview. The server recomputes the result from the vector before storing it."}
-            </p>
-            {proposed.error === null ? null : (
-              <p className="mt-1 text-[11px] text-danger">{proposed.error}</p>
-            )}
-          </div>
-
-          {error === null ? null : (
-            <p className="text-[12px] text-danger">{error}</p>
-          )}
-
-          {canEdit ? (
-            <div className="flex justify-end gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                disabled={proposed.error !== null || submit.isPending}
-                onClick={() =>
-                  submit.mutate(
-                    { approve: false },
-                    { onError: (e) => setError(e.message) },
-                  )
-                }
-              >
-                Save as proposed
-              </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={proposed.error !== null || submit.isPending}
-                onClick={() =>
-                  submit.mutate(
-                    { approve: true },
-                    { onError: (e) => setError(e.message) },
-                  )
-                }
-              >
-                <Check aria-hidden className="size-3" />
-                Approve assessment
-              </Button>
-            </div>
-          ) : null}
-        </CardBody>
-      </Card>
-
-      <div className="space-y-4">
-        <IntelligenceRefreshControls finding={finding} canEdit={canEdit} />
-        <Card>
-          <CardHeader>
-            <CardTitle>Recorded scores</CardTitle>
-          </CardHeader>
-
-          {finding.scores.length === 0 ? (
-            <CardBody className="text-[12px] text-text-muted">
-              No score has been recorded yet.
-            </CardBody>
-          ) : (
-            <>
-              {staleIntelligenceCount === 0 ? null : (
-                <div
-                  role="status"
-                  className="border-b border-warning/35 bg-warning/10 px-3 py-2 text-[11px] text-warning"
-                >
-                  {staleIntelligenceCount} intelligence source
-                  {staleIntelligenceCount === 1 ? " is" : "s are"} stale. Review
-                  {staleIntelligenceCount === 1 ? " its" : " their"} retrieval
-                  time before using it in a decision.
-                </div>
-              )}
-              <ul className="divide-y divide-border">
-                {finding.scores.map((score) => (
-                  <li key={score.id} className="px-3 py-2 text-[12px]">
-                    <div className="flex items-center gap-2">
-                      <Mono className="w-16 shrink-0">{score.scheme}</Mono>
-                      {score.severity === null ? (
-                        <span className="font-mono">
-                          {recordedScoreLabel(score)}
-                        </span>
-                      ) : (
-                        <SeverityBadge
-                          severity={score.severity}
-                          score={score.score}
-                        />
-                      )}
-                      <span className="rounded border border-border px-1 text-[10px] uppercase text-text-muted">
-                        {score.reviewState.toLowerCase()}
-                      </span>
-                      <span className="text-[10px] uppercase text-text-muted">
-                        {score.source.replace("_", " ").toLowerCase()}
-                      </span>
-                      {score.source === "EXTERNAL" &&
-                      isFreshnessTrackedIntelligence(score.scheme) ? (
-                        <IntelligenceFreshnessBadge
-                          scheme={score.scheme}
-                          retrievedAt={score.retrievedAt}
-                        />
-                      ) : null}
-                      {canEdit && score.reviewState === "PROPOSED" ? (
-                        <Button
-                          size="sm"
-                          variant="secondary"
-                          className="ml-auto"
-                          onClick={() => approveExisting.mutate(score.id)}
-                          disabled={approveExisting.isPending}
-                        >
-                          Approve
-                        </Button>
-                      ) : null}
-                    </div>
-                    {score.vector === null ? null : (
-                      <Mono className="mt-0.5 block truncate text-text-muted">
-                        {score.vector}
-                      </Mono>
-                    )}
-                    {score.sourceName === null ? null : (
-                      <p className="mt-0.5 text-text-muted">
-                        {score.sourceName}
-                        {score.retrievedAt === null
-                          ? ""
-                          : ` · retrieved ${formatDateTime(score.retrievedAt)}`}
-                      </p>
-                    )}
-                    {score.reviewedBy === null ? null : (
-                      <div className="mt-0.5 flex items-center gap-1 text-text-muted">
-                        <span>Approved by</span>
-                        <Avatar
-                          avatarId={null}
-                          userId={score.reviewedBy.id}
-                          label={score.reviewedBy.displayName}
-                          size="sm"
-                          showLabel
-                          className="gap-1"
-                        />
-                        <span>on {formatDateTime(score.reviewedAt)}</span>
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Weakness classification</CardTitle>
-          </CardHeader>
-          <CardBody className="space-y-2">
-            <div className="flex flex-wrap gap-1.5">
-              {finding.cweIds.length === 0 ? (
-                <span className="text-[12px] text-text-muted">
-                  No CWE assigned.
-                </span>
-              ) : (
-                finding.cweIds.map((cweId) => (
-                  <span
-                    key={cweId}
-                    className="inline-flex items-center gap-1 rounded-(--cv-radius) border border-border bg-surface-raised px-1.5 py-0.5 text-[11px]"
+                <div>
+                  <label
+                    className="mb-1 block text-[12px] text-text-muted"
+                    htmlFor="evss-source"
                   >
-                    <Mono>{cweId}</Mono>
-                    {canEdit ? (
-                      <button
-                        type="button"
-                        aria-label={`Remove ${cweId}`}
-                        className="text-text-muted hover:text-danger"
-                        onClick={() =>
-                          setCwes.mutate(
-                            finding.cweIds.filter((id) => id !== cweId),
-                          )
-                        }
-                      >
-                        ×
-                      </button>
-                    ) : null}
+                    Edgescan source
+                  </label>
+                  <Input
+                    id="evss-source"
+                    value={externalSource}
+                    onChange={(event) => setExternalSource(event.target.value)}
+                    placeholder="Edgescan report or integration"
+                    disabled={!canEdit}
+                  />
+                </div>
+                <p className="text-[11px] text-text-muted">
+                  EVSS is proprietary, so CodeVault records the supplied value
+                  and provenance; it does not recreate Edgescan’s formula.
+                </p>
+              </div>
+            ) : (
+              SCHEME_METRICS[scheme].map((metric, index, allMetrics) => (
+                <Fragment key={metric.code}>
+                  {index === 0 ||
+                  allMetrics[index - 1]?.group !== metric.group ? (
+                    <p className="pt-2 text-[10px] font-semibold uppercase tracking-wide text-text-muted">
+                      {metric.group}
+                    </p>
+                  ) : null}
+                  <div className="grid grid-cols-1 gap-1 sm:grid-cols-[150px_1fr] sm:items-center sm:gap-2">
+                    <label
+                      className="text-[12px] text-text-muted"
+                      title={metric.name}
+                      htmlFor={`metric-${metric.code}`}
+                    >
+                      <Mono>{metric.code}</Mono> {metric.name}
+                    </label>
+                    <Select
+                      aria-label={metric.name}
+                      value={metrics[metric.code]}
+                      onValueChange={(value) =>
+                        setMetrics((current) => ({
+                          ...current,
+                          [metric.code]: value,
+                        }))
+                      }
+                      disabled={!canEdit}
+                      options={metric.values.map((value) => ({
+                        value: value.code,
+                        label: `${value.code} · ${value.label}`,
+                        description: value.description,
+                      }))}
+                    />
+                  </div>
+                </Fragment>
+              ))
+            )}
+
+            <div className="mt-4 border-t border-border pt-3">
+              <div className="flex items-center gap-2">
+                {proposed.severity === null ? (
+                  <span className="font-mono text-[12px] font-semibold">
+                    {proposed.label ?? "Unscored"}
                   </span>
-                ))
+                ) : (
+                  <SeverityBadge
+                    severity={proposed.severity}
+                    score={proposed.score}
+                  />
+                )}
+                {proposed.vector === null ? null : (
+                  <Mono className="min-w-0 flex-1 truncate text-text-muted">
+                    {proposed.vector}
+                  </Mono>
+                )}
+              </div>
+              {proposed.error === null ? null : (
+                <p className="mt-1 text-[11px] text-danger">{proposed.error}</p>
               )}
             </div>
+
+            {error === null ? null : (
+              <p className="text-[12px] text-danger">{error}</p>
+            )}
 
             {canEdit ? (
-              <>
-                <Input
-                  value={cweQuery}
-                  onChange={(event) => setCweQuery(event.target.value)}
-                  placeholder="Search CWE by number or name…"
-                  aria-label="Search CWE"
-                />
-                {cweSuggestions.length === 0 ? null : (
-                  <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
-                    {cweSuggestions.map((entry) => (
-                      <li key={entry.id}>
-                        <button
-                          type="button"
-                          className="flex w-full items-start gap-2 px-2 py-1.5 text-left text-[12px] hover:bg-surface-hover"
-                          onClick={() => {
-                            setCwes.mutate([
-                              ...new Set([...finding.cweIds, entry.id]),
-                            ]);
-                            setCweQuery("");
-                          }}
-                        >
-                          <Mono className="w-20 shrink-0">{entry.id}</Mono>
-                          <span className="min-w-0">
-                            <span className="block">{entry.name}</span>
-                            <span className="block text-text-muted">
-                              {entry.summary}
-                            </span>
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={proposed.error !== null || submit.isPending}
+                  onClick={() =>
+                    submit.mutate(
+                      { approve: false },
+                      { onError: (e) => setError(e.message) },
+                    )
+                  }
+                >
+                  Save as proposed
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  disabled={proposed.error !== null || submit.isPending}
+                  onClick={() =>
+                    submit.mutate(
+                      { approve: true },
+                      { onError: (e) => setError(e.message) },
+                    )
+                  }
+                >
+                  <Check aria-hidden className="size-3" />
+                  Approve assessment
+                </Button>
+              </div>
             ) : null}
           </CardBody>
         </Card>
+
+        <aside className="space-y-0 bg-surface-raised/30">
+          <IntelligenceRefreshControls finding={finding} canEdit={canEdit} />
+          <Card className="rounded-none border-x-0 border-b-0">
+            <CardHeader>
+              <CardTitle>Recorded scores</CardTitle>
+            </CardHeader>
+
+            {finding.scores.length === 0 ? (
+              <CardBody className="text-[12px] text-text-muted">
+                No score has been recorded yet.
+              </CardBody>
+            ) : (
+              <>
+                {staleIntelligenceCount === 0 ? null : (
+                  <div
+                    role="status"
+                    className="border-b border-warning/35 bg-warning/10 px-3 py-2 text-[11px] text-warning"
+                  >
+                    {staleIntelligenceCount} intelligence source
+                    {staleIntelligenceCount === 1 ? " is" : "s are"} stale.
+                    Review
+                    {staleIntelligenceCount === 1 ? " its" : " their"} retrieval
+                    time before using it in a decision.
+                  </div>
+                )}
+                <ul className="divide-y divide-border">
+                  {finding.scores.map((score) => (
+                    <li key={score.id} className="px-3 py-2 text-[12px]">
+                      <div className="flex items-center gap-2">
+                        <Mono className="w-16 shrink-0">{score.scheme}</Mono>
+                        {score.severity === null ? (
+                          <span className="font-mono">
+                            {recordedScoreLabel(score)}
+                          </span>
+                        ) : (
+                          <SeverityBadge
+                            severity={score.severity}
+                            score={score.score}
+                          />
+                        )}
+                        <span className="rounded border border-border px-1 text-[10px] uppercase text-text-muted">
+                          {score.reviewState.toLowerCase()}
+                        </span>
+                        <span className="text-[10px] uppercase text-text-muted">
+                          {score.source.replace("_", " ").toLowerCase()}
+                        </span>
+                        {score.source === "EXTERNAL" &&
+                        isFreshnessTrackedIntelligence(score.scheme) ? (
+                          <IntelligenceFreshnessBadge
+                            scheme={score.scheme}
+                            retrievedAt={score.retrievedAt}
+                          />
+                        ) : null}
+                        {canEdit && score.reviewState === "PROPOSED" ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            className="ml-auto"
+                            onClick={() => approveExisting.mutate(score.id)}
+                            disabled={approveExisting.isPending}
+                          >
+                            Approve
+                          </Button>
+                        ) : null}
+                      </div>
+                      {score.vector === null ? null : (
+                        <Mono className="mt-0.5 block truncate text-text-muted">
+                          {score.vector}
+                        </Mono>
+                      )}
+                      {score.sourceName === null ? null : (
+                        <p className="mt-0.5 text-text-muted">
+                          {score.sourceName}
+                          {score.retrievedAt === null
+                            ? ""
+                            : ` · retrieved ${formatDateTime(score.retrievedAt)}`}
+                        </p>
+                      )}
+                      {score.reviewedBy === null ? null : (
+                        <div className="mt-0.5 flex items-center gap-1 text-text-muted">
+                          <span>Approved by</span>
+                          <Avatar
+                            avatarId={null}
+                            userId={score.reviewedBy.id}
+                            label={score.reviewedBy.displayName}
+                            size="sm"
+                            showLabel
+                            className="gap-1"
+                          />
+                          <span>on {formatDateTime(score.reviewedAt)}</span>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </Card>
+
+          <Card className="rounded-none border-x-0 border-b-0">
+            <CardHeader>
+              <CardTitle>Weakness classification</CardTitle>
+            </CardHeader>
+            <CardBody className="space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {finding.cweIds.length === 0 ? (
+                  <span className="text-[12px] text-text-muted">
+                    No CWE assigned.
+                  </span>
+                ) : (
+                  finding.cweIds.map((cweId) => (
+                    <span
+                      key={cweId}
+                      className="inline-flex items-center gap-1 rounded-(--cv-radius) border border-border bg-surface-raised px-1.5 py-0.5 text-[11px]"
+                    >
+                      <Mono>{cweId}</Mono>
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          aria-label={`Remove ${cweId}`}
+                          className="text-text-muted hover:text-danger"
+                          onClick={() =>
+                            setCwes.mutate(
+                              finding.cweIds.filter((id) => id !== cweId),
+                            )
+                          }
+                        >
+                          ×
+                        </button>
+                      ) : null}
+                    </span>
+                  ))
+                )}
+              </div>
+
+              {canEdit ? (
+                <>
+                  <Input
+                    value={cweQuery}
+                    onChange={(event) => setCweQuery(event.target.value)}
+                    placeholder="Search CWE by number or name…"
+                    aria-label="Search CWE"
+                  />
+                  {cweSuggestions.length === 0 ? null : (
+                    <ul className="divide-y divide-border rounded-(--cv-radius) border border-border">
+                      {cweSuggestions.map((entry) => (
+                        <li key={entry.id}>
+                          <button
+                            type="button"
+                            className="flex w-full items-start gap-2 px-2 py-1.5 text-left text-[12px] hover:bg-surface-hover"
+                            onClick={() => {
+                              setCwes.mutate([
+                                ...new Set([...finding.cweIds, entry.id]),
+                              ]);
+                              setCweQuery("");
+                            }}
+                          >
+                            <Mono className="w-20 shrink-0">{entry.id}</Mono>
+                            <span className="min-w-0">
+                              <span className="block">{entry.name}</span>
+                              <span className="block text-text-muted">
+                                {entry.summary}
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              ) : null}
+            </CardBody>
+          </Card>
+        </aside>
       </div>
     </div>
   );

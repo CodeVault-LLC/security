@@ -60,12 +60,31 @@ export async function registerVendorResponseSlaRoutes(
           asc(schema.correspondenceMessages.receivedAt),
           asc(schema.correspondenceMessages.createdAt),
         );
+      const outbound = await app.db
+        .select({
+          sentAt: schema.correspondenceMessages.sentAt,
+          createdAt: schema.correspondenceMessages.createdAt,
+        })
+        .from(schema.correspondenceMessages)
+        .where(
+          and(
+            eq(schema.correspondenceMessages.submissionId, submission.id),
+            eq(schema.correspondenceMessages.direction, "OUTBOUND"),
+          ),
+        )
+        .orderBy(
+          asc(schema.correspondenceMessages.sentAt),
+          asc(schema.correspondenceMessages.createdAt),
+        );
       const snapshot = submission.routeSnapshot as SubmissionRouteSnapshot;
       return deriveVendorResponseSla({
         submissionId: submission.id,
         acknowledgementBusinessDays: snapshot.route.acknowledgementBusinessDays,
         updateCadenceDays: snapshot.route.updateCadenceDays,
-        sentAt: deliveries.find((item) => item.sentAt !== null)?.sentAt ?? null,
+        sentAt:
+          deliveries.find((item) => item.sentAt !== null)?.sentAt ??
+          outbound.find((item) => item.sentAt !== null)?.sentAt ??
+          null,
         inboundAt: inbound.map((item) => item.receivedAt ?? item.createdAt),
         now: new Date().toISOString(),
       });

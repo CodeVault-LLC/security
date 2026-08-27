@@ -107,6 +107,38 @@ export const submissions = pgTable(
   ],
 );
 
+/** A user-selected provider thread tracked for one disclosure submission. */
+export const submissionMailThreads = pgTable(
+  "submission_mail_threads",
+  {
+    id: primaryId(),
+    submissionId: uuid("submission_id")
+      .notNull()
+      .references(() => submissions.id, { onDelete: "cascade" }),
+    mailboxConnectionId: uuid("mailbox_connection_id")
+      .notNull()
+      .references(() => mailboxConnections.id, { onDelete: "cascade" }),
+    providerThreadId: text("provider_thread_id").notNull(),
+    linkedBy: uuid("linked_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (table) => [
+    uniqueIndex("submission_mail_threads_submission_key").on(
+      table.submissionId,
+    ),
+    uniqueIndex("submission_mail_threads_provider_key").on(
+      table.mailboxConnectionId,
+      table.providerThreadId,
+    ),
+    index("submission_mail_threads_connection_idx").on(
+      table.mailboxConnectionId,
+      table.createdAt,
+    ),
+  ],
+);
+
 export const submissionRevisions = pgTable(
   "submission_revisions",
   {

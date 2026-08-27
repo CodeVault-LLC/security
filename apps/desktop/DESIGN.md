@@ -190,6 +190,23 @@ Controls use gently curved 6px corners and containers use 8px corners. Fully rou
 - **Hover / Focus:** Darken the fill on hover; use a visible blue two-pixel focus outline. Press feedback is brief and disabled during loading.
 - **Secondary / Ghost / Danger:** White or transparent surfaces with explicit borders or semantic text. Disabled controls remain visible with reduced opacity, disabled surface treatment, and a not-allowed cursor.
 
+### Tabs
+
+- **Active state:** Use a two-pixel Action Blue underline inset from the label edges. Do not turn tabs into filled pills or repeat the active state with a second background treatment.
+- **Density:** Tab rows are 40px high, horizontally scroll when needed, and keep labels on one line. Counts may follow the label as plain text.
+- **Hierarchy:** Tabs switch views within the current record. Use links or sidebar navigation when the destination changes the record or route context.
+
+### Mail workspaces
+
+- Keep the folder rail, conversation list, and reader stable while data refreshes. Initial loads use structural skeletons; background refreshes use a thin indeterminate progress edge.
+- Read state and provider categories are filters on the current mailbox, not organization-wide settings. Keep them visible above the list and clear the selected conversation when it no longer belongs to the active slice.
+- Attachments are explicit secondary actions. Bytes move through the bounded desktop bridge and a native save picker; the renderer never receives a filesystem path.
+
+### Analytical signals
+
+- Derived metrics must state their basis in nearby text. Prefer ratios, percentile spreads, and aging shares with visible numerators and denominators over opaque composite scores.
+- Put operational signals before detailed distributions so the page first answers where work is accumulating, then supplies the underlying breakdowns.
+
 ### Chips
 
 - **Style:** 20px status pills with 11px text, an outline, and a text/icon label. Never use pills for ordinary actions.
@@ -208,9 +225,15 @@ Controls use gently curved 6px corners and containers use 8px corners. Fully rou
 - **Focus:** Focus Blue border and two-pixel outline.
 - **Error / Disabled:** Semantic border plus inline `FieldError`; disabled fields use Raised Surface and remain readable. Helper text uses `FieldDescription` at 11.5px and is connected with `aria-describedby`.
 
-### Organization Settings
+### Settings Workspaces
 
-- **Navigation:** Keep General and Policy & access as shared, persistent sub-navigation so identity, report attribution, security requirements, and AI access remain one understandable settings area.
+- **Navigation:** Personal Settings and Organization use the shared settings shell. Each has one persistent local sidebar on wide layouts and one horizontally scrollable link row on compact layouts. These links change routes, so they are navigation rather than record tabs.
+- **Organization scope:** The global sidebar has one Organization destination. The Organization sidebar owns Members, General, and Security & access, and stays visible on member detail pages.
+- **Active state:** The current settings link uses a blue icon and selected surface at every width. `aria-current="page"` must name the same state without color. Do not style route links as record tabs.
+- **Page hierarchy:** Name the settings area once in the local sidebar and the current section once in the content header. Do not repeat the page title as the first card title.
+- **Sections:** Use a top divider, 24px vertical padding, and the standard Title, Body, and Metadata type steps. Cards are reserved for independently loaded or independently saved regions, not every group of fields.
+- **Fixed choices:** Two or three static role or preference choices stay visible as radio or segmented controls. Use Select only for longer or dynamic option sets.
+- **Shared controls:** Settings use the shared Button, Input, Select, Checkbox, loading, error, and save-state components. Do not override their standard heights or radii inside a settings route.
 - **Policy Rows:** Put the requirement name and consequence on the left and its direct control, unit, or immutable state on the right. Use a section divider instead of wrapping every value in a separate card.
 - **Save State:** Each independently persisted policy surface owns one save bar. Reset remains neutral; Save becomes blue only when changes are valid and executable.
 - **Scope and Permissions:** Name organization-wide consequences inline. Required, optional, enabled, blocked, read-only, loading, invalid, unsaved, saving, saved, and failure states must remain visible without relying on disabled styling alone.

@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from "vitest";
 
 import {
   syncMailboxHistory,
+  syncTrackedThread,
   type GmailSyncDependencies,
 } from "./gmail-sync.js";
 
@@ -56,5 +57,47 @@ describe("tracked Gmail synchronization", () => {
     );
     await expect(syncMailboxHistory(deps)).rejects.toThrow("storage failed");
     expect(deps.advanceCursor).not.toHaveBeenCalled();
+  });
+
+  test("imports every message from one explicitly linked thread", async () => {
+    const persistTracked = vi.fn(async () => undefined);
+    const getMessageRaw = vi.fn(async (_token: string, id: string) =>
+      new TextEncoder().encode(id),
+    );
+    await syncTrackedThread({
+      accessToken: "access",
+      threadId: "linked-thread",
+      getThreadMessageIds: vi.fn(async () => ["sent", "reply"]),
+      getMessageMetadata: vi.fn(async (_token, id) => ({
+        id,
+        threadId: "linked-thread",
+        labelIds: id === "sent" ? ["SENT"] : ["INBOX"],
+        headers: [],
+      })),
+      getMessageRaw,
+      persistTracked,
+    });
+    expect(getMessageRaw).toHaveBeenCalledTimes(2);
+    expect(persistTracked).toHaveBeenCalledTimes(2);
+  });
+
+  test("rejects inconsistent provider metadata before fetching raw content", async () => {
+    const getMessageRaw = vi.fn(async () => new Uint8Array());
+    await expect(
+      syncTrackedThread({
+        accessToken: "access",
+        threadId: "linked-thread",
+        getThreadMessageIds: vi.fn(async () => ["wrong"]),
+        getMessageMetadata: vi.fn(async () => ({
+          id: "wrong",
+          threadId: "different-thread",
+          labelIds: [],
+          headers: [],
+        })),
+        getMessageRaw,
+        persistTracked: vi.fn(async () => undefined),
+      }),
+    ).rejects.toThrow("inconsistent thread metadata");
+    expect(getMessageRaw).not.toHaveBeenCalled();
   });
 });

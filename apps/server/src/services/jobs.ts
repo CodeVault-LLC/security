@@ -66,6 +66,8 @@ export interface GmailSendJobData {
 
 export interface GmailSyncJobData {
   connectionId?: string;
+  /** Imports this one already-authorized thread before normal history sync. */
+  threadId?: string;
 }
 
 export interface GmailWatchRenewalJobData {

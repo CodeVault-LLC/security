@@ -3,11 +3,12 @@ import { describe, expect, it } from "vitest";
 import { createAppRouter } from "./router.js";
 
 describe("settings route ownership boundaries", () => {
-  it("exposes categorized organization and personal routes without an organization landing page", () => {
+  it("exposes categorized organization and personal settings routes", () => {
     const paths = Object.keys(createAppRouter().routesByPath);
 
     expect(paths).toEqual(
       expect.arrayContaining([
+        "/organization",
         "/organization/users",
         "/organization/users/$userId",
         "/organization/settings",
@@ -19,6 +20,5 @@ describe("settings route ownership boundaries", () => {
         "/settings/mail",
       ]),
     );
-    expect(paths).not.toContain("/organization");
   });
 });

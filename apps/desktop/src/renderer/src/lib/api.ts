@@ -139,6 +139,31 @@ export const queryKeys = {
   aiPolicies: ["ai-policies"] as const,
   aiProviders: ["ai-providers"] as const,
   mailConnections: ["mail-connections"] as const,
+  mailboxThreads: (
+    connectionId: string,
+    folder: string,
+    query: string,
+    readFilter: string,
+    category: string,
+    pageToken?: string,
+  ) =>
+    [
+      "mailbox-threads",
+      connectionId,
+      folder,
+      query,
+      readFilter,
+      category,
+      pageToken,
+    ] as const,
+  mailboxThread: (connectionId: string, threadId: string) =>
+    ["mailbox-thread", connectionId, threadId] as const,
+  mailTrackingPreview: (
+    connectionId: string,
+    threadId: string,
+    submissionId: string,
+  ) => ["mail-tracking-preview", connectionId, threadId, submissionId] as const,
+  mailTrackingTargets: ["mail-tracking-targets"] as const,
   notifications: ["notifications"] as const,
   activity: (filters?: Record<string, unknown>) =>
     filters === undefined

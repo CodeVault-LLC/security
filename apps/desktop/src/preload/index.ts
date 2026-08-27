@@ -168,6 +168,15 @@ const api: CodeVaultDesktopApi = {
       }) as ReturnType<CodeVaultDesktopApi["reports"]["downloadExport"]>,
   },
 
+  mail: {
+    downloadAttachment: (connectionId, messageId, attachmentIndex) =>
+      ipcRenderer.invoke(IPC_CHANNELS.mailDownloadAttachment, {
+        connectionId,
+        messageId,
+        attachmentIndex,
+      }) as ReturnType<CodeVaultDesktopApi["mail"]["downloadAttachment"]>,
+  },
+
   audit: {
     saveCsv: (caseId, csv) =>
       ipcRenderer.invoke(IPC_CHANNELS.auditSaveCsv, {

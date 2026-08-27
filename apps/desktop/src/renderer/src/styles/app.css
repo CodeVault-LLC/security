@@ -152,6 +152,18 @@ a {
   }
 }
 
+@keyframes mail-progress {
+  0% {
+    transform: translateX(-100%);
+  }
+  50% {
+    transform: translateX(100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
 /* Compact widths keep the existing single-pane navigation model. */
 @media (max-width: 767px) {
   .cv-report-sections-layout {
