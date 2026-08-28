@@ -47,6 +47,47 @@ export function formatDistanceToNowStrict(timestamp: string): string {
   return "just now";
 }
 
+/** Compact elapsed time for operational table cells: "3d 4h", "2h 18m". */
+export function formatElapsedDuration(
+  startedAt: string,
+  endedAt: string | number = Date.now(),
+): string {
+  const started = new Date(startedAt).getTime();
+  const ended =
+    typeof endedAt === "number" ? endedAt : new Date(endedAt).getTime();
+
+  if (Number.isNaN(started) || Number.isNaN(ended)) {
+    return "—";
+  }
+
+  const minutes = Math.max(0, Math.floor((ended - started) / 60_000));
+  const days = Math.floor(minutes / (24 * 60));
+  const hours = Math.floor((minutes % (24 * 60)) / 60);
+  const remainingMinutes = minutes % 60;
+
+  if (days >= 365) {
+    const years = Math.floor(days / 365);
+    const remainingMonths = Math.floor((days % 365) / 30);
+    return `${years}y${remainingMonths > 0 ? ` ${remainingMonths}mo` : ""}`;
+  }
+
+  if (days >= 30) {
+    const months = Math.floor(days / 30);
+    const remainingDays = days % 30;
+    return `${months}mo${remainingDays > 0 ? ` ${remainingDays}d` : ""}`;
+  }
+
+  if (days > 0) {
+    return `${days}d${hours > 0 ? ` ${hours}h` : ""}`;
+  }
+
+  if (hours > 0) {
+    return `${hours}h${remainingMinutes > 0 ? ` ${remainingMinutes}m` : ""}`;
+  }
+
+  return `${remainingMinutes}m`;
+}
+
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
   month: "short",

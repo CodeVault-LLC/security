@@ -1,3 +1,4 @@
+import { keepPreviousData } from "@tanstack/react-query";
 import { Link, useSearch } from "@tanstack/react-router";
 import { FilePlus2, ListFilter, Pencil, Plus, Search, X } from "lucide-react";
 import { useState } from "react";
@@ -49,6 +50,16 @@ import {
 
 import { PageHeader } from "../components/app-shell.js";
 import {
+  DataGridCell,
+  DataGridFrame,
+  DataGridHeaderCell,
+  DataGridTable,
+  DataGridToolbar,
+  DataGridViewport,
+  dataGridRowClass,
+  dataGridRowLinkClass,
+} from "../components/data-grid.js";
+import {
   CursorPagination,
   useCursorPagination,
 } from "../components/cursor-pagination.js";
@@ -86,7 +97,7 @@ interface Paginated<T> {
   nextCursor: string | null;
 }
 
-const COLLECTION_PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 50;
 
 /**
  * What each identifier scheme actually is.
@@ -112,11 +123,14 @@ export function AssetsRoute(): React.JSX.Element {
   const user = useSession((state) => state.user);
   const [createOpen, setCreateOpen] = useState(routeSearch.create);
   const [kindFilter, setKindFilter] = useState<string>("");
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const vendorFilter = routeSearch.vendorId;
-  const pagination = useCursorPagination(`${kindFilter}:${vendorFilter ?? ""}`);
+  const pagination = useCursorPagination(
+    `${kindFilter}:${vendorFilter ?? ""}:${pageSize}`,
+  );
 
   const assetQuery = new URLSearchParams({
-    limit: String(COLLECTION_PAGE_SIZE),
+    limit: String(pageSize),
   });
 
   if (kindFilter.length > 0) assetQuery.set("kind", kindFilter);
@@ -127,10 +141,11 @@ export function AssetsRoute(): React.JSX.Element {
     queryKeys.assets({
       kind: kindFilter,
       vendorId: vendorFilter,
-      limit: COLLECTION_PAGE_SIZE,
+      limit: pageSize,
       cursor: pagination.cursor,
     }),
     `/v1/assets?${assetQuery.toString()}`,
+    { placeholderData: keepPreviousData },
   );
 
   const metrics = useApiQuery<AssetMetricsResponse>(
@@ -255,161 +270,196 @@ export function AssetsRoute(): React.JSX.Element {
         )}
       </details>
 
-      <div className="flex items-center gap-2 border-b border-border px-4 py-2">
-        <Select
-          aria-label="Asset kind"
-          value={kindFilter.length === 0 ? "__all" : kindFilter}
-          onValueChange={(value) =>
-            setKindFilter(value === "__all" ? "" : value)
-          }
-          className="w-56"
-          options={[
-            {
-              value: "__all",
-              label: "All kinds",
-              icon: <ListFilter className="size-3.5" />,
-            },
-            ...assetKindSelectOptions(ASSET_KINDS),
-          ]}
-        />
-        {vendorFilter === undefined ? null : (
-          <div className="flex h-10 min-w-0 items-center gap-1 rounded-(--cv-radius) border border-border bg-surface px-2 text-[12px]">
-            <span className="shrink-0 text-text-muted">Vendor</span>
-            <Link
-              to={`/vendors/${vendorFilter}`}
-              className="min-w-0 truncate font-medium hover:underline"
-            >
-              {routeSearch.vendorName ?? "Linked vendor"}
-            </Link>
-            <Link
-              to="/assets"
-              search={{}}
-              aria-label="Clear vendor filter"
-              title="Clear vendor filter"
-              className="ml-1 flex size-10 shrink-0 items-center justify-center rounded-(--cv-radius) text-text-muted hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-focus"
-            >
-              <X aria-hidden className="size-3.5" />
-            </Link>
-          </div>
-        )}
-        <span className="ml-auto text-[11px] text-text-muted" role="status">
-          {assets.isFetching && assets.data !== undefined
-            ? "Updating…"
-            : `${items.length} asset${items.length === 1 ? "" : "s"}`}
-        </span>
-      </div>
+      <DataGridFrame aria-label="Assets table">
+        <DataGridToolbar>
+          <Select
+            aria-label="Asset kind"
+            value={kindFilter.length === 0 ? "__all" : kindFilter}
+            onValueChange={(value) =>
+              setKindFilter(value === "__all" ? "" : value)
+            }
+            className="w-56"
+            options={[
+              {
+                value: "__all",
+                label: "All kinds",
+                icon: <ListFilter className="size-3.5" />,
+              },
+              ...assetKindSelectOptions(ASSET_KINDS),
+            ]}
+          />
+          {vendorFilter === undefined ? null : (
+            <div className="flex h-9 min-w-0 items-center gap-1 rounded-(--cv-radius) border border-border bg-surface px-2 text-[12px]">
+              <span className="shrink-0 text-text-muted">Vendor</span>
+              <Link
+                to={`/vendors/${vendorFilter}`}
+                className="min-w-0 truncate font-medium underline-offset-2 hover:underline"
+              >
+                {routeSearch.vendorName ?? "Linked vendor"}
+              </Link>
+              <Link
+                to="/assets"
+                search={{}}
+                aria-label="Clear vendor filter"
+                title="Clear vendor filter"
+                className="ml-1 flex size-8 shrink-0 items-center justify-center rounded-(--cv-radius) text-text-muted hover:bg-surface-hover hover:text-text focus-visible:outline-2 focus-visible:outline-focus"
+              >
+                <X aria-hidden className="size-3.5" />
+              </Link>
+            </div>
+          )}
+          <span className="ml-auto text-[11px] text-text-muted" role="status">
+            {assets.isFetching && assets.data !== undefined
+              ? "Updating…"
+              : `${items.length} asset${items.length === 1 ? "" : "s"}`}
+          </span>
+        </DataGridToolbar>
 
-      {assets.error !== null ? (
-        <ErrorState
-          title={errorHeading(assets.error)}
-          description={assets.error.message}
-          action={
-            <Button
-              variant="secondary"
-              size="sm"
-              loading={assets.isFetching}
-              onClick={() => void assets.refetch()}
-            >
-              Try again
-            </Button>
-          }
-        />
-      ) : assets.isLoading ? (
-        <LoadingState label="Loading assets…" />
-      ) : items.length === 0 ? (
-        <EmptyState
-          title={
-            vendorFilter !== undefined
-              ? `No assets linked to ${routeSearch.vendorName ?? "this vendor"}`
-              : kindFilter.length > 0
-                ? "No assets match this kind"
-                : "No assets yet"
-          }
-          description={
-            vendorFilter !== undefined
-              ? canWrite(user)
-                ? "Create an asset here to link it to this vendor automatically."
-                : "No linked assets are available to you. An editor can create or link one."
-              : kindFilter.length > 0
-                ? "Clear the kind filter to return to every asset."
-                : canWrite(user)
-                  ? "Create the thing you are researching: a component, device, service, or firmware image."
-                  : "No assets are available to you. An editor can create the first asset."
-          }
-          action={
-            vendorFilter !== undefined && canWrite(user) ? (
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button variant="primary" onClick={() => setCreateOpen(true)}>
-                  <Plus aria-hidden className="size-3.5" />
-                  New linked asset
-                </Button>
+        {assets.error !== null ? (
+          <ErrorState
+            title={errorHeading(assets.error)}
+            description={assets.error.message}
+            action={
+              <Button
+                variant="secondary"
+                size="sm"
+                loading={assets.isFetching}
+                onClick={() => void assets.refetch()}
+              >
+                Try again
+              </Button>
+            }
+          />
+        ) : assets.isLoading ? (
+          <LoadingState label="Loading assets…" />
+        ) : items.length === 0 ? (
+          <EmptyState
+            title={
+              vendorFilter !== undefined
+                ? `No assets linked to ${routeSearch.vendorName ?? "this vendor"}`
+                : kindFilter.length > 0
+                  ? "No assets match this kind"
+                  : "No assets yet"
+            }
+            description={
+              vendorFilter !== undefined
+                ? canWrite(user)
+                  ? "Create an asset here to link it to this vendor automatically."
+                  : "No linked assets are available to you. An editor can create or link one."
+                : kindFilter.length > 0
+                  ? "Clear the kind filter to return to every asset."
+                  : canWrite(user)
+                    ? "Create the thing you are researching: a component, device, service, or firmware image."
+                    : "No assets are available to you. An editor can create the first asset."
+            }
+            action={
+              vendorFilter !== undefined && canWrite(user) ? (
+                <div className="flex flex-wrap justify-center gap-2">
+                  <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                    <Plus aria-hidden className="size-3.5" />
+                    New linked asset
+                  </Button>
+                  <Button asChild variant="secondary">
+                    <Link to="/assets" search={{}}>
+                      Clear vendor filter
+                    </Link>
+                  </Button>
+                </div>
+              ) : vendorFilter !== undefined ? (
                 <Button asChild variant="secondary">
                   <Link to="/assets" search={{}}>
                     Clear vendor filter
                   </Link>
                 </Button>
-              </div>
-            ) : vendorFilter !== undefined ? (
-              <Button asChild variant="secondary">
-                <Link to="/assets" search={{}}>
-                  Clear vendor filter
-                </Link>
-              </Button>
-            ) : kindFilter.length > 0 ? (
-              <Button variant="secondary" onClick={() => setKindFilter("")}>
-                Clear filter
-              </Button>
-            ) : canWrite(user) ? (
-              <Button variant="primary" onClick={() => setCreateOpen(true)}>
-                <Plus aria-hidden className="size-3.5" />
-                New asset
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <ul className="divide-y divide-border">
-            {items.map((asset) => (
-              <li key={asset.id}>
-                <Link
-                  to={`/assets/${asset.id}`}
-                  className="grid min-h-16 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-2.5 text-[12px] hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus lg:grid-cols-[auto_6rem_minmax(10rem,1fr)_10rem_7rem_minmax(10rem,16rem)_6rem]"
-                >
-                  <AssetKindIcon kind={asset.kind} />
-                  <Mono className="text-text-muted max-lg:col-start-2 max-lg:row-start-2">
-                    {asset.ref}
-                  </Mono>
-                  <span className="min-w-0 truncate font-medium max-lg:col-span-2 max-lg:col-start-2 max-lg:row-start-1">
-                    {asset.name}
-                  </span>
-                  <span className="truncate text-text-muted max-lg:hidden">
-                    {asset.vendor?.name ?? asset.legacyVendorName ?? "—"}
-                  </span>
-                  <span className="truncate text-text-muted max-lg:hidden">
-                    {asset.version ?? "—"}
-                  </span>
-                  <Mono className="truncate text-text-muted max-lg:hidden">
-                    {asset.primaryIdentifier ?? ""}
-                  </Mono>
-                  <span className="shrink-0 text-right text-text-muted max-lg:col-start-3 max-lg:row-start-2">
-                    {asset.findingCount} finding
-                    {asset.findingCount === 1 ? "" : "s"}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <CursorPagination
-            label="Asset"
-            pageIndex={pagination.pageIndex}
-            nextCursor={assets.data?.nextCursor ?? null}
-            loading={assets.isFetching}
-            onPrevious={pagination.previous}
-            onNext={pagination.next}
+              ) : kindFilter.length > 0 ? (
+                <Button variant="secondary" onClick={() => setKindFilter("")}>
+                  Clear filter
+                </Button>
+              ) : canWrite(user) ? (
+                <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                  <Plus aria-hidden className="size-3.5" />
+                  New asset
+                </Button>
+              ) : undefined
+            }
           />
-        </div>
-      )}
+        ) : (
+          <>
+            <DataGridViewport aria-busy={assets.isFetching || undefined}>
+              <DataGridTable className="min-w-[900px]">
+                <thead>
+                  <tr>
+                    <DataGridHeaderCell className="w-12" aria-label="Kind" />
+                    <DataGridHeaderCell>Asset</DataGridHeaderCell>
+                    <DataGridHeaderCell className="w-44">
+                      Vendor
+                    </DataGridHeaderCell>
+                    <DataGridHeaderCell className="w-28">
+                      Version
+                    </DataGridHeaderCell>
+                    <DataGridHeaderCell className="w-64">
+                      Primary identifier
+                    </DataGridHeaderCell>
+                    <DataGridHeaderCell className="w-24 text-right">
+                      Findings
+                    </DataGridHeaderCell>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((asset) => (
+                    <tr key={asset.id} className={dataGridRowClass}>
+                      <DataGridCell className="w-12 pr-0">
+                        <AssetKindIcon kind={asset.kind} />
+                      </DataGridCell>
+                      <DataGridCell className="min-w-64">
+                        <Link
+                          to={`/assets/${asset.id}`}
+                          className={dataGridRowLinkClass}
+                        >
+                          <span className="block truncate" title={asset.name}>
+                            {asset.name}
+                          </span>
+                          <Mono className="mt-0.5 block text-[10.5px] font-normal text-text-muted">
+                            {asset.ref}
+                          </Mono>
+                        </Link>
+                      </DataGridCell>
+                      <DataGridCell className="max-w-44 truncate text-text-muted">
+                        {asset.vendor?.name ?? asset.legacyVendorName ?? "—"}
+                      </DataGridCell>
+                      <DataGridCell className="max-w-28 truncate text-text-muted">
+                        {asset.version ?? "—"}
+                      </DataGridCell>
+                      <DataGridCell className="max-w-64">
+                        <Mono
+                          className="block truncate text-[10.5px] text-text-muted"
+                          title={asset.primaryIdentifier ?? undefined}
+                        >
+                          {asset.primaryIdentifier ?? "—"}
+                        </Mono>
+                      </DataGridCell>
+                      <DataGridCell className="text-right text-[11px] tabular-nums text-text-muted">
+                        {asset.findingCount.toLocaleString()}
+                      </DataGridCell>
+                    </tr>
+                  ))}
+                </tbody>
+              </DataGridTable>
+            </DataGridViewport>
+            <CursorPagination
+              label="Asset"
+              pageIndex={pagination.pageIndex}
+              itemCount={items.length}
+              pageSize={pageSize}
+              nextCursor={assets.data?.nextCursor ?? null}
+              loading={assets.isFetching}
+              onPageSizeChange={setPageSize}
+              onPrevious={pagination.previous}
+              onNext={pagination.next}
+            />
+          </>
+        )}
+      </DataGridFrame>
 
       <CreateAssetDialog
         open={createOpen}
