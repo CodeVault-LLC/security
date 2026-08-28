@@ -4,6 +4,7 @@ This index states what the repository proves and what still depends on an operat
 
 | Evidence | Repository source | Current state |
 | --- | --- | --- |
+| Project classification | Root `GOVERNANCE.md` | Class B approved on 2026-08-28 with Lukas Olsen (`@lukasolsen`) as owning engineering lead. The classification is recorded during alpha; missing earlier lifecycle evidence is an open release gap, not a retrospective claim. |
 | Product feature inventory | `docs/feature-register.md` | Current for the `0.1.0-alpha.9` source tree; every implemented row links to at least one acceptance test. Published release and pull-request evidence are added when the tag ships. |
 | Threat model | `docs/architecture/threat-model.md` | Implemented; review after trust-boundary changes and at least annually. |
 | AI trust policy | `docs/architecture/ai-security.md` | Implemented for in-product AI proposals. Authenticated MCP clients are a separate direct-operation interface whose calls are attributed to the signed-in user. |
@@ -21,4 +22,8 @@ This index states what the repository proves and what still depends on an operat
 | NIST 800-53 | `docs/compliance/nist-800-53-moderate.md` | Responsibility mapping only. The deploying organization tailors and assesses its controls. |
 | Vulnerability policy | Root `SECURITY.md` | Approved and implemented. The root policy governs the complete repository. |
 | Open-source license | Root `LICENSE` and `NOTICE` | Apache-2.0 selected. Release source, desktop packages, and OCI images carry the license. |
-| Independent assessment | Future assessment report | Not performed. |
+| Independent Software Assurance concurrence | Future assessment report and concurrence record | Required for Class B before the Release Readiness Review; not performed. Automated and AI review are supporting evidence, not independent concurrence. |
+| Release Readiness Review | Future review record | Required for Class B before general availability; not performed. |
+| Severity 1/2 anomaly and waiver register | Future anomaly and waiver register | Required for Class B certification. No release-level register or approved risk-assessed waiver record exists. |
+| Requirements traceability | Future requirements traceability matrix | Required for Class B. Existing feature-to-test links are partial evidence, not a complete traceability matrix. |
+| Reproducible release | Release workflow and future reproducibility record | Required for Class B. Build controls exist in source, but reproducibility has not been demonstrated for a published release. |
