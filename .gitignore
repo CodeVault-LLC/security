@@ -12,3 +12,4 @@ release/
 test-results/
 playwright-report/
 /.security-review/
+/.worktrees/
