@@ -12,6 +12,7 @@ import {
   ShortText,
   Timestamp,
   Uuid,
+  UserRoleSchema,
 } from "./common.js";
 
 /**
@@ -79,6 +80,91 @@ export const CaseMember = Type.Object({
 });
 
 export type CaseMember = Static<typeof CaseMember>;
+
+const CaseCapabilityList = Type.Array(CaseCapabilitySchema, {
+  maxItems: 4,
+  uniqueItems: true,
+});
+
+export const CaseAccessReviewPrincipal = Type.Object({
+  user: ActorSummary,
+  role: UserRoleSchema,
+  disabled: Type.Boolean(),
+  source: Type.Union([Type.Literal("OWNER"), Type.Literal("GRANT")]),
+  /** Stored grant, or the owner's implicit grant. */
+  grantedCapabilities: CaseCapabilityList,
+  /** Authority after applying account state and the organization-role ceiling. */
+  effectiveCapabilities: CaseCapabilityList,
+  grantedAt: Type.Union([Timestamp, Type.Null()]),
+});
+
+export type CaseAccessReviewPrincipal = Static<
+  typeof CaseAccessReviewPrincipal
+>;
+
+export const CaseAccessReviewItem = Type.Object({
+  id: Uuid,
+  ref: HumanReference,
+  title: Type.String(),
+  status: CaseStatusSchema,
+  restricted: Type.Boolean(),
+  principals: Type.Array(CaseAccessReviewPrincipal, { minItems: 1 }),
+  updatedAt: Timestamp,
+});
+
+export type CaseAccessReviewItem = Static<typeof CaseAccessReviewItem>;
+
+export const ListCaseAccessReviewQuery = Type.Object({
+  ...PaginationQuery.properties,
+  page: Type.Optional(Type.Integer({ minimum: 1, maximum: 100_000 })),
+  query: Type.Optional(Type.String({ maxLength: 200 })),
+  userId: Type.Optional(Uuid),
+});
+
+export type ListCaseAccessReviewQuery = Static<
+  typeof ListCaseAccessReviewQuery
+>;
+
+export const CaseAccessReviewResponse = Type.Object({
+  ...PaginatedResponse(CaseAccessReviewItem).properties,
+  total: Type.Integer({ minimum: 0 }),
+});
+
+export type CaseAccessReviewResponse = Static<typeof CaseAccessReviewResponse>;
+
+export const CaseAccessHistoryEvent = Type.Object({
+  id: Uuid,
+  kind: Type.Union([
+    Type.Literal("GRANTED"),
+    Type.Literal("UPDATED"),
+    Type.Literal("REVOKED"),
+    Type.Literal("OWNER_TRANSFERRED"),
+    Type.Literal("LEGACY_CHANGE"),
+  ]),
+  actor: Type.Union([ActorSummary, Type.Null()]),
+  subject: Type.Union([ActorSummary, Type.Null()]),
+  previousSubject: Type.Union([ActorSummary, Type.Null()]),
+  beforeCapabilities: Type.Union([CaseCapabilityList, Type.Null()]),
+  afterCapabilities: Type.Union([CaseCapabilityList, Type.Null()]),
+  requestId: Type.Union([Type.String(), Type.Null()]),
+  occurredAt: Timestamp,
+});
+
+export type CaseAccessHistoryEvent = Static<typeof CaseAccessHistoryEvent>;
+
+export const ListCaseAccessHistoryQuery = Type.Object({
+  ...PaginationQuery.properties,
+  page: Type.Optional(Type.Integer({ minimum: 1, maximum: 100_000 })),
+});
+
+export const CaseAccessHistoryResponse = Type.Object({
+  ...PaginatedResponse(CaseAccessHistoryEvent).properties,
+  total: Type.Integer({ minimum: 0 }),
+});
+
+export type CaseAccessHistoryResponse = Static<
+  typeof CaseAccessHistoryResponse
+>;
 
 export const CaseSummary = Type.Object({
   id: Uuid,

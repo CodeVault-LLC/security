@@ -166,6 +166,9 @@ export const queryKeys = {
   ) => ["mail-tracking-preview", connectionId, threadId, submissionId] as const,
   mailTrackingTargets: ["mail-tracking-targets"] as const,
   notifications: ["notifications"] as const,
+  caseAccessReview: ["case-access-review"] as const,
+  caseAccessHistory: (caseId: string) =>
+    ["case-access-history", caseId] as const,
   activity: (filters?: Record<string, unknown>) =>
     filters === undefined
       ? (["activity"] as const)

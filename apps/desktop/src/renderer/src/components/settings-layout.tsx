@@ -2,6 +2,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   Bot,
   Building2,
+  KeyRound,
   Mail,
   Palette,
   ShieldCheck,
@@ -19,6 +20,7 @@ type SettingsDestination =
   | "/settings/ai"
   | "/settings/mail"
   | "/organization/users"
+  | "/organization/access-review"
   | "/organization/settings"
   | "/organization/security";
 
@@ -73,6 +75,11 @@ const ORGANIZATION_SETTINGS_GROUPS: readonly SettingsNavGroup[] = [
         label: "Members",
         icon: <UsersRound aria-hidden />,
         matchPrefix: true,
+      },
+      {
+        to: "/organization/access-review",
+        label: "Access review",
+        icon: <KeyRound aria-hidden />,
       },
       {
         to: "/organization/settings",

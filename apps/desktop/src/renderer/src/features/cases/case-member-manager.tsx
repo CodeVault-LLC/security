@@ -54,14 +54,24 @@ export function CaseMemberManager({
       method: "POST",
       body: { userId, capabilities: [...capabilities] },
     }),
-    () => [queryKeys.case(researchCase.id), queryKeys.cases()],
+    () => [
+      queryKeys.case(researchCase.id),
+      queryKeys.cases(),
+      queryKeys.caseAccessReview,
+      queryKeys.caseAccessHistory(researchCase.id),
+    ],
   );
   const remove = useApiMutation<{ ok: true }, string>(
     (memberUserId) => ({
       path: `/v1/cases/${researchCase.id}/members/${memberUserId}`,
       method: "DELETE",
     }),
-    () => [queryKeys.case(researchCase.id), queryKeys.cases()],
+    () => [
+      queryKeys.case(researchCase.id),
+      queryKeys.cases(),
+      queryKeys.caseAccessReview,
+      queryKeys.caseAccessHistory(researchCase.id),
+    ],
   );
   const existing = new Set(
     researchCase.members.map((member) => member.user.id),

@@ -112,6 +112,16 @@ case capabilities layered beneath the global role ceiling. Root list, search,
 metric, evidence, report, notification, event, and activity queries use the
 same user-aware readable-case scope.
 
+The access-review projection applies that same scope before listing principals,
+so it cannot become an identifier oracle for hidden cases. It reports both the
+stored grant and effective authority after disabled-account and organization-role
+ceilings. Grant creation, capability changes, revocation, and ownership transfer
+write immutable before/after audit records; identical retried grants are
+serialized and do not manufacture duplicate history. Pre-review audit rows that
+lack capability snapshots are labeled as legacy changes instead of being shown
+as exact history. Ownership updates use an atomic revision check, so racing
+transfers cannot commit contradictory owners or omit a revocation event.
+
 Role authority lives on organization memberships. A deferred database
 constraint prevents any committed transaction—including two racing admin
 changes—from leaving the organization without an enabled administrator.

@@ -56,6 +56,30 @@ describe("organization mail policy events", () => {
 });
 
 describe("case access events", () => {
+  it("refreshes the review matrix and history after a grant change", () => {
+    const queryClient = new QueryClient();
+    const caseId = "018f2f56-7c9a-7abc-8def-0123456789ab";
+    queryClient.setQueryData(["case-access-review"], { items: [] });
+    queryClient.setQueryData(["case-access-history", caseId], { items: [] });
+
+    invalidateForEvent(queryClient, {
+      id: "event-1",
+      type: "case.access_changed",
+      entityType: "case_access",
+      entityId: caseId,
+      caseId,
+      detail: { canRead: true },
+      occurredAt: "2026-08-28T10:01:00.000Z",
+    });
+
+    expect(
+      queryClient.getQueryState(["case-access-review"])?.isInvalidated,
+    ).toBe(true);
+    expect(
+      queryClient.getQueryState(["case-access-history", caseId])?.isInvalidated,
+    ).toBe(true);
+  });
+
   it("removes case-scoped cached data immediately after revocation", () => {
     const queryClient = new QueryClient();
     const caseId = "018f2f56-7c9a-7abc-8def-0123456789ab";

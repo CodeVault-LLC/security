@@ -1,8 +1,13 @@
 import type { AppInstance } from "../../http/app-instance.js";
-import { and, desc, eq, lt, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or, sql, type SQL } from "drizzle-orm";
 
 import {
   AddCaseMemberRequest,
+  CaseAccessHistoryResponse,
+  type CaseAccessHistoryEvent,
+  CaseAccessReviewResponse,
+  type CaseAccessReviewPrincipal,
+  type CaseCapability,
   CaseDetail,
   CaseListResponse,
   CaseReadiness,
@@ -13,11 +18,14 @@ import {
   DuplicateCaseRequest,
   ErrorResponse,
   IdParam,
+  ListCaseAccessHistoryQuery,
+  ListCaseAccessReviewQuery,
   ListCasesQuery,
   OkResponse,
   UpdateCaseRequest,
 } from "@codevault/contracts";
 import {
+  CASE_CAPABILITIES,
   canManageCaseMembers,
   DomainError,
   defaultPolicyPackForProfile,
@@ -144,6 +152,226 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
         items: page.items.map(toCaseSummary),
         nextCursor: page.nextCursor,
         total,
+      };
+    },
+  );
+
+  app.get(
+    "/v1/cases/access-review",
+    {
+      schema: {
+        querystring: ListCaseAccessReviewQuery,
+        response: { 200: CaseAccessReviewResponse },
+      },
+    },
+    async (request) => {
+      const user = actingUser(request);
+      const size = pageSize(request.query.limit);
+      const cursor =
+        request.query.page === undefined
+          ? decodeCursor(request.query.cursor)
+          : null;
+      const filters: SQL[] = [visibilityCondition(user)];
+
+      if (request.query.query !== undefined) {
+        const pattern = `%${request.query.query}%`;
+        filters.push(
+          sql`(
+            ${schema.cases.title} ILIKE ${pattern}
+            OR ${schema.cases.ref} ILIKE ${pattern}
+            OR EXISTS (
+              SELECT 1 FROM users review_owner
+              WHERE review_owner.id = ${schema.cases.ownerId}
+                AND (
+                  review_owner.display_name ILIKE ${pattern}
+                  OR review_owner.email ILIKE ${pattern}
+                )
+            )
+            OR EXISTS (
+              SELECT 1
+              FROM case_members review_member
+              INNER JOIN users review_user
+                ON review_user.id = review_member.user_id
+              WHERE review_member.case_id = ${schema.cases.id}
+                AND (
+                  review_user.display_name ILIKE ${pattern}
+                  OR review_user.email ILIKE ${pattern}
+                )
+            )
+          )`,
+        );
+      }
+
+      if (request.query.userId !== undefined) {
+        filters.push(
+          or(
+            eq(schema.cases.ownerId, request.query.userId),
+            sql`EXISTS (
+              SELECT 1 FROM case_members review_member
+              WHERE review_member.case_id = ${schema.cases.id}
+                AND review_member.user_id = ${request.query.userId}
+            )`,
+          ) as SQL,
+        );
+      }
+
+      const [totalRow] = await app.db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(schema.cases)
+        .where(and(...filters));
+      const rowFilters = [...filters];
+
+      if (cursor !== null) {
+        rowFilters.push(
+          or(
+            lt(schema.cases.updatedAt, cursor.timestamp),
+            and(
+              eq(schema.cases.updatedAt, cursor.timestamp),
+              lt(schema.cases.id, cursor.id),
+            ),
+          ) as SQL,
+        );
+      }
+
+      const rows = await app.db
+        .select({
+          id: schema.cases.id,
+          ref: schema.cases.ref,
+          title: schema.cases.title,
+          status: schema.cases.status,
+          restricted: schema.cases.restricted,
+          updatedAt: schema.cases.updatedAt,
+          ownerId: schema.users.id,
+          ownerName: schema.users.displayName,
+          ownerEmail: schema.users.email,
+          ownerDisabled: schema.users.disabled,
+          ownerRole: schema.organizationMemberships.role,
+        })
+        .from(schema.cases)
+        .innerJoin(schema.users, eq(schema.users.id, schema.cases.ownerId))
+        .innerJoin(
+          schema.organizationMemberships,
+          and(
+            eq(schema.organizationMemberships.userId, schema.users.id),
+            eq(
+              schema.organizationMemberships.organizationId,
+              schema.cases.organizationId,
+            ),
+          ),
+        )
+        .where(and(...rowFilters))
+        .orderBy(desc(schema.cases.updatedAt), desc(schema.cases.id))
+        .limit(size + 1)
+        .offset(
+          request.query.page === undefined
+            ? 0
+            : (request.query.page - 1) * size,
+        );
+      const page = paginate(rows, size, (row) => row.updatedAt);
+      const caseIds = page.items.map((row) => row.id);
+      const ownerIdsByCase = new Map(
+        page.items.map((row) => [row.id, row.ownerId]),
+      );
+      const memberRows =
+        caseIds.length === 0
+          ? []
+          : await app.db
+              .select({
+                caseId: schema.caseMembers.caseId,
+                canWrite: schema.caseMembers.canWrite,
+                canApprove: schema.caseMembers.canApprove,
+                canDisclose: schema.caseMembers.canDisclose,
+                grantedAt: schema.caseMembers.createdAt,
+                userId: schema.users.id,
+                displayName: schema.users.displayName,
+                email: schema.users.email,
+                disabled: schema.users.disabled,
+                role: schema.organizationMemberships.role,
+              })
+              .from(schema.caseMembers)
+              .innerJoin(
+                schema.users,
+                eq(schema.users.id, schema.caseMembers.userId),
+              )
+              .innerJoin(
+                schema.organizationMemberships,
+                and(
+                  eq(schema.organizationMemberships.userId, schema.users.id),
+                  eq(
+                    schema.organizationMemberships.organizationId,
+                    user.organizationId,
+                  ),
+                ),
+              )
+              .where(inArray(schema.caseMembers.caseId, caseIds))
+              .orderBy(
+                schema.caseMembers.caseId,
+                schema.users.displayName,
+                schema.users.id,
+              );
+      const membersByCase = new Map<string, CaseAccessReviewPrincipal[]>();
+
+      for (const member of memberRows) {
+        // Ownership is authoritative. A stale explicit grant can survive an
+        // ownership transfer, but must not render the same principal twice.
+        if (ownerIdsByCase.get(member.caseId) === member.userId) continue;
+
+        const grantedCapabilities = caseCapabilitiesFromFlags(member);
+        const principal: CaseAccessReviewPrincipal = {
+          user: {
+            id: member.userId,
+            displayName: member.displayName,
+            email: member.email,
+          },
+          role: member.role,
+          disabled: member.disabled,
+          source: "GRANT",
+          grantedCapabilities,
+          effectiveCapabilities: effectiveCapabilities(
+            member.role,
+            member.disabled,
+            grantedCapabilities,
+          ),
+          grantedAt: member.grantedAt,
+        };
+        const existing = membersByCase.get(member.caseId) ?? [];
+        existing.push(principal);
+        membersByCase.set(member.caseId, existing);
+      }
+
+      return {
+        items: page.items.map((row) => {
+          const grantedCapabilities = [...CASE_CAPABILITIES];
+          const owner: CaseAccessReviewPrincipal = {
+            user: {
+              id: row.ownerId,
+              displayName: row.ownerName,
+              email: row.ownerEmail,
+            },
+            role: row.ownerRole,
+            disabled: row.ownerDisabled,
+            source: "OWNER",
+            grantedCapabilities,
+            effectiveCapabilities: effectiveCapabilities(
+              row.ownerRole,
+              row.ownerDisabled,
+              grantedCapabilities,
+            ),
+            grantedAt: null,
+          };
+
+          return {
+            id: row.id,
+            ref: row.ref,
+            title: row.title,
+            status: row.status,
+            restricted: row.restricted,
+            principals: [owner, ...(membersByCase.get(row.id) ?? [])],
+            updatedAt: row.updatedAt,
+          };
+        }),
+        nextCursor: page.nextCursor,
+        total: totalRow?.total ?? 0,
       };
     },
   );
@@ -457,7 +685,7 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
       }
 
       await app.db.transaction(async (tx) => {
-        await tx
+        const updated = await tx
           .update(schema.cases)
           .set({
             ...(body.title === undefined ? {} : { title: body.title }),
@@ -475,7 +703,24 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
             revision: existing.revision + 1,
             updatedAt: sql`now()`,
           })
-          .where(eq(schema.cases.id, access.caseId));
+          .where(
+            and(
+              eq(schema.cases.id, access.caseId),
+              eq(schema.cases.revision, body.expectedRevision),
+            ),
+          )
+          .returning({ id: schema.cases.id });
+
+        if (updated.length === 0) {
+          const [current] = await tx
+            .select({ revision: schema.cases.revision })
+            .from(schema.cases)
+            .where(eq(schema.cases.id, access.caseId))
+            .limit(1);
+          if (current === undefined) throw notFound("Case");
+          assertRevision(current, body.expectedRevision, "case");
+          throw new DomainError("SERVER_ERROR", "Could not update the case.");
+        }
 
         await app.audit.write(
           tx,
@@ -590,25 +835,61 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
         throw notFound("User");
       }
 
-      await app.db.transaction(async (tx) => {
-        await tx
-          .insert(schema.caseMembers)
-          .values({
+      const changed = await app.db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${access.caseId}:${userId}`}, 0))`,
+        );
+        const [existingMember] = await tx
+          .select({
+            canWrite: schema.caseMembers.canWrite,
+            canApprove: schema.caseMembers.canApprove,
+            canDisclose: schema.caseMembers.canDisclose,
+          })
+          .from(schema.caseMembers)
+          .where(
+            and(
+              eq(schema.caseMembers.caseId, access.caseId),
+              eq(schema.caseMembers.userId, userId),
+            ),
+          )
+          .limit(1)
+          .for("update");
+        const beforeCapabilities =
+          existingMember === undefined
+            ? []
+            : caseCapabilitiesFromFlags(existingMember);
+        const afterCapabilities = CASE_CAPABILITIES.filter((capability) =>
+          granted.has(capability),
+        );
+
+        if (sameCapabilities(beforeCapabilities, afterCapabilities)) {
+          return false;
+        }
+
+        if (existingMember === undefined) {
+          await tx.insert(schema.caseMembers).values({
             caseId: access.caseId,
             userId,
             canWrite: granted.has("WRITE"),
             canApprove: granted.has("APPROVAL"),
             canDisclose: granted.has("DISCLOSURE"),
             addedBy: user.id,
-          })
-          .onConflictDoUpdate({
-            target: [schema.caseMembers.caseId, schema.caseMembers.userId],
-            set: {
+          });
+        } else {
+          await tx
+            .update(schema.caseMembers)
+            .set({
               canWrite: granted.has("WRITE"),
               canApprove: granted.has("APPROVAL"),
               canDisclose: granted.has("DISCLOSURE"),
-            },
-          });
+            })
+            .where(
+              and(
+                eq(schema.caseMembers.caseId, access.caseId),
+                eq(schema.caseMembers.userId, userId),
+              ),
+            );
+        }
 
         await app.audit.write(
           tx,
@@ -618,23 +899,37 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
             requestId: request.requestId,
           },
           {
-            action: "case.member_added",
+            action:
+              existingMember === undefined
+                ? "case.member_added"
+                : "case.member_updated",
             entityType: "case",
             entityId: access.caseId,
             caseId: access.caseId,
-            after: { userId, capabilities },
+            before: { userId, capabilities: beforeCapabilities },
+            after: { userId, capabilities: afterCapabilities },
           },
         );
+
+        return true;
       });
 
-      app.events.publish({
-        type: "case.access_changed",
-        entityType: "case_access",
-        entityId: access.caseId,
-        caseId: access.caseId,
-        targetUserId: userId,
-        detail: { canRead: true, capabilities },
-      });
+      if (changed) {
+        app.events.publish({
+          type: "case.access_changed",
+          entityType: "case_access",
+          entityId: access.caseId,
+          caseId: access.caseId,
+          targetUserId: userId,
+          detail: { canRead: true, capabilities },
+        });
+        app.events.publish({
+          type: "entity.changed",
+          entityType: "case",
+          entityId: access.caseId,
+          caseId: access.caseId,
+        });
+      }
 
       return loadCaseDetail(app, access.caseId);
     },
@@ -669,6 +964,9 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
       }
 
       const revoked = await app.db.transaction(async (tx) => {
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${access.caseId}:${request.params.userId}`}, 0))`,
+        );
         const removed = await tx
           .delete(schema.caseMembers)
           .where(
@@ -677,7 +975,12 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
               eq(schema.caseMembers.userId, request.params.userId),
             ),
           )
-          .returning({ userId: schema.caseMembers.userId });
+          .returning({
+            userId: schema.caseMembers.userId,
+            canWrite: schema.caseMembers.canWrite,
+            canApprove: schema.caseMembers.canApprove,
+            canDisclose: schema.caseMembers.canDisclose,
+          });
 
         if (removed[0] === undefined) {
           return false;
@@ -695,7 +998,10 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
             entityType: "case",
             entityId: access.caseId,
             caseId: access.caseId,
-            before: { userId: request.params.userId },
+            before: {
+              userId: request.params.userId,
+              capabilities: caseCapabilitiesFromFlags(removed[0]),
+            },
           },
         );
 
@@ -711,9 +1017,130 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
           targetUserId: request.params.userId,
           detail: { canRead: false },
         });
+        app.events.publish({
+          type: "entity.changed",
+          entityType: "case",
+          entityId: access.caseId,
+          caseId: access.caseId,
+        });
       }
 
       return { ok: true as const };
+    },
+  );
+
+  app.get(
+    "/v1/cases/:id/access-history",
+    {
+      schema: {
+        params: IdParam,
+        querystring: ListCaseAccessHistoryQuery,
+        response: { 200: CaseAccessHistoryResponse },
+      },
+    },
+    async (request) => {
+      const user = actingUser(request);
+      const access = await requireCaseRead(app.db, user, request.params.id);
+      const size = pageSize(request.query.limit);
+      const cursor =
+        request.query.page === undefined
+          ? decodeCursor(request.query.cursor)
+          : null;
+      const filters: SQL[] = [
+        eq(schema.auditEvents.caseId, access.caseId),
+        or(
+          inArray(schema.auditEvents.action, [
+            "case.member_added",
+            "case.member_updated",
+            "case.member_removed",
+          ]),
+          and(
+            eq(schema.auditEvents.action, "case.updated"),
+            sql`(${schema.auditEvents.before}->>'ownerId') IS DISTINCT FROM (${schema.auditEvents.after}->>'ownerId')`,
+          ),
+        ) as SQL,
+      ];
+      const [totalRow] = await app.db
+        .select({ total: sql<number>`count(*)::int` })
+        .from(schema.auditEvents)
+        .where(and(...filters));
+
+      if (cursor !== null) {
+        filters.push(
+          or(
+            lt(schema.auditEvents.occurredAt, cursor.timestamp),
+            and(
+              eq(schema.auditEvents.occurredAt, cursor.timestamp),
+              lt(schema.auditEvents.id, cursor.id),
+            ),
+          ) as SQL,
+        );
+      }
+
+      const rows = await app.db
+        .select({
+          id: schema.auditEvents.id,
+          action: schema.auditEvents.action,
+          actorId: schema.auditEvents.actorId,
+          requestId: schema.auditEvents.requestId,
+          before: schema.auditEvents.before,
+          after: schema.auditEvents.after,
+          occurredAt: schema.auditEvents.occurredAt,
+        })
+        .from(schema.auditEvents)
+        .where(and(...filters))
+        .orderBy(
+          desc(schema.auditEvents.occurredAt),
+          desc(schema.auditEvents.id),
+        )
+        .limit(size + 1)
+        .offset(
+          request.query.page === undefined
+            ? 0
+            : (request.query.page - 1) * size,
+        );
+      const page = paginate(rows, size, (row) => row.occurredAt);
+      const referencedUserIds = new Set<string>();
+
+      for (const row of page.items) {
+        if (row.actorId !== null) referencedUserIds.add(row.actorId);
+        const subjectId = accessSubjectId(row.before, row.after);
+        const previousSubjectId = stringField(row.before, "ownerId");
+        if (subjectId !== null) referencedUserIds.add(subjectId);
+        if (previousSubjectId !== null) {
+          referencedUserIds.add(previousSubjectId);
+        }
+      }
+
+      const referencedUsers =
+        referencedUserIds.size === 0
+          ? []
+          : await app.db
+              .select({
+                id: schema.users.id,
+                displayName: schema.users.displayName,
+                email: schema.users.email,
+              })
+              .from(schema.users)
+              .where(inArray(schema.users.id, [...referencedUserIds]));
+      const usersById = new Map(
+        referencedUsers.map((referencedUser) => [
+          referencedUser.id,
+          {
+            id: referencedUser.id,
+            displayName: referencedUser.displayName,
+            email: referencedUser.email,
+          },
+        ]),
+      );
+
+      return {
+        items: page.items.map((row) =>
+          toCaseAccessHistoryEvent(row, usersById),
+        ),
+        nextCursor: page.nextCursor,
+        total: totalRow?.total ?? 0,
+      };
     },
   );
 
@@ -873,6 +1300,120 @@ function visibilityCondition(
       WHERE cm.case_id = ${schema.cases.id} AND cm.user_id = ${user.id}
     )
   )`;
+}
+
+function caseCapabilitiesFromFlags(flags: {
+  canWrite: boolean;
+  canApprove: boolean;
+  canDisclose: boolean;
+}): CaseCapability[] {
+  return [
+    "READ",
+    ...(flags.canWrite ? (["WRITE"] as const) : []),
+    ...(flags.canApprove ? (["APPROVAL"] as const) : []),
+    ...(flags.canDisclose ? (["DISCLOSURE"] as const) : []),
+  ];
+}
+
+function effectiveCapabilities(
+  role: CaseAccessReviewPrincipal["role"],
+  disabled: boolean,
+  granted: readonly CaseCapability[],
+): CaseCapability[] {
+  if (disabled) return [];
+  if (role === "VIEWER") return granted.includes("READ") ? ["READ"] : [];
+  return CASE_CAPABILITIES.filter((capability) => granted.includes(capability));
+}
+
+function sameCapabilities(
+  left: readonly CaseCapability[],
+  right: readonly CaseCapability[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((capability, index) => capability === right[index])
+  );
+}
+
+function stringField(
+  payload: Record<string, unknown> | null,
+  key: string,
+): string | null {
+  const value = payload?.[key];
+  return typeof value === "string" ? value : null;
+}
+
+function accessSubjectId(
+  before: Record<string, unknown> | null,
+  after: Record<string, unknown> | null,
+): string | null {
+  return (
+    stringField(after, "userId") ??
+    stringField(before, "userId") ??
+    stringField(after, "ownerId")
+  );
+}
+
+function capabilitiesField(
+  payload: Record<string, unknown> | null,
+): CaseCapability[] | null {
+  const capabilities = payload?.["capabilities"];
+  if (!Array.isArray(capabilities)) return null;
+
+  return CASE_CAPABILITIES.filter((capability) =>
+    capabilities.includes(capability),
+  );
+}
+
+type AccessHistoryActor = NonNullable<CaseAccessHistoryEvent["actor"]>;
+
+function toCaseAccessHistoryEvent(
+  row: {
+    id: string;
+    action: string;
+    actorId: string | null;
+    requestId: string | null;
+    before: Record<string, unknown> | null;
+    after: Record<string, unknown> | null;
+    occurredAt: string;
+  },
+  usersById: ReadonlyMap<string, AccessHistoryActor>,
+): CaseAccessHistoryEvent {
+  const ownerTransferred = row.action === "case.updated";
+  const subjectId = accessSubjectId(row.before, row.after);
+  const previousSubjectId = ownerTransferred
+    ? stringField(row.before, "ownerId")
+    : null;
+  const beforeCapabilities = capabilitiesField(row.before);
+  const afterCapabilities = capabilitiesField(row.after);
+  let kind: CaseAccessHistoryEvent["kind"];
+
+  if (ownerTransferred) kind = "OWNER_TRANSFERRED";
+  else if (row.action === "case.member_removed") kind = "REVOKED";
+  else if (row.action === "case.member_updated") kind = "UPDATED";
+  else if (beforeCapabilities === null) kind = "LEGACY_CHANGE";
+  else kind = "GRANTED";
+
+  return {
+    id: row.id,
+    kind,
+    actor: row.actorId === null ? null : (usersById.get(row.actorId) ?? null),
+    subject: subjectId === null ? null : (usersById.get(subjectId) ?? null),
+    previousSubject:
+      previousSubjectId === null
+        ? null
+        : (usersById.get(previousSubjectId) ?? null),
+    beforeCapabilities: ownerTransferred
+      ? [...CASE_CAPABILITIES]
+      : beforeCapabilities,
+    afterCapabilities: ownerTransferred
+      ? [...CASE_CAPABILITIES]
+      : row.action === "case.member_removed"
+        ? []
+        : afterCapabilities,
+    requestId: row.requestId,
+    occurredAt: row.occurredAt,
+  };
 }
 
 async function loadCaseDetail(
