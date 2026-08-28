@@ -33,6 +33,13 @@ export function invalidateForEvent(
     void queryClient.invalidateQueries({ queryKey: key });
   };
 
+  if (event.type === "case.access_changed") {
+    invalidate(queryKeys.caseAccessReview);
+    if (event.caseId !== null) {
+      invalidate(queryKeys.caseAccessHistory(event.caseId));
+    }
+  }
+
   if (event.caseId !== null) {
     invalidate(queryKeys.case(event.caseId));
     invalidate(queryKeys.reports(event.caseId));
@@ -49,6 +56,10 @@ export function invalidateForEvent(
 
     case "case": {
       invalidate(["cases"]);
+      invalidate(queryKeys.caseAccessReview);
+      if (event.caseId !== null) {
+        invalidate(queryKeys.caseAccessHistory(event.caseId));
+      }
       break;
     }
 

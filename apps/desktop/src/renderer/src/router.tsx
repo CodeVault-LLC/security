@@ -10,6 +10,7 @@ import { createMemoryHistory } from "@tanstack/react-router";
 
 import { AppShell } from "./components/app-shell.js";
 import { AssetDetailRoute, AssetsRoute } from "./routes/assets.js";
+import { AccessReviewRoute } from "./routes/access-review.js";
 import { CaseDetailRoute } from "./routes/case-detail.js";
 import { CasesRoute } from "./routes/cases.js";
 import { DashboardRoute } from "./routes/dashboard.js";
@@ -274,6 +275,11 @@ const organizationUserDetailRoute = createRoute({
     return <OrganizationUserDetailRoute userId={userId} />;
   },
 });
+const organizationAccessReviewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/organization/access-review",
+  component: AccessReviewRoute,
+});
 const organizationSettingsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/organization/settings",
@@ -321,6 +327,7 @@ const routeTree = rootRoute.addChildren([
   organizationRoute,
   organizationUsersRoute,
   organizationUserDetailRoute,
+  organizationAccessReviewRoute,
   organizationSettingsRoute,
   organizationSecurityRoute,
 ]);
