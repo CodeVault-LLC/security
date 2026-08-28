@@ -42,7 +42,10 @@ describeIntegration("case template duplication", () => {
       method: "POST",
       url: `/v1/cases/${source.id}/members`,
       headers: owner.headers,
-      payload: { userId: collaborator.id, access: "WRITE" },
+      payload: {
+        userId: collaborator.id,
+        capabilities: ["READ", "WRITE", "APPROVAL", "DISCLOSURE"],
+      },
     });
 
     asset = (
@@ -97,7 +100,7 @@ describeIntegration("case template duplication", () => {
       expect.arrayContaining([
         expect.objectContaining({
           user: expect.objectContaining({ id: collaborator.id }),
-          access: "WRITE",
+          capabilities: ["READ", "WRITE", "APPROVAL", "DISCLOSURE"],
         }),
       ]),
     );
@@ -125,7 +128,7 @@ describeIntegration("case template duplication", () => {
       method: "POST",
       url: `/v1/cases/${source.id}/members`,
       headers: owner.headers,
-      payload: { userId: collaborator.id, access: "READ" },
+      payload: { userId: collaborator.id, capabilities: ["READ"] },
     });
 
     const response = await harness.app.inject({

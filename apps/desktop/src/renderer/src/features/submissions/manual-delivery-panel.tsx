@@ -14,10 +14,12 @@ import {
 export function ManualDeliveryPanel({
   submission,
   busy,
+  canDisclose,
   onRecord,
 }: {
   submission: SubmissionDetail;
   busy: boolean;
+  canDisclose: boolean;
   onRecord: (input: {
     packageId: string;
     deliveredAt: string;
@@ -30,7 +32,8 @@ export function ManualDeliveryPanel({
   if (route.type !== "MANUAL") return null;
 
   const packageId = submission.latestPackage?.id ?? null;
-  const eligible = submission.status === "SEALED" && packageId !== null;
+  const eligible =
+    canDisclose && submission.status === "SEALED" && packageId !== null;
   return (
     <Card>
       <CardHeader>

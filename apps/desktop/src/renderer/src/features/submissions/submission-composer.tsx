@@ -31,7 +31,7 @@ export function SubmissionComposer({
 
   return (
     <div className="space-y-3">
-      <SubmissionAiToolbar submission={submission} />
+      {canEdit ? <SubmissionAiToolbar submission={submission} /> : null}
       {route.type === "EMAIL" ? (
         <div>
           <Label htmlFor="submission-subject">Subject</Label>

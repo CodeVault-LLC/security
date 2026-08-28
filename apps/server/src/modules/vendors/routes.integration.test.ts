@@ -369,8 +369,27 @@ describeIntegration("vendor directory routes", () => {
     ).toEqual([linked.json<AssetDetail>().id]);
   });
 
-  it("does not let a read-only member mutate an asset linked to a restricted case", async () => {
-    const reader = await harness.createUser({ role: "MEMBER" });
+  it("keeps shared asset mutation independent of hidden case links", async () => {
+    const member = await harness.createUser({ role: "MEMBER" });
+    const created = await harness.app.inject({
+      method: "POST",
+      url: "/v1/assets",
+      headers: author.headers,
+      payload: {
+        name: "Organization security target",
+        kind: "DEVICE",
+      },
+    });
+    const asset = created.json<AssetDetail>();
+    const beforeLink = await harness.app.inject({
+      method: "PATCH",
+      url: `/v1/assets/${asset.id}`,
+      headers: member.headers,
+      payload: { name: "Shared target", expectedRevision: asset.revision },
+    });
+    expect(beforeLink.statusCode, beforeLink.body).toBe(200);
+    const updated = beforeLink.json<AssetDetail>();
+
     const caseResponse = await harness.app.inject({
       method: "POST",
       url: "/v1/cases",
@@ -382,33 +401,22 @@ describeIntegration("vendor directory routes", () => {
       },
     });
     const caseId = caseResponse.json<{ id: string }>().id;
-    const created = await harness.app.inject({
-      method: "POST",
-      url: "/v1/assets",
-      headers: author.headers,
-      payload: {
-        name: "Unreleased security target",
-        kind: "DEVICE",
-        caseId,
-      },
-    });
-    const asset = created.json<AssetDetail>();
-
-    await harness.dbHandle.db.insert(schema.caseMembers).values({
+    await harness.dbHandle.db.insert(schema.caseAssets).values({
       caseId,
-      userId: reader.id,
-      access: "READ",
-      addedBy: author.id,
+      assetId: asset.id,
     });
 
-    const response = await harness.app.inject({
+    const afterLink = await harness.app.inject({
       method: "PATCH",
       url: `/v1/assets/${asset.id}`,
-      headers: reader.headers,
-      payload: { name: "Tampered target", expectedRevision: asset.revision },
+      headers: member.headers,
+      payload: {
+        name: "Shared target after link",
+        expectedRevision: updated.revision,
+      },
     });
 
-    expect(response.statusCode).toBe(403);
+    expect(afterLink.statusCode, afterLink.body).toBe(200);
   });
 
   it("seeds editable starter vendors without importing an unverified key", async () => {

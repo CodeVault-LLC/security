@@ -1,7 +1,7 @@
 import { desc, eq, sql, type SQL } from "drizzle-orm";
 
 import type { FindingDetail } from "@codevault/contracts";
-import { notFound } from "@codevault/core";
+import { notFound, type ActingUser } from "@codevault/core";
 import type { Database } from "@codevault/db";
 import { schema } from "@codevault/db";
 
@@ -19,10 +19,19 @@ import { schema } from "@codevault/db";
  * Expressed in SQL rather than as a fetched array so a workspace with thousands
  * of cases does not ship its whole case list into the process on every query.
  */
-export function readableCaseIdsSubquery(organizationId: string): SQL {
+export function readableCaseIdsSubquery(
+  user: Pick<ActingUser, "id" | "organizationId">,
+): SQL {
   return sql`(
     SELECT c.id FROM cases c
-    WHERE c.organization_id = ${organizationId}
+    WHERE c.organization_id = ${user.organizationId}
+      AND (
+        c.owner_id = ${user.id}
+        OR EXISTS (
+          SELECT 1 FROM case_members cm
+          WHERE cm.case_id = c.id AND cm.user_id = ${user.id}
+        )
+      )
   )`;
 }
 

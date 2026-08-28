@@ -10,7 +10,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import type { CaseAccess, CaseProfile, CaseStatus } from "@codevault/core";
+import type { CaseProfile, CaseStatus } from "@codevault/core";
 
 import { users } from "./auth.js";
 import { organizations } from "./organizations.js";
@@ -75,7 +75,10 @@ export const caseMembers = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    access: text("access").$type<CaseAccess>().notNull(),
+    /** Row presence grants READ; action capabilities remain independent. */
+    canWrite: boolean("can_write").notNull().default(false),
+    canApprove: boolean("can_approve").notNull().default(false),
+    canDisclose: boolean("can_disclose").notNull().default(false),
     addedBy: uuid("added_by").references(() => users.id),
     createdAt: createdAt(),
   },

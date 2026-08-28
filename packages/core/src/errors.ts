@@ -82,10 +82,10 @@ export function permissionDenied(
   return new DomainError("PERMISSION_DENIED", message);
 }
 
-export function notFound(entity: string): DomainError {
-  // Restricted cases are reported as missing rather than forbidden so the API
-  // does not confirm the existence of research the caller may not know about.
-  return new DomainError("NOT_FOUND", `${entity} was not found.`);
+export function notFound(_entity: string): DomainError {
+  // Keep the public response uniform so a guessed child identifier cannot
+  // distinguish a missing object from an object inside a hidden case.
+  return new DomainError("NOT_FOUND", "The requested resource was not found.");
 }
 
 export function conflict(

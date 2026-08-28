@@ -2,14 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   canAdministerWorkspace,
+  canApproveCase,
   canApproveReport,
+  canDiscloseCase,
   canManageCaseMembers,
   canReadCase,
   canWriteAnything,
   canWriteCase,
   satisfiesSeparationOfDuties,
   type ActingUser,
-  type CaseAccess,
+  type CaseCapability,
   type CaseAccessContext,
 } from "./permissions.js";
 
@@ -32,40 +34,33 @@ function caseContext(
     ownerId: OWNER_ID,
     organizationId: "organization-1",
     restricted: false,
-    members: new Map<string, CaseAccess>(),
+    members: new Map<string, ReadonlySet<CaseCapability>>(),
     ...overrides,
   };
 }
 
-describe("open cases", () => {
+function grants(
+  ...capabilities: CaseCapability[]
+): ReadonlySet<CaseCapability> {
+  return new Set(capabilities);
+}
+
+describe("case capabilities", () => {
   const context = caseContext();
 
-  it("lets any active user read", () => {
-    expect(canReadCase(user("VIEWER"), context)).toBe(true);
-    expect(canReadCase(user("MEMBER"), context)).toBe(true);
-    expect(canReadCase(user("ADMIN"), context)).toBe(true);
+  it("hides every case from ungranted organization users", () => {
+    expect(canReadCase(user("VIEWER"), context)).toBe(false);
+    expect(canReadCase(user("MEMBER"), context)).toBe(false);
+    expect(canReadCase(user("ADMIN"), context)).toBe(false);
   });
 
-  it("lets members and admins write but not viewers", () => {
-    expect(canWriteCase(user("VIEWER"), context)).toBe(false);
-    expect(canWriteCase(user("MEMBER"), context)).toBe(true);
-    expect(canWriteCase(user("ADMIN"), context)).toBe(true);
-  });
-});
+  it("gives an active owner every case capability subject to role policy", () => {
+    const owner = user("MEMBER", OWNER_ID);
 
-describe("restricted cases", () => {
-  const context = caseContext({
-    restricted: true,
-    members: new Map<string, CaseAccess>([
-      ["reader-1", "READ"],
-      ["writer-1", "WRITE"],
-    ]),
-  });
-
-  it("lets every active organization member read the case", () => {
-    expect(canReadCase(user("MEMBER", "outsider-1"), context)).toBe(true);
-    expect(canReadCase(user("ADMIN", "admin-1"), context)).toBe(true);
-    expect(canReadCase(user("VIEWER", "viewer-1"), context)).toBe(true);
+    expect(canReadCase(owner, context)).toBe(true);
+    expect(canWriteCase(owner, context)).toBe(true);
+    expect(canApproveCase(owner, context)).toBe(true);
+    expect(canDiscloseCase(owner, context)).toBe(true);
   });
 
   it("does not let an actor from another organization read the case", () => {
@@ -77,36 +72,65 @@ describe("restricted cases", () => {
     ).toBe(false);
   });
 
-  it("grants the owner full access without a membership row", () => {
-    expect(canReadCase(user("MEMBER", OWNER_ID), context)).toBe(true);
-    expect(canWriteCase(user("MEMBER", OWNER_ID), context)).toBe(true);
-  });
-
-  it("honours read-only membership", () => {
+  it("honours an independent read grant", () => {
+    const granted = caseContext({
+      members: new Map([["reader-1", grants("READ")]]),
+    });
     const reader = user("MEMBER", "reader-1");
 
-    expect(canReadCase(reader, context)).toBe(true);
-    expect(canWriteCase(reader, context)).toBe(false);
+    expect(canReadCase(reader, granted)).toBe(true);
+    expect(canWriteCase(reader, granted)).toBe(false);
+    expect(canApproveCase(reader, granted)).toBe(false);
+    expect(canDiscloseCase(reader, granted)).toBe(false);
   });
 
-  it("honours write membership", () => {
-    const writer = user("MEMBER", "writer-1");
-
-    expect(canWriteCase(writer, context)).toBe(true);
-  });
-
-  it("keeps a viewer globally read-only despite a write membership", () => {
-    expect(canWriteCase(user("VIEWER", "writer-1"), context)).toBe(false);
-  });
-});
-
-describe("explicit read membership on an open case", () => {
-  it("downgrades a member who would otherwise inherit write access", () => {
-    const context = caseContext({
-      members: new Map<string, CaseAccess>([["member-1", "READ"]]),
+  it("keeps write, approval, and disclosure independent", () => {
+    const granted = caseContext({
+      members: new Map([
+        ["writer-1", grants("READ", "WRITE")],
+        ["approver-1", grants("READ", "APPROVAL")],
+        ["discloser-1", grants("READ", "DISCLOSURE")],
+      ]),
     });
+    const writer = user("MEMBER", "writer-1");
+    const approver = user("MEMBER", "approver-1");
+    const discloser = user("MEMBER", "discloser-1");
 
-    expect(canWriteCase(user("MEMBER", "member-1"), context)).toBe(false);
+    expect(canWriteCase(writer, granted)).toBe(true);
+    expect(canApproveCase(writer, granted)).toBe(false);
+    expect(canDiscloseCase(writer, granted)).toBe(false);
+    expect(canWriteCase(approver, granted)).toBe(false);
+    expect(canApproveCase(approver, granted)).toBe(true);
+    expect(canDiscloseCase(approver, granted)).toBe(false);
+    expect(canWriteCase(discloser, granted)).toBe(false);
+    expect(canApproveCase(discloser, granted)).toBe(false);
+    expect(canDiscloseCase(discloser, granted)).toBe(true);
+  });
+
+  it("fails closed when an action grant does not include read", () => {
+    const malformed = caseContext({
+      members: new Map([["member-1", grants("WRITE", "APPROVAL")]]),
+    });
+    const member = user("MEMBER", "member-1");
+
+    expect(canReadCase(member, malformed)).toBe(false);
+    expect(canWriteCase(member, malformed)).toBe(false);
+    expect(canApproveCase(member, malformed)).toBe(false);
+  });
+
+  it("keeps a viewer globally read-only despite action grants or ownership", () => {
+    const granted = caseContext({
+      members: new Map([
+        ["viewer-1", grants("READ", "WRITE", "APPROVAL", "DISCLOSURE")],
+      ]),
+    });
+    const viewer = user("VIEWER", "viewer-1");
+
+    expect(canReadCase(viewer, granted)).toBe(true);
+    expect(canWriteCase(viewer, granted)).toBe(false);
+    expect(canApproveCase(viewer, granted)).toBe(false);
+    expect(canDiscloseCase(viewer, granted)).toBe(false);
+    expect(canWriteCase(user("VIEWER", OWNER_ID), granted)).toBe(false);
   });
 });
 
@@ -122,6 +146,8 @@ describe("disabled users", () => {
   it("loses every permission", () => {
     expect(canReadCase(disabled, caseContext())).toBe(false);
     expect(canWriteCase(disabled, caseContext())).toBe(false);
+    expect(canApproveCase(disabled, caseContext())).toBe(false);
+    expect(canDiscloseCase(disabled, caseContext())).toBe(false);
     expect(canWriteAnything(disabled)).toBe(false);
     expect(canAdministerWorkspace(disabled)).toBe(false);
   });
@@ -136,25 +162,41 @@ describe("workspace administration", () => {
 });
 
 describe("case membership management", () => {
-  it("is available to the owner and to admins who can read the case", () => {
-    const context = caseContext();
+  it("is available to the owner and to explicitly cleared admins", () => {
+    const context = caseContext({
+      members: new Map([["ADMIN-1", grants("READ")]]),
+    });
 
     expect(canManageCaseMembers(user("MEMBER", OWNER_ID), context)).toBe(true);
     expect(canManageCaseMembers(user("ADMIN"), context)).toBe(true);
     expect(canManageCaseMembers(user("MEMBER"), context)).toBe(false);
   });
 
-  it("remains available to an organization admin on a restricted case", () => {
+  it("does not reveal a case to an ungranted organization admin", () => {
     expect(
       canManageCaseMembers(user("ADMIN"), caseContext({ restricted: true })),
-    ).toBe(true);
+    ).toBe(false);
+  });
+
+  it("keeps a viewer owner from delegating case capabilities", () => {
+    expect(canManageCaseMembers(user("VIEWER", OWNER_ID), caseContext())).toBe(
+      false,
+    );
   });
 });
 
 describe("report approval", () => {
-  it("requires write access to the case", () => {
+  it("requires the independent approval capability", () => {
+    const context = caseContext({
+      members: new Map([
+        ["member-1", grants("READ", "APPROVAL")],
+        ["member-2", grants("READ", "WRITE")],
+      ]),
+    });
+
     expect(canApproveReport(user("VIEWER"), caseContext())).toBe(false);
-    expect(canApproveReport(user("MEMBER"), caseContext())).toBe(true);
+    expect(canApproveReport(user("MEMBER", "member-1"), context)).toBe(true);
+    expect(canApproveReport(user("MEMBER", "member-2"), context)).toBe(false);
   });
 });
 

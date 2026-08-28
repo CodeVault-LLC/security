@@ -134,11 +134,13 @@ function recordedScoreLabel(score: FindingDetail["scores"][number]): string {
 export interface ScoringPanelProps {
   finding: FindingDetail;
   canEdit: boolean;
+  canApprove: boolean;
 }
 
 export function ScoringPanel({
   finding,
   canEdit,
+  canApprove,
 }: ScoringPanelProps): React.JSX.Element {
   const [scheme, setScheme] = useState<Scheme>("CVSS40");
   const [metrics, setMetrics] = useState<Record<string, string>>(
@@ -434,33 +436,37 @@ export function ScoringPanel({
 
             {canEdit ? (
               <div className="flex justify-end gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={proposed.error !== null || submit.isPending}
-                  onClick={() =>
-                    submit.mutate(
-                      { approve: false },
-                      { onError: (e) => setError(e.message) },
-                    )
-                  }
-                >
-                  Save as proposed
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  disabled={proposed.error !== null || submit.isPending}
-                  onClick={() =>
-                    submit.mutate(
-                      { approve: true },
-                      { onError: (e) => setError(e.message) },
-                    )
-                  }
-                >
-                  <Check aria-hidden className="size-3" />
-                  Approve assessment
-                </Button>
+                {canEdit ? (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={proposed.error !== null || submit.isPending}
+                    onClick={() =>
+                      submit.mutate(
+                        { approve: false },
+                        { onError: (e) => setError(e.message) },
+                      )
+                    }
+                  >
+                    Save as proposed
+                  </Button>
+                ) : null}
+                {canEdit && canApprove ? (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    disabled={proposed.error !== null || submit.isPending}
+                    onClick={() =>
+                      submit.mutate(
+                        { approve: true },
+                        { onError: (e) => setError(e.message) },
+                      )
+                    }
+                  >
+                    <Check aria-hidden className="size-3" />
+                    Approve assessment
+                  </Button>
+                ) : null}
               </div>
             ) : null}
           </CardBody>
@@ -519,7 +525,7 @@ export function ScoringPanel({
                             retrievedAt={score.retrievedAt}
                           />
                         ) : null}
-                        {canEdit && score.reviewState === "PROPOSED" ? (
+                        {canApprove && score.reviewState === "PROPOSED" ? (
                           <Button
                             size="sm"
                             variant="secondary"

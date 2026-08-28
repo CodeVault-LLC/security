@@ -54,3 +54,27 @@ describe("organization mail policy events", () => {
     });
   });
 });
+
+describe("case access events", () => {
+  it("removes case-scoped cached data immediately after revocation", () => {
+    const queryClient = new QueryClient();
+    const caseId = "018f2f56-7c9a-7abc-8def-0123456789ab";
+    queryClient.setQueryData(queryKeys.case(caseId), { title: "Embargoed" });
+    queryClient.setQueryData(queryKeys.reports(caseId), {
+      items: [{ title: "Private report" }],
+    });
+
+    invalidateForEvent(queryClient, {
+      id: "event-2",
+      type: "case.access_changed",
+      entityType: "case_access",
+      entityId: caseId,
+      caseId,
+      detail: { canRead: false },
+      occurredAt: "2026-08-28T10:01:00.000Z",
+    });
+
+    expect(queryClient.getQueryData(queryKeys.case(caseId))).toBeUndefined();
+    expect(queryClient.getQueryData(queryKeys.reports(caseId))).toBeUndefined();
+  });
+});

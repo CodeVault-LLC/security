@@ -51,6 +51,7 @@ import {
   requireCaseWrite,
 } from "../../services/case-access.js";
 import { loadArtifacts, loadEvidence } from "./queries.js";
+import { readableCaseIdsSubquery } from "../findings/queries.js";
 
 /**
  * Evidence and artifact routes.
@@ -739,10 +740,7 @@ export async function registerEvidenceRoutes(app: AppInstance): Promise<void> {
         filters.push(eq(schema.evidence.caseId, request.query.caseId));
       } else {
         filters.push(
-          sql`${schema.evidence.caseId} IN (
-            SELECT c.id FROM cases c
-            WHERE c.organization_id = ${user.organizationId}
-          )`,
+          sql`${schema.evidence.caseId} IN ${readableCaseIdsSubquery(user)}`,
         );
       }
 

@@ -17,6 +17,7 @@ import { useMemo, useRef, useState } from "react";
 import type {
   AiProposal,
   AiRunWithProposals,
+  CaseDetail,
   LintFinding,
   LintResult,
   ReportDetail,
@@ -113,7 +114,7 @@ export function ReportDetailRoute({
 }): React.JSX.Element {
   const queryClient = useQueryClient();
   const user = useSession((state) => state.user);
-  const canEdit = canWrite(user);
+  const canAct = canWrite(user);
 
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [proposals, setProposals] = useState<AiProposal[]>([]);
@@ -127,6 +128,18 @@ export function ReportDetailRoute({
     queryKeys.report(reportId),
     `/v1/reports/${reportId}`,
   );
+  const caseId = report.data?.caseId;
+  const caseAccess = useApiQuery<CaseDetail>(
+    queryKeys.case(caseId ?? "pending"),
+    `/v1/cases/${caseId ?? "pending"}`,
+    { enabled: caseId !== undefined },
+  );
+  const ownsCase = user != null && caseAccess.data?.owner.id === user.id;
+  const capabilities =
+    caseAccess.data?.members.find((member) => member.user.id === user?.id)
+      ?.capabilities ?? [];
+  const canEdit = canAct && (ownsCase || capabilities.includes("WRITE"));
+  const canApprove = canAct && (ownsCase || capabilities.includes("APPROVAL"));
 
   const lint = useApiQuery<LintResult>(
     queryKeys.reportLint(reportId),
@@ -326,6 +339,7 @@ export function ReportDetailRoute({
           audience={data.audience}
           section={activeSection}
           canEdit={canEdit}
+          canApprove={canApprove}
           showPreview={showPreview}
           previewHtml={preview.data?.html ?? null}
           lint={lint.data ?? null}
@@ -442,6 +456,32 @@ export function ReportDetailRoute({
             <Eye aria-hidden className="size-3.5" />
             Preview
           </Button>
+          {canApprove ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={
+                reportBlocked ||
+                requiredApprovalCount > 0 ||
+                approveReport.isPending
+              }
+              loading={approveReport.isPending}
+              title={
+                actionBlockReason ??
+                (requiredApprovalCount > 0
+                  ? `Approve ${requiredApprovalCount} required section${requiredApprovalCount === 1 ? "" : "s"} first.`
+                  : "Approve the report.")
+              }
+              onClick={() =>
+                approveReport.mutate(undefined, {
+                  onError: (mutationError) => setError(mutationError.message),
+                })
+              }
+            >
+              <Check aria-hidden className="size-3.5" />
+              Approve
+            </Button>
+          ) : null}
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -506,28 +546,30 @@ export function ReportDetailRoute({
                     <Pencil aria-hidden className="size-4" />
                     Rename report
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={
-                      reportBlocked ||
-                      requiredApprovalCount > 0 ||
-                      approveReport.isPending
-                    }
-                    title={
-                      actionBlockReason ??
-                      (requiredApprovalCount > 0
-                        ? `Approve ${requiredApprovalCount} required section${requiredApprovalCount === 1 ? "" : "s"} first.`
-                        : "Approve the report.")
-                    }
-                    onSelect={() =>
-                      approveReport.mutate(undefined, {
-                        onError: (mutationError) =>
-                          setError(mutationError.message),
-                      })
-                    }
-                  >
-                    <Check aria-hidden className="size-4" />
-                    Approve report
-                  </DropdownMenuItem>
+                  {canApprove ? (
+                    <DropdownMenuItem
+                      disabled={
+                        reportBlocked ||
+                        requiredApprovalCount > 0 ||
+                        approveReport.isPending
+                      }
+                      title={
+                        actionBlockReason ??
+                        (requiredApprovalCount > 0
+                          ? `Approve ${requiredApprovalCount} required section${requiredApprovalCount === 1 ? "" : "s"} first.`
+                          : "Approve the report.")
+                      }
+                      onSelect={() =>
+                        approveReport.mutate(undefined, {
+                          onError: (mutationError) =>
+                            setError(mutationError.message),
+                        })
+                      }
+                    >
+                      <Check aria-hidden className="size-4" />
+                      Approve report
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem
                     disabled={reportBlocked || exportReport.isPending}
                     title={actionBlockReason ?? "Export this report as PDF."}
@@ -709,6 +751,7 @@ interface SectionWorkspaceProps {
   audience: string;
   section: ReportSection;
   canEdit: boolean;
+  canApprove: boolean;
   showPreview: boolean;
   previewHtml: string | null;
   lint: LintResult | null;
@@ -737,6 +780,7 @@ function SectionWorkspace({
   audience,
   section,
   canEdit,
+  canApprove,
   showPreview,
   previewHtml,
   lint,
@@ -870,7 +914,7 @@ function SectionWorkspace({
                   <p>{new Date(section.approvedAt).toLocaleString()}</p>
                 )}
               </div>
-              {canEdit ? (
+              {canApprove ? (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem

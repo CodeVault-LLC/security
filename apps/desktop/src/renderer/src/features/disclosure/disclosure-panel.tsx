@@ -103,14 +103,16 @@ export interface DisclosurePanelProps {
   caseId: string;
   caseRef: string;
   caseTitle: string;
-  canEdit: boolean;
+  canWrite: boolean;
+  canDisclose: boolean;
 }
 
 export function DisclosurePanel({
   caseId,
   caseRef,
   caseTitle,
-  canEdit,
+  canWrite,
+  canDisclose,
 }: DisclosurePanelProps): React.JSX.Element {
   const [eventOpen, setEventOpen] = useState(false);
   const [stakeholderOpen, setStakeholderOpen] = useState(false);
@@ -146,7 +148,7 @@ export function DisclosurePanel({
       <Card>
         <CardHeader>
           <CardTitle>Vendor submissions</CardTitle>
-          {canEdit ? (
+          {canWrite ? (
             <Button
               size="sm"
               variant="primary"
@@ -165,7 +167,7 @@ export function DisclosurePanel({
           <CardBody className="text-[12px] text-text-muted">
             No vendor package has been prepared. Route details are snapshotted
             when a draft is created.
-            {canEdit ? (
+            {canWrite ? (
               <Button
                 className="mt-3"
                 variant="secondary"
@@ -230,7 +232,7 @@ export function DisclosurePanel({
         <Card>
           <CardHeader>
             <CardTitle>Timeline</CardTitle>
-            {canEdit ? (
+            {canDisclose ? (
               <Button
                 size="sm"
                 variant="secondary"
@@ -296,7 +298,7 @@ export function DisclosurePanel({
           <Card>
             <CardHeader>
               <CardTitle>Stakeholders</CardTitle>
-              {canEdit ? (
+              {canWrite ? (
                 <Button
                   size="sm"
                   variant="secondary"
@@ -314,7 +316,7 @@ export function DisclosurePanel({
               <CardBody className="text-[12px] text-text-muted">
                 No contact recorded. Coordinated disclosure requires one before
                 you can log that the vendor was contacted.
-                {canEdit ? (
+                {canWrite ? (
                   <Button
                     className="mt-3"
                     variant="secondary"
@@ -363,7 +365,7 @@ export function DisclosurePanel({
               <DateField
                 label="Expected vendor response"
                 value={data?.embargo?.expectedResponseAt ?? null}
-                disabled={!canEdit || setEmbargo.isPending}
+                disabled={!canDisclose || setEmbargo.isPending}
                 onChange={(value) =>
                   setEmbargo.mutate(
                     { expectedResponseAt: value },
@@ -374,7 +376,7 @@ export function DisclosurePanel({
               <DateField
                 label="Embargo starts"
                 value={data?.embargo?.startsAt ?? null}
-                disabled={!canEdit || setEmbargo.isPending}
+                disabled={!canDisclose || setEmbargo.isPending}
                 onChange={(value) =>
                   setEmbargo.mutate(
                     { startsAt: value },
@@ -385,7 +387,7 @@ export function DisclosurePanel({
               <DateField
                 label="Embargo ends"
                 value={data?.embargo?.endsAt ?? null}
-                disabled={!canEdit || setEmbargo.isPending}
+                disabled={!canDisclose || setEmbargo.isPending}
                 onChange={(value) =>
                   setEmbargo.mutate(
                     { endsAt: value },
@@ -396,7 +398,7 @@ export function DisclosurePanel({
               <DateField
                 label="Planned disclosure"
                 value={data?.embargo?.plannedDisclosureAt ?? null}
-                disabled={!canEdit || setEmbargo.isPending}
+                disabled={!canDisclose || setEmbargo.isPending}
                 onChange={(value) =>
                   setEmbargo.mutate(
                     { plannedDisclosureAt: value },

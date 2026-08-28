@@ -183,7 +183,7 @@ describeIntegration("finding intake", () => {
     });
   });
 
-  it("shows restricted-case intake to another cleared organization member", async () => {
+  it("hides restricted-case intake from an ungranted member", async () => {
     await createManual();
 
     const response = await harness.app.inject({
@@ -192,10 +192,7 @@ describeIntegration("finding intake", () => {
       headers: outsider.headers,
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(
-      response.json<{ items: IntakeItem[] }>().items.length,
-    ).toBeGreaterThan(0);
+    expect(response.statusCode).toBe(404);
   });
 
   it("accepts once and creates a finding only in safe initial states", async () => {

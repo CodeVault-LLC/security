@@ -6,6 +6,7 @@ import { useState } from "react";
 import type {
   AiRunWithProposals,
   AiProposal,
+  CaseDetail,
   FindingDetail,
 } from "@codevault/contracts";
 import {
@@ -134,6 +135,12 @@ export function FindingDetailRoute({
     queryKeys.finding(findingId),
     `/v1/findings/${findingId}`,
   );
+  const caseId = finding.data?.caseId;
+  const caseAccess = useApiQuery<CaseDetail>(
+    queryKeys.case(caseId ?? "pending"),
+    `/v1/cases/${caseId ?? "pending"}`,
+    { enabled: caseId !== undefined },
+  );
 
   if (finding.isLoading) {
     return <LoadingState label="Loading finding…" />;
@@ -161,7 +168,15 @@ export function FindingDetailRoute({
   }
 
   const data = finding.data;
-  const canEdit = canWrite(user);
+  const ownsCase = user != null && caseAccess.data?.owner.id === user.id;
+  const capabilities =
+    caseAccess.data?.members.find((member) => member.user.id === user?.id)
+      ?.capabilities ?? [];
+  const canAct = canWrite(user);
+  const canEdit = canAct && (ownsCase || capabilities.includes("WRITE"));
+  const canApprove = canAct && (ownsCase || capabilities.includes("APPROVAL"));
+  const canDisclose =
+    canAct && (ownsCase || capabilities.includes("DISCLOSURE"));
 
   const onAiCompleted = (run: AiRunWithProposals): void => {
     setProposals((current) => [
@@ -292,7 +307,11 @@ export function FindingDetailRoute({
           </TabsContent>
 
           <TabsContent value="scoring">
-            <ScoringPanel finding={data} canEdit={canEdit} />
+            <ScoringPanel
+              finding={data}
+              canEdit={canEdit}
+              canApprove={canApprove}
+            />
           </TabsContent>
 
           <TabsContent value="prior-art">
@@ -316,6 +335,7 @@ export function FindingDetailRoute({
           <FindingContextColumn
             finding={data}
             canEdit={canEdit}
+            canDisclose={canDisclose}
             onError={setError}
           />
         </SheetBody>
@@ -327,17 +347,24 @@ export function FindingDetailRoute({
 function FindingContextColumn({
   finding,
   canEdit,
+  canDisclose,
   onError,
 }: {
   finding: FindingDetail;
   canEdit: boolean;
+  canDisclose: boolean;
   onError: (message: string | null) => void;
 }): React.JSX.Element {
   const primaryAsset = finding.assets.find((asset) => asset.primary);
 
   return (
     <div className="space-y-4">
-      <StatePanel finding={finding} canEdit={canEdit} onError={onError} />
+      <StatePanel
+        finding={finding}
+        canEdit={canEdit}
+        canDisclose={canDisclose}
+        onError={onError}
+      />
 
       <RemediationSlaCard finding={finding} canEdit={canEdit} />
 
@@ -422,13 +449,15 @@ function FindingContextColumn({
   );
 }
 
-function StatePanel({
+export function StatePanel({
   finding,
   canEdit,
+  canDisclose,
   onError,
 }: {
   finding: FindingDetail;
   canEdit: boolean;
+  canDisclose: boolean;
   onError: (message: string | null) => void;
 }): React.JSX.Element {
   const update = useApiMutation<FindingDetail, Record<string, string>>(
@@ -476,7 +505,7 @@ function StatePanel({
           label="Disclosure"
           value={finding.disclosureState}
           options={stateSelectOptions("disclosure", DISCLOSURE_STATES)}
-          disabled={!canEdit || update.isPending}
+          disabled={!canDisclose || update.isPending}
           onChange={(value) => change("disclosureState", value)}
         />
         <StateRow
@@ -487,11 +516,13 @@ function StatePanel({
           onChange={(value) => change("visibility", value)}
         />
         <p className="text-[11px] leading-4 text-text-muted" role="status">
-          {!canEdit
+          {!canEdit && !canDisclose
             ? "You have read-only access. An editor can change workflow state."
             : update.isPending
               ? "Saving state…"
-              : "Prior-art state is set from its tab, where the conclusion stays attached to a specific check."}
+              : canEdit
+                ? "Prior-art state is set from its tab, where the conclusion stays attached to a specific check."
+                : "You can change disclosure state; research content remains read only."}
         </p>
       </CardBody>
     </Card>

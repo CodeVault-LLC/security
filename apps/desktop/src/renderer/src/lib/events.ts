@@ -18,6 +18,17 @@ export function invalidateForEvent(
   queryClient: QueryClient,
   event: ServerEvent,
 ): void {
+  if (
+    event.type === "case.access_changed" &&
+    event.detail["canRead"] === false
+  ) {
+    // Revocation is rare and security-sensitive. Clear all cached server data
+    // because derived finding/report/search records do not all carry case IDs
+    // in their query keys.
+    queryClient.clear();
+    return;
+  }
+
   const invalidate = (key: readonly unknown[]): void => {
     void queryClient.invalidateQueries({ queryKey: key });
   };

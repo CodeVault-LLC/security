@@ -428,7 +428,7 @@ describeIntegration("artifact downloads", () => {
     expect(audit.map((row) => row.action)).toContain("artifact.downloaded");
   });
 
-  it("allows another cleared organization member to download a restricted case", async () => {
+  it("hides a restricted-case artifact from an ungranted member", async () => {
     const { artifactId } = await storedArtifact(true);
     const outsider = await harness.createUser({ role: "MEMBER" });
 
@@ -438,7 +438,7 @@ describeIntegration("artifact downloads", () => {
       headers: outsider.headers,
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode).toBe(404);
   });
 });
 
@@ -598,7 +598,7 @@ describeIntegration("evidence visibility", () => {
     );
   });
 
-  it("lists restricted-case evidence for every cleared organization member", async () => {
+  it("excludes restricted-case evidence for an ungranted member", async () => {
     const other = await harness.createUser({ role: "MEMBER" });
     const createdCase = await harness.app.inject({
       method: "POST",
@@ -631,6 +631,6 @@ describeIntegration("evidence visibility", () => {
       .items.map((item) => item.id);
 
     expect(response.statusCode).toBe(200);
-    expect(ids).toContain(evidence.json<Evidence>().id);
+    expect(ids).not.toContain(evidence.json<Evidence>().id);
   });
 });

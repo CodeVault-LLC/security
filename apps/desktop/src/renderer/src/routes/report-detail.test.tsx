@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
+  CaseDetail,
   LintResult,
   ReportDetail,
   ReportExport,
@@ -53,6 +54,24 @@ const report: ReportDetail = {
   createdAt: "2026-08-24T10:00:00.000Z",
   updatedAt: "2026-08-24T10:00:00.000Z",
   revision: 2,
+};
+
+const researchCase: CaseDetail = {
+  id: report.caseId,
+  ref: "CASE-2026-0001",
+  title: "Report case",
+  summary: null,
+  profile: "COORDINATED_DISCLOSURE",
+  status: "OPEN",
+  restricted: true,
+  disclosureEnabled: true,
+  owner: actor,
+  findingCount: 0,
+  createdAt: "2026-08-24T09:00:00.000Z",
+  updatedAt: "2026-08-24T10:00:00.000Z",
+  revision: 1,
+  members: [],
+  policyPackIds: [],
 };
 
 const lint: LintResult = {
@@ -110,6 +129,7 @@ const section: ReportSection = {
 function renderReport(
   detail: ReportDetail = report,
   reportExports: ReportExport[] = [completedExport],
+  caseDetail: CaseDetail = researchCase,
 ): void {
   const client = new QueryClient({
     defaultOptions: {
@@ -123,6 +143,7 @@ function renderReport(
   client.setQueryData(queryKeys.reportExports(REPORT_ID), {
     items: reportExports,
   });
+  client.setQueryData(queryKeys.case(detail.caseId), caseDetail);
 
   render(
     <QueryClientProvider client={client}>
@@ -409,5 +430,56 @@ describe("report renaming", () => {
       await screen.findByText("That report title cannot be used."),
     ).toBeTruthy();
     expect(input.value).toBe("Preserved report title");
+  });
+});
+
+describe("report case capabilities", () => {
+  beforeEach(() => {
+    mockReportRequests();
+    useSession.getState().signIn(
+      {
+        ...actor,
+        role: "MEMBER",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        lastLoginAt: null,
+      },
+      null,
+    );
+  });
+
+  it("lets an approval-only member approve without exposing write actions", async () => {
+    const user = userEvent.setup();
+    renderReport({ ...report, status: "DRAFT" }, [], {
+      ...researchCase,
+      owner: {
+        id: "018f2f56-7c9a-7abc-8def-0123456789ff",
+        email: "owner@example.test",
+        displayName: "Owner",
+      },
+      members: [
+        {
+          user: actor,
+          capabilities: ["READ", "APPROVAL"],
+          addedAt: "2026-08-24T09:30:00.000Z",
+        },
+      ],
+    });
+
+    await user.click(screen.getByRole("button", { name: "Approve" }));
+
+    await waitFor(() =>
+      expect(apiBridge.request).toHaveBeenCalledWith(
+        `/v1/reports/${REPORT_ID}/approve`,
+        { method: "POST", body: { expectedRevision: report.revision } },
+      ),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Report details" }));
+    expect(
+      screen.queryByRole("menuitem", { name: "Rename report" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("menuitem", { name: "Export Markdown" }),
+    ).toBeNull();
   });
 });

@@ -95,6 +95,9 @@ describe("submission release gates", () => {
         submission={submission}
         validation={validation(true)}
         busy={false}
+        canWrite={false}
+        canApprove
+        canDisclose={false}
         onReview={vi.fn()}
         onApprove={vi.fn()}
         onDownloadManualBundle={vi.fn()}
@@ -111,6 +114,9 @@ describe("submission release gates", () => {
         submission={submission}
         validation={validation(false)}
         busy={false}
+        canWrite={false}
+        canApprove
+        canDisclose={false}
         onReview={vi.fn()}
         onApprove={vi.fn()}
         onDownloadManualBundle={vi.fn()}
@@ -128,6 +134,7 @@ describe("submission release gates", () => {
       <ManualDeliveryPanel
         submission={submission}
         busy={false}
+        canDisclose
         onRecord={vi.fn()}
       />,
     );
@@ -149,11 +156,110 @@ describe("submission release gates", () => {
           },
         }}
         busy={false}
+        canDisclose
         onRecord={vi.fn()}
       />,
     );
     expect(
       screen.getByRole("button", { name: "Record as submitted" }),
     ).toHaveProperty("disabled", false);
+  });
+
+  it("shows approval and disclosure actions only to their capability holders", () => {
+    const view = render(
+      <PackageReview
+        submission={submission}
+        validation={validation(false)}
+        busy={false}
+        canWrite
+        canApprove={false}
+        canDisclose={false}
+        onReview={vi.fn()}
+        onApprove={vi.fn()}
+        onDownloadManualBundle={vi.fn()}
+        onSealEmail={vi.fn()}
+        onSendEmail={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Approve exact content" }),
+    ).toBeNull();
+
+    view.rerender(
+      <PackageReview
+        submission={submission}
+        validation={validation(false)}
+        busy={false}
+        canWrite={false}
+        canApprove
+        canDisclose={false}
+        onReview={vi.fn()}
+        onApprove={vi.fn()}
+        onDownloadManualBundle={vi.fn()}
+        onSealEmail={vi.fn()}
+        onSendEmail={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Approve exact content" }),
+    ).toBeTruthy();
+
+    const sealedEmail: SubmissionDetail = {
+      ...submission,
+      status: "SEALED",
+      routeSnapshot: {
+        ...submission.routeSnapshot,
+        route: {
+          name: "Vendor security",
+          type: "EMAIL",
+          to: ["security@vendor.test"],
+          cc: [],
+          subjectTemplate: "Security report",
+          maximumAttachmentBytes: 20_000_000,
+          acknowledgementBusinessDays: 5,
+          updateCadenceDays: 30,
+          requiredFields: [],
+          encryptionPolicy: "OPTIONAL",
+          publicKeyId: null,
+        },
+      },
+    };
+    view.rerender(
+      <PackageReview
+        submission={sealedEmail}
+        validation={validation(false)}
+        busy={false}
+        canWrite
+        canApprove={false}
+        canDisclose={false}
+        onReview={vi.fn()}
+        onApprove={vi.fn()}
+        onDownloadManualBundle={vi.fn()}
+        onSealEmail={vi.fn()}
+        onSendEmail={vi.fn()}
+      />,
+    );
+    expect(
+      screen.queryByRole("button", { name: "Review and send now" }),
+    ).toBeNull();
+
+    view.rerender(
+      <PackageReview
+        submission={sealedEmail}
+        validation={validation(false)}
+        busy={false}
+        canWrite={false}
+        canApprove={false}
+        canDisclose
+        onReview={vi.fn()}
+        onApprove={vi.fn()}
+        onDownloadManualBundle={vi.fn()}
+        onSealEmail={vi.fn()}
+        onSendEmail={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole("button", { name: "Review and send now" }),
+    ).toBeTruthy();
   });
 });

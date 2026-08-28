@@ -133,7 +133,7 @@ describe("CorrespondenceThread transcript export", () => {
     });
     render(
       <QueryClientProvider client={client}>
-        <CorrespondenceThread submission={submission} canEdit />
+        <CorrespondenceThread submission={submission} canWrite canDisclose />
       </QueryClientProvider>,
     );
 
@@ -165,7 +165,8 @@ describe("CorrespondenceThread transcript export", () => {
       <QueryClientProvider client={client}>
         <CorrespondenceThread
           submission={submission}
-          canEdit={false}
+          canWrite={false}
+          canDisclose={false}
           focusMessageId={message.id}
         />
       </QueryClientProvider>,

@@ -133,7 +133,7 @@ describeIntegration("submission coordination dashboard", () => {
     );
   });
 
-  it("shows restricted coordination work to another cleared member", async () => {
+  it("hides restricted coordination work from an ungranted member", async () => {
     const response = await harness.app.inject({
       method: "GET",
       url: "/v1/dashboard",
@@ -143,7 +143,7 @@ describeIntegration("submission coordination dashboard", () => {
     const dashboard = response.json<DashboardResponse>();
     expect(
       dashboard.needsAttention.some((item) => item.entityId === submission.id),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("deep-links the signed-in evaluator to the synthetic case", async () => {

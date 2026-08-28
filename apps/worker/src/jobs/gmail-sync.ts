@@ -367,6 +367,7 @@ async function runOneMailbox(
             [...recipients].map((userId) => ({
               organizationId: tracked.organizationId,
               userId,
+              caseId: tracked.caseId,
               eventType: "VENDOR_REPLY_RECEIVED",
               details: {
                 caseId: tracked.caseId,

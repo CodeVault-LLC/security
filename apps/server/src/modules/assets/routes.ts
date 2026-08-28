@@ -27,7 +27,11 @@ import { allocateReference, schema } from "@codevault/db";
 import { assertRevision } from "../../http/concurrency.js";
 import { actingUser, principalOf, requireAuthor } from "../../http/guards.js";
 import { decodeCursor, pageSize, paginate } from "../../http/pagination.js";
-import { requireCaseWrite } from "../../services/case-access.js";
+import {
+  requireCaseRead,
+  requireCaseWrite,
+} from "../../services/case-access.js";
+import { readableCaseIdsSubquery } from "../findings/queries.js";
 import { vendorNameForAsset } from "../vendors/service.js";
 
 /**
@@ -50,17 +54,20 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
       },
     },
     async (request) => {
-      actingUser(request);
+      const user = actingUser(request);
 
       const size = pageSize(request.query.limit);
       const cursor = decodeCursor(request.query.cursor);
-      const filters: SQL[] = [];
+      const filters: SQL[] = [
+        eq(schema.assets.organizationId, user.organizationId),
+      ];
 
       if (request.query.kind !== undefined) {
         filters.push(eq(schema.assets.kind, request.query.kind));
       }
 
       if (request.query.caseId !== undefined) {
+        await requireCaseRead(app.db, user, request.query.caseId);
         filters.push(
           sql`EXISTS (
             SELECT 1 FROM case_assets
@@ -129,8 +136,11 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
             LIMIT 1
           )`,
           findingCount: sql<number>`(
-            SELECT count(*)::int FROM finding_assets
-            WHERE finding_assets.asset_id = ${schema.assets.id}
+            SELECT count(*)::int
+            FROM finding_assets fa
+            JOIN findings f ON f.id = fa.finding_id
+            WHERE fa.asset_id = ${schema.assets.id}
+              AND f.case_id IN ${readableCaseIdsSubquery(user)}
           )`,
         })
         .from(schema.assets)
@@ -254,7 +264,7 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
         return row.id;
       });
 
-      return loadAssetDetail(app, assetId);
+      return loadAssetDetail(app, user, assetId);
     },
   );
 
@@ -267,9 +277,9 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
       },
     },
     async (request) => {
-      actingUser(request);
+      const user = actingUser(request);
 
-      return loadAssetDetail(app, request.params.id);
+      return loadAssetDetail(app, user, request.params.id);
     },
   );
 
@@ -357,7 +367,7 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
         );
       });
 
-      return loadAssetDetail(app, existing.id);
+      return loadAssetDetail(app, user, existing.id);
     },
   );
 
@@ -413,7 +423,7 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
         },
       );
 
-      return loadAssetDetail(app, assetId);
+      return loadAssetDetail(app, user, assetId);
     },
   );
 
@@ -442,7 +452,7 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
         })
         .onConflictDoNothing();
 
-      return loadAssetDetail(app, assetId);
+      return loadAssetDetail(app, user, assetId);
     },
   );
 
@@ -464,7 +474,7 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
         throw validationError("An asset cannot relate to itself.");
       }
 
-      await requireAsset(app, body.toAssetId);
+      await requireAsset(app, user, body.toAssetId);
 
       const inserted = await app.db
         .insert(schema.assetRelationships)
@@ -482,19 +492,25 @@ export async function registerAssetRoutes(app: AppInstance): Promise<void> {
         throw validationError("That relationship already exists.");
       }
 
-      return loadAssetDetail(app, assetId);
+      return loadAssetDetail(app, user, assetId);
     },
   );
 }
 
 async function requireAsset(
   app: AppInstance,
+  user: Pick<ActingUser, "organizationId">,
   assetId: string,
 ): Promise<string> {
   const rows = await app.db
     .select({ id: schema.assets.id })
     .from(schema.assets)
-    .where(eq(schema.assets.id, assetId))
+    .where(
+      and(
+        eq(schema.assets.id, assetId),
+        eq(schema.assets.organizationId, user.organizationId),
+      ),
+    )
     .limit(1);
 
   const row = rows[0];
@@ -511,18 +527,10 @@ async function requireAssetWrite(
   user: ActingUser,
   assetId: string,
 ): Promise<string> {
-  await requireAsset(app, assetId);
-
-  const linkedCases = await app.db
-    .select({ caseId: schema.caseAssets.caseId })
-    .from(schema.caseAssets)
-    .where(eq(schema.caseAssets.assetId, assetId));
-
-  for (const linked of linkedCases) {
-    await requireCaseWrite(app.db, user, linked.caseId);
-  }
-
-  return assetId;
+  // Assets are an organization-shared directory. Case links are secret and
+  // must not change whether an otherwise-authorized member can mutate the
+  // shared record; creating a case link is separately gated by case WRITE.
+  return requireAsset(app, user, assetId);
 }
 
 interface JoinedVendorColumns {
@@ -616,6 +624,7 @@ async function refreshNormalizedIdentity(
 
 async function loadAssetDetail(
   app: AppInstance,
+  user: Pick<ActingUser, "id" | "organizationId">,
   assetId: string,
 ): Promise<AssetDetail> {
   const rows = await app.db
@@ -644,13 +653,21 @@ async function loadAssetDetail(
       createdAt: schema.assets.createdAt,
       updatedAt: schema.assets.updatedAt,
       findingCount: sql<number>`(
-        SELECT count(*)::int FROM finding_assets
-        WHERE finding_assets.asset_id = ${schema.assets.id}
+        SELECT count(*)::int
+        FROM finding_assets fa
+        JOIN findings f ON f.id = fa.finding_id
+        WHERE fa.asset_id = ${schema.assets.id}
+          AND f.case_id IN ${readableCaseIdsSubquery(user)}
       )`,
     })
     .from(schema.assets)
     .leftJoin(schema.vendors, eq(schema.vendors.id, schema.assets.vendorId))
-    .where(eq(schema.assets.id, assetId))
+    .where(
+      and(
+        eq(schema.assets.id, assetId),
+        eq(schema.assets.organizationId, user.organizationId),
+      ),
+    )
     .limit(1);
 
   const asset = rows[0];

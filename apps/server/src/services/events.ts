@@ -22,6 +22,8 @@ export interface PublishInput {
   entityType: string;
   entityId: string;
   caseId: string | null;
+  /** Required for access-change events, including post-revocation eviction. */
+  targetUserId?: string;
   detail?: Record<string, unknown>;
 }
 
@@ -53,6 +55,15 @@ export function createEventBroker(): EventBroker {
     },
 
     publish(input) {
+      if (
+        (input.type === "case.access_changed") !==
+        (input.targetUserId !== undefined)
+      ) {
+        throw new Error(
+          "Case access events must be targeted, and only case access events may be targeted.",
+        );
+      }
+
       const event: ServerEvent = {
         id: uuidv7(),
         type: input.type,
@@ -64,6 +75,30 @@ export function createEventBroker(): EventBroker {
       };
 
       for (const subscriber of subscribers.values()) {
+        if (input.targetUserId !== undefined) {
+          if (subscriber.userId !== input.targetUserId) {
+            continue;
+          }
+
+          if (input.detail?.["canRead"] === false) {
+            subscriber.send(event);
+          } else {
+            void Promise.resolve(
+              visibilityFilter(subscriber.userId, event.caseId),
+            )
+              .then((allowed) => {
+                if (allowed) {
+                  subscriber.send(event);
+                }
+              })
+              .catch(() => {
+                // Grant/update events fail closed. Only revocation events may
+                // bypass visibility so clients can evict stale case data.
+              });
+          }
+          continue;
+        }
+
         void Promise.resolve(visibilityFilter(subscriber.userId, event.caseId))
           .then((allowed) => {
             if (allowed) {

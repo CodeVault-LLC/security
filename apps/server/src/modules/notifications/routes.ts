@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNull, or, sql } from "drizzle-orm";
 
 import {
   ErrorResponse,
@@ -12,6 +12,7 @@ import { schema } from "@codevault/db";
 
 import type { AppInstance } from "../../http/app-instance.js";
 import { actingUser } from "../../http/guards.js";
+import { readableCaseIdsSubquery } from "../findings/queries.js";
 
 export async function registerNotificationRoutes(
   app: AppInstance,
@@ -24,6 +25,10 @@ export async function registerNotificationRoutes(
       const scope = and(
         eq(schema.securityNotifications.userId, user.id),
         eq(schema.securityNotifications.organizationId, user.organizationId),
+        or(
+          isNull(schema.securityNotifications.caseId),
+          sql`${schema.securityNotifications.caseId} IN ${readableCaseIdsSubquery(user)}`,
+        ),
       );
       const [items, unread] = await Promise.all([
         app.db
@@ -63,6 +68,10 @@ export async function registerNotificationRoutes(
               schema.securityNotifications.organizationId,
               user.organizationId,
             ),
+            or(
+              isNull(schema.securityNotifications.caseId),
+              sql`${schema.securityNotifications.caseId} IN ${readableCaseIdsSubquery(user)}`,
+            ),
             isNull(schema.securityNotifications.readAt),
           ),
         )
@@ -94,6 +103,10 @@ export async function registerNotificationRoutes(
             eq(
               schema.securityNotifications.organizationId,
               user.organizationId,
+            ),
+            or(
+              isNull(schema.securityNotifications.caseId),
+              sql`${schema.securityNotifications.caseId} IN ${readableCaseIdsSubquery(user)}`,
             ),
           ),
         )

@@ -17,9 +17,8 @@ import {
 /**
  * Metrics.
  *
- * Organization membership is the read-clearance boundary. These tests verify
- * that restricted cases contribute identically to every cleared member's
- * aggregate view while the remaining assertions cover the arithmetic.
+ * Case ownership and explicit membership are the read-clearance boundary.
+ * Restricted findings must not contribute to an ungranted user's aggregates.
  */
 
 const describeIntegration = process.env.DATABASE_URL ? describe : describe.skip;
@@ -71,16 +70,6 @@ describeIntegration("metrics", () => {
     stage: "CONTACT_TO_ACKNOWLEDGEMENT",
   ): number =>
     metrics.stages.find((entry) => entry.stage === stage)?.sampleSize ?? 0;
-
-  const bothViews = async (): Promise<{
-    member: MetricsResponse;
-    owner: MetricsResponse;
-  }> => {
-    const member = await metricsFor(outsider);
-    const ownerView = await metricsFor(owner);
-
-    return { member, owner: ownerView };
-  };
 
   /** A disclosure contact, which `VENDOR_CONTACTED` requires to already exist. */
   const recordStakeholder = async (caseId: string): Promise<void> => {
@@ -171,31 +160,13 @@ describeIntegration("metrics", () => {
     expect(metrics.severity.critical).toBeGreaterThanOrEqual(3);
   });
 
-  describe("organization-wide visibility", () => {
-    it("shows the same restricted-case totals to every cleared member", async () => {
-      const { member, owner: ownerView } = await bothViews();
-      expect(member.totals).toEqual(ownerView.totals);
-      expect(member.severity).toEqual(ownerView.severity);
-    });
-
-    it("shows restricted distributions and trends to every cleared member", async () => {
-      const { member, owner: ownerView } = await bothViews();
-      expect(member.validation).toEqual(ownerView.validation);
-      expect(member.remediation).toEqual(ownerView.remediation);
-      expect(member.disclosure).toEqual(ownerView.disclosure);
-      expect(member.externalId).toEqual(ownerView.externalId);
-      expect(member.priorArt).toEqual(ownerView.priorArt);
-      expect(member.coverage).toEqual(ownerView.coverage);
-      expect(member.age).toEqual(ownerView.age);
-      expect(member.trend).toEqual(ownerView.trend);
-    });
-
-    it("shows restricted weakness and asset metrics to every cleared member", async () => {
+  describe("case-scoped visibility", () => {
+    it("hides restricted weakness and asset metrics until read is granted", async () => {
       const metrics = await metricsFor(outsider);
-      expect(metrics.cwe.map((entry) => entry.cweId)).toContain(SECRET_CWE);
+      expect(metrics.cwe.map((entry) => entry.cweId)).not.toContain(SECRET_CWE);
       expect(
         metrics.topAssets.some((entry) => entry.assetId === asset.id),
-      ).toBe(true);
+      ).toBe(false);
 
       const direct = await harness.app.inject({
         method: "GET",
@@ -203,14 +174,34 @@ describeIntegration("metrics", () => {
         headers: outsider.headers,
       });
       expect(direct.statusCode).toBe(200);
-      expect(direct.json<{ total: number }>().total).toBeGreaterThanOrEqual(
-        RESTRICTED_FINDINGS,
-      );
+      expect(direct.json<{ total: number }>().total).toBe(0);
       expect(
         (await assetMetricsFor(outsider)).topAssets.some(
           (entry) => entry.assetId === asset.id,
         ),
+      ).toBe(false);
+
+      const grant = await harness.app.inject({
+        method: "POST",
+        url: `/v1/cases/${ownCase.id}/members`,
+        headers: owner.headers,
+        payload: { userId: outsider.id, capabilities: ["READ"] },
+      });
+      expect(grant.statusCode, grant.body).toBe(200);
+
+      const granted = await metricsFor(outsider);
+      expect(granted.cwe.map((entry) => entry.cweId)).toContain(SECRET_CWE);
+      expect(
+        granted.topAssets.some((entry) => entry.assetId === asset.id),
       ).toBe(true);
+      const grantedDirect = await harness.app.inject({
+        method: "GET",
+        url: `/v1/assets/${asset.id}/metrics`,
+        headers: outsider.headers,
+      });
+      expect(
+        grantedDirect.json<{ total: number }>().total,
+      ).toBeGreaterThanOrEqual(RESTRICTED_FINDINGS);
     });
   });
 

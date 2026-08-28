@@ -39,6 +39,7 @@ import { actingUser, principalOf, requireAuthor } from "../../http/guards.js";
 import { decodeCursor, pageSize, paginate } from "../../http/pagination.js";
 import { JOB_QUEUES } from "../../services/jobs.js";
 import {
+  requireCaseApproval,
   requireCaseRead,
   requireCaseWrite,
 } from "../../services/case-access.js";
@@ -48,6 +49,7 @@ import {
   renderReportHtml,
   resolveTemplate,
 } from "./service.js";
+import { readableCaseIdsSubquery } from "../findings/queries.js";
 
 /**
  * Report routes.
@@ -97,7 +99,7 @@ export async function registerReportRoutes(app: AppInstance): Promise<void> {
       const size = pageSize(request.query.limit);
       const cursor = decodeCursor(request.query.cursor);
       const filters: SQL[] = [
-        eq(schema.cases.organizationId, user.organizationId),
+        sql`${schema.reports.caseId} IN ${readableCaseIdsSubquery(user)}`,
       ];
 
       if (request.query.caseId !== undefined) {
@@ -357,7 +359,18 @@ export async function registerReportRoutes(app: AppInstance): Promise<void> {
       const body = request.body;
       const report = await loadReportDetail(app.db, request.params.id);
 
-      await requireCaseWrite(app.db, user, report.caseId);
+      const approvesSection = body.reviewState === "APPROVED";
+      const editsSection =
+        body.title !== undefined ||
+        body.contentMarkdown !== undefined ||
+        (body.reviewState !== undefined && !approvesSection);
+
+      if (approvesSection) {
+        await requireCaseApproval(app.db, user, report.caseId);
+      }
+      if (editsSection || body.reviewState === undefined) {
+        await requireCaseWrite(app.db, user, report.caseId);
+      }
 
       const rows = await app.db
         .select()
@@ -522,7 +535,7 @@ export async function registerReportRoutes(app: AppInstance): Promise<void> {
       const principal = principalOf(request);
       const report = await loadReportDetail(app.db, request.params.id);
 
-      await requireCaseWrite(app.db, user, report.caseId);
+      await requireCaseApproval(app.db, user, report.caseId);
       assertRevision(report, request.body.expectedRevision, "report");
 
       const lint = await lintReportById(app.db, report.id);

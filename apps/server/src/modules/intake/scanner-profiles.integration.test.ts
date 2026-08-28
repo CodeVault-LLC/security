@@ -102,15 +102,12 @@ describeIntegration("scanner synchronization profiles", () => {
     expect(stale.statusCode).toBe(409);
   });
 
-  it("shares profiles with another cleared organization member", async () => {
+  it("hides profiles from an ungranted organization member", async () => {
     const response = await harness.app.inject({
       method: "GET",
       url: `/v1/intake/scanner-profiles?caseId=${researchCase.id}`,
       headers: outsider.headers,
     });
-    expect(response.statusCode, response.body).toBe(200);
-    expect(
-      response.json<{ items: ScannerSyncProfile[] }>().items[0]?.name,
-    ).toBe("Nightly Semgrep");
+    expect(response.statusCode, response.body).toBe(404);
   });
 });
