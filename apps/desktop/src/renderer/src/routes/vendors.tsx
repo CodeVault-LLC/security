@@ -1,9 +1,11 @@
+import { keepPreviousData } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   KeyRound,
   Mail,
   Plus,
   Route as RouteIcon,
+  Search,
   SquareArrowOutUpRight,
 } from "lucide-react";
 import { useState } from "react";
@@ -34,6 +36,16 @@ import {
 
 import { PageHeader } from "../components/app-shell.js";
 import {
+  DataGridCell,
+  DataGridFrame,
+  DataGridHeaderCell,
+  DataGridTable,
+  DataGridToolbar,
+  DataGridViewport,
+  dataGridRowClass,
+  dataGridRowLinkClass,
+} from "../components/data-grid.js";
+import {
   CursorPagination,
   useCursorPagination,
 } from "../components/cursor-pagination.js";
@@ -56,16 +68,19 @@ interface AssetPage {
   nextCursor: string | null;
 }
 
-const COLLECTION_PAGE_SIZE = 50;
+const DEFAULT_PAGE_SIZE = 50;
 
 export function VendorsRoute(): React.JSX.Element {
   const user = useSession((state) => state.user);
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const debouncedQuery = useDebouncedValue(query, 220);
-  const pagination = useCursorPagination(debouncedQuery.trim());
+  const pagination = useCursorPagination(
+    `${debouncedQuery.trim()}:${pageSize}`,
+  );
   const vendorParams = new URLSearchParams({
-    limit: String(COLLECTION_PAGE_SIZE),
+    limit: String(pageSize),
   });
   if (debouncedQuery.trim().length > 0) {
     vendorParams.set("query", debouncedQuery.trim());
@@ -76,10 +91,11 @@ export function VendorsRoute(): React.JSX.Element {
   const vendors = useApiQuery<VendorPage>(
     queryKeys.vendors({
       query: debouncedQuery,
-      limit: COLLECTION_PAGE_SIZE,
+      limit: pageSize,
       cursor: pagination.cursor,
     }),
     `/v1/vendors?${vendorParams.toString()}`,
+    { placeholderData: keepPreviousData },
   );
   const editable = canWrite(user);
 
@@ -97,98 +113,133 @@ export function VendorsRoute(): React.JSX.Element {
           ) : undefined
         }
       />
-      <div className="flex items-center gap-3 border-b border-border p-3">
-        <Input
-          aria-label="Search vendors"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search by name or reference"
-          className="max-w-md"
-        />
-        <span className="ml-auto text-[11px] text-text-muted" role="status">
-          {vendors.isFetching && vendors.data !== undefined
-            ? "Updating…"
-            : `${vendors.data?.items.length ?? 0} vendor${vendors.data?.items.length === 1 ? "" : "s"}`}
-        </span>
-      </div>
-      {vendors.isLoading ? (
-        <LoadingState label="Loading vendors…" />
-      ) : vendors.error !== null ? (
-        <ErrorState
-          title={errorHeading(vendors.error)}
-          description={vendors.error.message}
-          action={
-            <Button
-              variant="secondary"
-              loading={vendors.isFetching}
-              onClick={() => void vendors.refetch()}
-            >
-              Try again
-            </Button>
-          }
-        />
-      ) : (vendors.data?.items.length ?? 0) === 0 ? (
-        <EmptyState
-          title={
-            query.trim().length > 0 ? "No vendors match" : "No vendors yet"
-          }
-          description={
-            query.trim().length > 0
-              ? "Clear the search to return to the full vendor directory."
-              : editable
-                ? "Add a vendor before creating a disclosure route."
-                : "No vendors are available to you. An editor can add the first vendor."
-          }
-          action={
-            query.trim().length > 0 ? (
-              <Button variant="secondary" onClick={() => setQuery("")}>
-                Clear search
+      <DataGridFrame aria-label="Vendors table">
+        <DataGridToolbar>
+          <label className="relative min-w-56 flex-1 sm:max-w-md">
+            <span className="sr-only">Search vendors</span>
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-text-muted"
+            />
+            <Input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search by name or reference"
+              className="pl-9"
+            />
+          </label>
+          <span className="ml-auto text-[11px] text-text-muted" role="status">
+            {vendors.isFetching && vendors.data !== undefined
+              ? "Updating…"
+              : `${vendors.data?.items.length ?? 0} vendor${vendors.data?.items.length === 1 ? "" : "s"}`}
+          </span>
+        </DataGridToolbar>
+
+        {vendors.isLoading ? (
+          <LoadingState label="Loading vendors…" />
+        ) : vendors.error !== null ? (
+          <ErrorState
+            title={errorHeading(vendors.error)}
+            description={vendors.error.message}
+            action={
+              <Button
+                variant="secondary"
+                loading={vendors.isFetching}
+                onClick={() => void vendors.refetch()}
+              >
+                Try again
               </Button>
-            ) : editable ? (
-              <Button variant="primary" onClick={() => setCreateOpen(true)}>
-                <Plus aria-hidden className="size-3.5" />
-                New vendor
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <ul className="divide-y divide-border">
-            {vendors.data?.items.map((vendor) => (
-              <li key={vendor.id}>
-                <Link
-                  to={`/vendors/${vendor.id}`}
-                  className="grid min-h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 px-4 py-2.5 hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus lg:grid-cols-[8rem_minmax(12rem,1fr)_auto_10rem]"
-                >
-                  <Mono className="text-[11px] text-text-muted max-lg:row-start-2">
-                    {vendor.ref}
-                  </Mono>
-                  <span className="min-w-0 truncate text-[13px] font-medium max-lg:col-span-2 max-lg:row-start-1">
-                    {vendor.name}
-                  </span>
-                  {vendor.builtIn ? (
-                    <span className="text-[11px] text-warning">
-                      Verify before use
-                    </span>
-                  ) : null}
-                  <span className="shrink-0 text-right text-[11px] text-text-muted">
-                    Reviewed {formatDate(vendor.sourceReviewedAt)}
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <CursorPagination
-            label="Vendor"
-            pageIndex={pagination.pageIndex}
-            nextCursor={vendors.data?.nextCursor ?? null}
-            loading={vendors.isFetching}
-            onPrevious={pagination.previous}
-            onNext={pagination.next}
+            }
           />
-        </div>
-      )}
+        ) : (vendors.data?.items.length ?? 0) === 0 ? (
+          <EmptyState
+            title={
+              query.trim().length > 0 ? "No vendors match" : "No vendors yet"
+            }
+            description={
+              query.trim().length > 0
+                ? "Clear the search to return to the full vendor directory."
+                : editable
+                  ? "Add a vendor before creating a disclosure route."
+                  : "No vendors are available to you. An editor can add the first vendor."
+            }
+            action={
+              query.trim().length > 0 ? (
+                <Button variant="secondary" onClick={() => setQuery("")}>
+                  Clear search
+                </Button>
+              ) : editable ? (
+                <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                  <Plus aria-hidden className="size-3.5" />
+                  New vendor
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <>
+            <DataGridViewport aria-busy={vendors.isFetching || undefined}>
+              <DataGridTable className="min-w-[720px]">
+                <thead>
+                  <tr>
+                    <DataGridHeaderCell>Vendor</DataGridHeaderCell>
+                    <DataGridHeaderCell className="w-44">
+                      Source
+                    </DataGridHeaderCell>
+                    <DataGridHeaderCell className="w-48 text-right">
+                      Last reviewed
+                    </DataGridHeaderCell>
+                  </tr>
+                </thead>
+                <tbody>
+                  {vendors.data?.items.map((vendor) => (
+                    <tr key={vendor.id} className={dataGridRowClass}>
+                      <DataGridCell className="min-w-72">
+                        <Link
+                          to={`/vendors/${vendor.id}`}
+                          className={dataGridRowLinkClass}
+                        >
+                          <span className="block truncate" title={vendor.name}>
+                            {vendor.name}
+                          </span>
+                          <Mono className="mt-0.5 block text-[10.5px] font-normal text-text-muted">
+                            {vendor.ref}
+                          </Mono>
+                        </Link>
+                      </DataGridCell>
+                      <DataGridCell>
+                        {vendor.builtIn ? (
+                          <span className="text-[11px] font-medium text-warning">
+                            Verify before use
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-text-muted">
+                            Workspace
+                          </span>
+                        )}
+                      </DataGridCell>
+                      <DataGridCell className="text-right text-[11px] whitespace-nowrap text-text-muted">
+                        {formatDate(vendor.sourceReviewedAt)}
+                      </DataGridCell>
+                    </tr>
+                  ))}
+                </tbody>
+              </DataGridTable>
+            </DataGridViewport>
+            <CursorPagination
+              label="Vendor"
+              pageIndex={pagination.pageIndex}
+              itemCount={vendors.data?.items.length ?? 0}
+              pageSize={pageSize}
+              nextCursor={vendors.data?.nextCursor ?? null}
+              loading={vendors.isFetching}
+              onPageSizeChange={setPageSize}
+              onPrevious={pagination.previous}
+              onNext={pagination.next}
+            />
+          </>
+        )}
+      </DataGridFrame>
       <VendorDialog open={createOpen} onOpenChange={setCreateOpen} />
     </div>
   );
