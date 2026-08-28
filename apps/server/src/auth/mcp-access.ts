@@ -78,6 +78,8 @@ export async function resolveMcpAccess(
         schema.organizationSecurityPolicies.sessionAbsoluteHours,
       recentMfaMinutes: schema.organizationSecurityPolicies.recentMfaMinutes,
       mfaRequired: schema.organizationSecurityPolicies.mfaRequired,
+      phishingResistantMfaRequired:
+        schema.organizationSecurityPolicies.phishingResistantMfaRequired,
       mcpEnabled: schema.organizationSecurityPolicies.mcpEnabled,
       mailHtmlRenderingEnabled:
         schema.organizationSecurityPolicies.mailHtmlRenderingEnabled,
@@ -142,6 +144,7 @@ export async function resolveMcpAccess(
         sessionAbsoluteHours: row.sessionAbsoluteHours,
         recentMfaMinutes: row.recentMfaMinutes,
         mfaRequired: row.mfaRequired,
+        phishingResistantMfaRequired: row.phishingResistantMfaRequired,
         mcpEnabled: row.mcpEnabled,
         mailHtmlRenderingEnabled: row.mailHtmlRenderingEnabled,
       },

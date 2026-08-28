@@ -1410,6 +1410,7 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
   const [draft, setDraft] = useState<
     Partial<{
       mfaRequired: boolean;
+      phishingResistantMfaRequired: boolean;
       inviteTtlHours: number;
       sessionIdleMinutes: number;
       sessionAbsoluteHours: number;
@@ -1419,8 +1420,18 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
     }>
   >({});
   const [saved, setSaved] = useState(false);
+  const [securityKeyStepUp, setSecurityKeyStepUp] = useState<
+    "IDLE" | "RUNNING" | "VERIFIED"
+  >("IDLE");
+  const [securityKeyStepUpError, setSecurityKeyStepUpError] = useState<
+    string | null
+  >(null);
   const values = {
     mfaRequired: draft.mfaRequired ?? policy.data?.mfaRequired ?? true,
+    phishingResistantMfaRequired:
+      draft.phishingResistantMfaRequired ??
+      policy.data?.phishingResistantMfaRequired ??
+      false,
     inviteTtlHours: draft.inviteTtlHours ?? policy.data?.inviteTtlHours ?? 24,
     sessionIdleMinutes:
       draft.sessionIdleMinutes ?? policy.data?.sessionIdleMinutes ?? 30,
@@ -1447,6 +1458,8 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
   const dirty =
     policy.data !== undefined &&
     (values.mfaRequired !== policy.data.mfaRequired ||
+      values.phishingResistantMfaRequired !==
+        policy.data.phishingResistantMfaRequired ||
       values.inviteTtlHours !== policy.data.inviteTtlHours ||
       values.sessionIdleMinutes !== policy.data.sessionIdleMinutes ||
       values.sessionAbsoluteHours !== policy.data.sessionAbsoluteHours ||
@@ -1606,15 +1619,99 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
                     checked={values.mfaRequired}
                     label="Require MFA"
                     description="Applies to every member in this organization."
-                    onChange={(checked) =>
-                      setPolicyValue("mfaRequired", checked)
-                    }
+                    onChange={(checked) => {
+                      setPolicyValue("mfaRequired", checked);
+                      if (!checked) {
+                        setPolicyValue("phishingResistantMfaRequired", false);
+                      }
+                    }}
                   />
                 ) : (
                   <strong className="text-[12px] sm:text-right">
                     {values.mfaRequired ? "Required" : "Not required"}
                   </strong>
                 )}
+              </section>
+
+              <section className="border-t border-border px-4 py-4">
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_18rem] sm:items-center">
+                  <div>
+                    <h3 className="text-[12px] font-semibold">
+                      Phishing-resistant administrator MFA
+                    </h3>
+                    <p className="mt-1 max-w-2xl text-[11px] leading-4 text-text-muted">
+                      Require administrators to sign in and re-verify protected
+                      actions with WebAuthn. Every active administrator must
+                      keep at least two security keys; TOTP remains available
+                      for non-administrator recovery and transition.
+                    </p>
+                  </div>
+                  {admin ? (
+                    <PolicyCheckbox
+                      checked={values.phishingResistantMfaRequired}
+                      label={
+                        values.phishingResistantMfaRequired
+                          ? "Security key required"
+                          : "TOTP or security key"
+                      }
+                      disabled={!values.mfaRequired}
+                      description="Applies to active administrators."
+                      onChange={(checked) => {
+                        setPolicyValue("phishingResistantMfaRequired", checked);
+                        setSecurityKeyStepUp("IDLE");
+                        setSecurityKeyStepUpError(null);
+                      }}
+                    />
+                  ) : (
+                    <strong className="text-[12px] sm:text-right">
+                      {values.phishingResistantMfaRequired
+                        ? "Required for administrators"
+                        : "Not required"}
+                    </strong>
+                  )}
+                </div>
+                {admin && values.phishingResistantMfaRequired ? (
+                  <div className="mt-3 flex flex-wrap items-center justify-end gap-2 border-t border-border pt-3">
+                    {securityKeyStepUpError ? (
+                      <p
+                        role="alert"
+                        className="mr-auto text-[11px] text-danger"
+                      >
+                        {securityKeyStepUpError}
+                      </p>
+                    ) : securityKeyStepUp === "VERIFIED" ? (
+                      <p className="mr-auto text-[11px] text-success">
+                        Security key verified for protected changes.
+                      </p>
+                    ) : (
+                      <p className="mr-auto text-[11px] text-text-muted">
+                        Verify a security key before enabling or changing this
+                        requirement.
+                      </p>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      loading={securityKeyStepUp === "RUNNING"}
+                      onClick={() => {
+                        setSecurityKeyStepUp("RUNNING");
+                        setSecurityKeyStepUpError(null);
+                        void bridge()
+                          .auth.stepUpSecurityKey()
+                          .then((outcome) => {
+                            if (outcome.ok) {
+                              setSecurityKeyStepUp("VERIFIED");
+                            } else {
+                              setSecurityKeyStepUp("IDLE");
+                              setSecurityKeyStepUpError(outcome.message);
+                            }
+                          });
+                      }}
+                    >
+                      Verify security key
+                    </Button>
+                  </div>
+                ) : null}
               </section>
 
               <section className="border-t border-border">
@@ -1753,9 +1850,12 @@ export function OrganizationSecurityRoute(): React.JSX.Element {
                     ? "Disabling HTML email rendering makes Mail use plain text for every member. Personal preferences are preserved."
                     : values.mfaRequired === false && policy.data.mfaRequired
                       ? "Disabling MFA allows password-only sign-in for every member. Enrolled authenticators and recovery codes are kept."
-                      : values.mfaRequired && !policy.data.mfaRequired
-                        ? "Enabling MFA revokes password-only sessions. Members without an authenticator must enroll at their next sign-in."
-                        : "Saving stricter session limits can revoke sessions that already exceed the new policy."}{" "}
+                      : values.phishingResistantMfaRequired &&
+                          !policy.data.phishingResistantMfaRequired
+                        ? "Enabling phishing-resistant MFA requires two active security keys for every enabled administrator and revokes their TOTP sessions."
+                        : values.mfaRequired && !policy.data.mfaRequired
+                          ? "Enabling MFA revokes password-only sessions. Members without an authenticator must enroll at their next sign-in."
+                          : "Saving stricter session limits can revoke sessions that already exceed the new policy."}{" "}
                   {policy.data.mfaRequired
                     ? "A recent authenticator verification is required."
                     : "This change applies organization-wide."}

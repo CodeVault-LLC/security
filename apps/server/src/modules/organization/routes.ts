@@ -20,7 +20,14 @@ import { revokeAllMcpAccessForUser } from "../../auth/mcp-access.js";
 import {
   principalOf,
   requireOrganizationAdminWithRecentMfa,
+  requireRecentPhishingResistantMfa,
 } from "../../http/guards.js";
+import {
+  assertOrganizationAdminKeyReadiness,
+  assertUserHasPrivilegedKeyReadiness,
+  lockPhishingResistantPolicy,
+  organizationRequiresPhishingResistantMfa,
+} from "../../auth/webauthn-policy.js";
 
 const Id = Type.Object({ id: Type.String({ format: "uuid" }) });
 
@@ -128,6 +135,7 @@ export async function registerOrganizationRoutes(
         body: UpdateUserRequest,
         response: {
           200: OrganizationUser,
+          400: ErrorResponse,
           403: ErrorResponse,
           404: ErrorResponse,
         },
@@ -135,6 +143,7 @@ export async function registerOrganizationRoutes(
     },
     async (request) => {
       const admin = requireOrganizationAdminWithRecentMfa(request);
+      const principal = principalOf(request);
       if (
         request.params.id === admin.id &&
         (request.body.disabled === true ||
@@ -145,13 +154,37 @@ export async function registerOrganizationRoutes(
         );
       }
       const row = await app.db.transaction(async (tx) => {
-        const locked = await tx.execute<{ id: string }>(sql`
-          SELECT account.id FROM users AS account
+        const enteringPrivilegedRole =
+          request.body.role === "ADMIN" || request.body.disabled === false;
+        if (enteringPrivilegedRole) {
+          await lockPhishingResistantPolicy(tx, admin.organizationId);
+        }
+        const locked = await tx.execute<{
+          id: string;
+          disabled: boolean;
+          role: "ADMIN" | "MEMBER" | "VIEWER";
+        }>(sql`
+          SELECT account.id, account.disabled, membership.role
+          FROM users AS account
           JOIN organization_memberships AS membership ON membership.user_id = account.id
           WHERE account.id = ${request.params.id} AND membership.organization_id = ${admin.organizationId}
           FOR UPDATE OF account, membership
         `);
-        if (!locked.rows[0]) return null;
+        const current = locked.rows[0];
+        if (!current) return null;
+        const nextRole = request.body.role ?? current.role;
+        const nextDisabled = request.body.disabled ?? current.disabled;
+        if (
+          enteringPrivilegedRole &&
+          nextRole === "ADMIN" &&
+          !nextDisabled &&
+          (await organizationRequiresPhishingResistantMfa(
+            tx,
+            admin.organizationId,
+          ))
+        ) {
+          await assertUserHasPrivilegedKeyReadiness(tx, request.params.id);
+        }
         if (
           request.body.displayName !== undefined ||
           request.body.disabled !== undefined
@@ -201,13 +234,34 @@ export async function registerOrganizationRoutes(
           )
           .where(eq(schema.users.id, request.params.id))
           .limit(1);
+        if (!updated) return null;
+        const authorityChanged =
+          request.body.disabled === true ||
+          (request.body.role !== undefined &&
+            request.body.role !== current.role);
+        if (authorityChanged) {
+          await revokeAllSessionsForUser(tx, request.params.id);
+          await revokeAllMcpAccessForUser(tx, request.params.id);
+        }
+        await app.audit.write(
+          tx,
+          {
+            actorId: admin.id,
+            sessionId: principal.session.id,
+            requestId: request.requestId,
+          },
+          {
+            action:
+              request.body.disabled === true ? "user.disabled" : "user.updated",
+            entityType: "user",
+            entityId: request.params.id,
+            before: { role: current.role, disabled: current.disabled },
+            after: { role: updated.role, disabled: updated.disabled },
+          },
+        );
         return updated;
       });
       if (!row) throw notFound("User");
-      if (request.body.disabled === true || request.body.role !== undefined) {
-        await revokeAllSessionsForUser(app.db, row.id);
-        await revokeAllMcpAccessForUser(app.db, row.id);
-      }
       return row;
     },
   );
@@ -283,6 +337,7 @@ export async function registerOrganizationRoutes(
         );
       return {
         mfaRequired: policy!.mfaRequired,
+        phishingResistantMfaRequired: policy!.phishingResistantMfaRequired,
         inviteTtlHours: policy!.inviteTtlHours,
         sessionIdleMinutes: policy!.sessionIdleMinutes,
         sessionAbsoluteHours: policy!.sessionAbsoluteHours,
@@ -299,39 +354,126 @@ export async function registerOrganizationRoutes(
     {
       schema: {
         body: UpdateOrganizationSecurityPolicy,
-        response: { 200: OrganizationSecurityPolicy, 403: ErrorResponse },
+        response: {
+          200: OrganizationSecurityPolicy,
+          400: ErrorResponse,
+          403: ErrorResponse,
+        },
       },
     },
     async (request) => {
       const admin = requireOrganizationAdminWithRecentMfa(request);
-      const [policy] = await app.db
-        .update(schema.organizationSecurityPolicies)
-        .set({
-          ...request.body,
-          updatedBy: admin.id,
-          updatedAt: sql`now()`,
-        })
-        .where(
-          eq(
-            schema.organizationSecurityPolicies.organizationId,
-            admin.organizationId,
-          ),
-        )
-        .returning();
-      await app.db.execute(sql`
-      UPDATE sessions SET revoked_at = now()
-      WHERE revoked_at IS NULL AND created_at < now() - (${policy!.sessionAbsoluteHours}::text || ' hours')::interval
-    `);
-      if (request.body.mfaRequired === true) {
-        await app.db.execute(sql`
-          UPDATE sessions AS session SET revoked_at = now()
-          FROM organization_memberships AS membership
-          WHERE session.user_id = membership.user_id
-            AND membership.organization_id = ${admin.organizationId}
-            AND session.revoked_at IS NULL
-            AND session.mfa_method = 'PASSWORD'
+      const principal = principalOf(request);
+      const policy = await app.db.transaction(async (tx) => {
+        await lockPhishingResistantPolicy(tx, admin.organizationId);
+        const locked = await tx.execute<{
+          mfa_required: boolean;
+          phishing_resistant_mfa_required: boolean;
+        }>(sql`
+          SELECT mfa_required, phishing_resistant_mfa_required
+          FROM organization_security_policies
+          WHERE organization_id = ${admin.organizationId}
+          FOR UPDATE
         `);
-      }
+        const current = locked.rows[0];
+        if (!current) {
+          throw new Error("The organization security policy is missing.");
+        }
+        const nextPhishingResistant =
+          request.body.phishingResistantMfaRequired ??
+          current.phishing_resistant_mfa_required;
+        const nextMfaRequired =
+          request.body.mfaRequired ?? current.mfa_required;
+        if (nextPhishingResistant && !nextMfaRequired) {
+          throw validationError(
+            "Multi-factor authentication must remain enabled while phishing-resistant MFA is required.",
+          );
+        }
+        if (
+          request.body.phishingResistantMfaRequired === true &&
+          !current.phishing_resistant_mfa_required
+        ) {
+          await assertOrganizationAdminKeyReadiness(tx, admin.organizationId);
+          requireRecentPhishingResistantMfa(request);
+        }
+
+        const [updated] = await tx
+          .update(schema.organizationSecurityPolicies)
+          .set({
+            ...request.body,
+            updatedBy: admin.id,
+            updatedAt: sql`now()`,
+          })
+          .where(
+            eq(
+              schema.organizationSecurityPolicies.organizationId,
+              admin.organizationId,
+            ),
+          )
+          .returning();
+        await tx.execute(sql`
+          UPDATE sessions SET revoked_at = now()
+          WHERE revoked_at IS NULL AND created_at < now() - (${updated!.sessionAbsoluteHours}::text || ' hours')::interval
+        `);
+        if (request.body.mfaRequired === true) {
+          await tx.execute(sql`
+            UPDATE sessions AS session SET revoked_at = now()
+            FROM organization_memberships AS membership
+            WHERE session.user_id = membership.user_id
+              AND membership.organization_id = ${admin.organizationId}
+              AND session.revoked_at IS NULL
+              AND session.mfa_method = 'PASSWORD'
+          `);
+        }
+        if (
+          request.body.phishingResistantMfaRequired === true &&
+          !current.phishing_resistant_mfa_required
+        ) {
+          await tx.execute(sql`
+            UPDATE sessions AS session SET revoked_at = now()
+            FROM organization_memberships AS membership
+            WHERE session.user_id = membership.user_id
+              AND membership.organization_id = ${admin.organizationId}
+              AND membership.role = 'ADMIN'
+              AND session.revoked_at IS NULL
+              AND session.mfa_method <> 'WEBAUTHN'
+          `);
+          await tx.execute(sql`
+            UPDATE mcp_access_tokens AS access SET revoked_at = now()
+            FROM organization_memberships AS membership
+            WHERE access.user_id = membership.user_id
+              AND membership.organization_id = ${admin.organizationId}
+              AND membership.role = 'ADMIN'
+              AND access.revoked_at IS NULL
+          `);
+        }
+        if (
+          request.body.phishingResistantMfaRequired !== undefined &&
+          request.body.phishingResistantMfaRequired !==
+            current.phishing_resistant_mfa_required
+        ) {
+          await app.audit.write(
+            tx,
+            {
+              actorId: admin.id,
+              sessionId: principal.session.id,
+              requestId: request.requestId,
+            },
+            {
+              action: "organization.phishing_resistant_mfa_changed",
+              entityType: "organization_security_policy",
+              entityId: admin.organizationId,
+              before: {
+                required: current.phishing_resistant_mfa_required,
+              },
+              after: {
+                required: updated!.phishingResistantMfaRequired,
+              },
+            },
+          );
+        }
+        return updated!;
+      });
       app.events.publish({
         type: "entity.changed",
         entityType: "organization_security_policy",
@@ -339,10 +481,12 @@ export async function registerOrganizationRoutes(
         caseId: null,
         detail: {
           mailHtmlRenderingEnabled: policy!.mailHtmlRenderingEnabled,
+          phishingResistantMfaRequired: policy!.phishingResistantMfaRequired,
         },
       });
       return {
         mfaRequired: policy!.mfaRequired,
+        phishingResistantMfaRequired: policy!.phishingResistantMfaRequired,
         inviteTtlHours: policy!.inviteTtlHours,
         sessionIdleMinutes: policy!.sessionIdleMinutes,
         sessionAbsoluteHours: policy!.sessionAbsoluteHours,

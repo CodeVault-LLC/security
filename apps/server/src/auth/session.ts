@@ -45,6 +45,7 @@ export interface AuthenticatedPrincipal {
       sessionAbsoluteHours: number;
       recentMfaMinutes: number;
       mfaRequired: boolean;
+      phishingResistantMfaRequired: boolean;
       mcpEnabled: boolean;
       mailHtmlRenderingEnabled: boolean;
     };
@@ -132,6 +133,8 @@ export async function resolveSession(
         schema.organizationSecurityPolicies.sessionAbsoluteHours,
       recentMfaMinutes: schema.organizationSecurityPolicies.recentMfaMinutes,
       mfaRequired: schema.organizationSecurityPolicies.mfaRequired,
+      phishingResistantMfaRequired:
+        schema.organizationSecurityPolicies.phishingResistantMfaRequired,
       mcpEnabled: schema.organizationSecurityPolicies.mcpEnabled,
       mailHtmlRenderingEnabled:
         schema.organizationSecurityPolicies.mailHtmlRenderingEnabled,
@@ -169,6 +172,14 @@ export async function resolveSession(
   const row = rows[0];
 
   if (row === undefined) {
+    return null;
+  }
+
+  if (
+    row.phishingResistantMfaRequired &&
+    row.role === "ADMIN" &&
+    row.mfaMethod !== "WEBAUTHN"
+  ) {
     return null;
   }
 
@@ -213,11 +224,74 @@ export async function resolveSession(
         sessionAbsoluteHours: row.sessionAbsoluteHours,
         recentMfaMinutes: row.recentMfaMinutes,
         mfaRequired: row.mfaRequired,
+        phishingResistantMfaRequired: row.phishingResistantMfaRequired,
         mcpEnabled: row.mcpEnabled,
         mailHtmlRenderingEnabled: row.mailHtmlRenderingEnabled,
       },
     },
   };
+}
+
+/** Revalidates a long-lived channel without needing to retain its raw token. */
+export async function isSessionActive(
+  db: Database,
+  sessionId: string,
+  userId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({
+      expiresAt: schema.sessions.expiresAt,
+      createdAt: schema.sessions.createdAt,
+      lastSeenAt: schema.sessions.lastSeenAt,
+      remembered: schema.sessions.remembered,
+      mfaMethod: schema.sessions.mfaMethod,
+      disabled: schema.users.disabled,
+      role: schema.organizationMemberships.role,
+      idleMinutes: schema.organizationSecurityPolicies.sessionIdleMinutes,
+      absoluteHours: schema.organizationSecurityPolicies.sessionAbsoluteHours,
+      phishingResistantMfaRequired:
+        schema.organizationSecurityPolicies.phishingResistantMfaRequired,
+    })
+    .from(schema.sessions)
+    .innerJoin(schema.users, eq(schema.users.id, schema.sessions.userId))
+    .innerJoin(
+      schema.organizationMemberships,
+      eq(schema.organizationMemberships.userId, schema.users.id),
+    )
+    .innerJoin(
+      schema.organizationSecurityPolicies,
+      eq(
+        schema.organizationSecurityPolicies.organizationId,
+        schema.organizationMemberships.organizationId,
+      ),
+    )
+    .where(
+      and(
+        eq(schema.sessions.id, sessionId),
+        eq(schema.sessions.userId, userId),
+        isNull(schema.sessions.revokedAt),
+        gt(schema.sessions.expiresAt, new Date().toISOString()),
+        eq(schema.users.disabled, false),
+      ),
+    )
+    .limit(1);
+
+  return (
+    row !== undefined &&
+    !(
+      row.phishingResistantMfaRequired &&
+      row.role === "ADMIN" &&
+      row.mfaMethod !== "WEBAUTHN"
+    ) &&
+    !hasSessionExpired({
+      expiresAt: row.expiresAt,
+      createdAt: row.createdAt,
+      lastSeenAt: row.lastSeenAt,
+      idleMinutes: row.idleMinutes,
+      absoluteHours: row.absoluteHours,
+      remembered: row.remembered,
+    })
+  );
 }
 
 interface SessionExpiryInput {

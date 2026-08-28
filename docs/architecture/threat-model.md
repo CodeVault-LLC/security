@@ -99,9 +99,12 @@ the `ADMIN` membership role, and sensitive changes require recent MFA.
 
 TOTP is not phishing-resistant. A malicious site or endpoint process can relay
 or capture a password and current code, and a compromised live API process can
-use decrypted TOTP secrets. Passkeys/WebAuthn are the planned
-phishing-resistant successor; sessions record the MFA method to support that
-migration.
+use decrypted TOTP secrets. Passkeys and FIDO2 security keys provide the
+phishing-resistant path. Organizations can require WebAuthn for administrators;
+the server enforces that method at login, session resolution, and recent-MFA
+guards. Policy activation is serialized with administrator promotion,
+invitation acceptance, and key revocation so concurrent changes cannot strand
+the organization below its two-key-per-administrator recovery floor.
 
 ### 4. API ↔ PostgreSQL
 

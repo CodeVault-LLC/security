@@ -513,6 +513,39 @@ export function registerIpcHandlers(dependencies: IpcDependencies): void {
     }
   });
 
+  handle(IPC_CHANNELS.authStepUpSecurityKey, async () => {
+    const parent = dependencies.window();
+    const serverUrl = apiClient.serverUrl();
+    if (parent === null || serverUrl === null) {
+      return failure(new Error("missing authenticated server"));
+    }
+    try {
+      const started = await apiClient.request<WebAuthnCeremonyOptions>(
+        "/v1/auth/webauthn/step-up/options",
+        { method: "POST", body: {} },
+      );
+      const assertion = await runWebAuthnCeremony(
+        parent,
+        serverUrl,
+        "authenticate",
+        started.options,
+      );
+      const completed = await apiClient.request<{ ok: true }>(
+        "/v1/auth/webauthn/step-up/complete",
+        {
+          method: "POST",
+          body: {
+            ceremonyToken: started.ceremonyToken,
+            response: assertion,
+          },
+        },
+      );
+      return { ok: true as const, data: completed };
+    } catch (error: unknown) {
+      return failure(error);
+    }
+  });
+
   handle(IPC_CHANNELS.authEnrollmentStart, async () => {
     if (pendingLogin === null) {
       return failure(new Error("missing migration enrollment challenge"));

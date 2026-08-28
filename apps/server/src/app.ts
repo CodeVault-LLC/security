@@ -8,7 +8,11 @@ import { createDatabase, schema, type DatabaseHandle } from "@codevault/db";
 import { eq } from "drizzle-orm";
 
 import { bearerTokenFrom } from "./auth/tokens.js";
-import { resolveSession, touchSession } from "./auth/session.js";
+import {
+  isSessionActive,
+  resolveSession,
+  touchSession,
+} from "./auth/session.js";
 import {
   isMcpAccessToken,
   resolveMcpAccess,
@@ -136,7 +140,13 @@ export async function buildApp(
 
   // Event delivery is filtered by the same case rules as the REST API, so a
   // subscriber is never told that a restricted case changed.
-  events.setVisibilityFilter(async (userId, caseId) => {
+  events.setVisibilityFilter(async (userId, caseId, sessionId) => {
+    if (
+      sessionId !== undefined &&
+      !(await isSessionActive(dbHandle.db, sessionId, userId))
+    ) {
+      return false;
+    }
     if (caseId === null) {
       return true;
     }

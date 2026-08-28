@@ -14,6 +14,8 @@ export interface EventSubscriber {
   id: string;
   /** Case IDs the subscriber may see; null means "every case they can read". */
   userId: string;
+  /** Present for real client streams; tests may omit it for broker-only checks. */
+  sessionId?: string;
   send(event: ServerEvent): void;
 }
 
@@ -39,6 +41,7 @@ export interface EventBroker {
 export type CaseVisibilityFilter = (
   userId: string,
   caseId: string | null,
+  sessionId?: string,
 ) => boolean | Promise<boolean>;
 
 export function createEventBroker(): EventBroker {
@@ -84,7 +87,11 @@ export function createEventBroker(): EventBroker {
             subscriber.send(event);
           } else {
             void Promise.resolve(
-              visibilityFilter(subscriber.userId, event.caseId),
+              visibilityFilter(
+                subscriber.userId,
+                event.caseId,
+                subscriber.sessionId,
+              ),
             )
               .then((allowed) => {
                 if (allowed) {
@@ -99,7 +106,13 @@ export function createEventBroker(): EventBroker {
           continue;
         }
 
-        void Promise.resolve(visibilityFilter(subscriber.userId, event.caseId))
+        void Promise.resolve(
+          visibilityFilter(
+            subscriber.userId,
+            event.caseId,
+            subscriber.sessionId,
+          ),
+        )
           .then((allowed) => {
             if (allowed) {
               subscriber.send(event);
