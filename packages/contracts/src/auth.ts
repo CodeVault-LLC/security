@@ -144,6 +144,11 @@ export const CompleteWebAuthnLoginRequest = Type.Object({
   response: WebAuthnAuthenticationCredential,
   rememberMe: Type.Optional(Type.Boolean({ default: false })),
 });
+export const StartWebAuthnStepUpRequest = Type.Object({});
+export const CompleteWebAuthnStepUpRequest = Type.Object({
+  ceremonyToken: Type.String({ minLength: 32, maxLength: 512 }),
+  response: WebAuthnAuthenticationCredential,
+});
 export const StartWebAuthnRegistrationRequest = Type.Object({
   name: Type.String({ minLength: 1, maxLength: 120 }),
 });

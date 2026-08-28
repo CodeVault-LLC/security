@@ -23,6 +23,14 @@ The implemented flow is:
    one-time challenges.
 5. Users can list and revoke their registered keys. Registration and
    revocation are audited. TOTP and recovery codes remain fallback factors.
+6. An administrator can require phishing-resistant MFA for every active
+   administrator. Enabling the rule requires two active keys per administrator,
+   no pending administrator invitation, and a fresh WebAuthn assertion from the
+   acting administrator. TOTP administrator sessions are revoked and subsequent
+   administrator sign-in and protected actions require WebAuthn.
+7. Authenticated WebAuthn step-up ceremonies are one-time, source-bound, and
+   session-bound. A successful assertion updates only that session and is
+   audited without credential material.
 
 `WEBAUTHN_ORIGIN` must be the exact public HTTPS origin used by desktop clients,
 and `WEBAUTHN_RP_ID` must be that hostname or a registrable suffix. Changing the
@@ -35,21 +43,13 @@ future policy that promises hardware-only authentication must add attestation
 metadata, privacy review, an allowlist lifecycle, and an exception/recovery
 procedure first.
 
-## What to implement next
+## Remaining release work
 
 The next slice should complete the policy and recovery story:
 
-- Add WebAuthn step-up for sensitive actions, not only initial sign-in. The
-  existing TOTP step-up remains available unless organization policy forbids it
-  for the specific action.
-- Add an organization policy requiring phishing-resistant authentication for
-  administrators and, later, roles that can approve or disclose reports. Refuse
-  to enable it until every affected active user has at least two usable keys or
-  an approved recovery path.
-- Require a fresh security-key assertion for credential changes, role and
-  security-policy changes, disclosure approval, mail-provider authorization,
-  export of especially sensitive material, and creation of persistent MCP
-  grants when policy requires it.
+- Extend phishing-resistant policy beyond the organization administrator role
+  only when new global privileged roles are introduced. Case approval and
+  disclosure remain capabilities rather than organization roles.
 - Add administrator-assisted lost-key recovery with dual control, explicit
   notifications, session and MCP-token revocation, and a durable audit trail.
   Recovery codes should not silently satisfy a hardware-only policy.

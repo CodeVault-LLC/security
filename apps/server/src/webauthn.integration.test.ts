@@ -68,6 +68,48 @@ describeIntegration("WebAuthn security keys", () => {
     expect(stored[0]?.tokenHash).not.toBe(body.ceremonyToken);
   });
 
+  it("binds a one-time WebAuthn step-up ceremony to the current session", async () => {
+    const user = await harness.createUser();
+    await harness.dbHandle.db.insert(schema.webauthnCredentials).values({
+      userId: user.id,
+      credentialId: `step-up-${user.id}`,
+      publicKey: "unused-in-options-test",
+      transports: ["usb"],
+      deviceType: "singleDevice",
+      backedUp: false,
+      name: "Step-up YubiKey",
+    });
+
+    const response = await harness.app.inject({
+      method: "POST",
+      url: "/v1/auth/webauthn/step-up/options",
+      headers: user.headers,
+      payload: {},
+    });
+    expect(response.statusCode, response.body).toBe(200);
+    const body = response.json<{
+      ceremonyToken: string;
+      options: { allowCredentials: Array<{ id: string }> };
+    }>();
+    expect(body.options.allowCredentials).toEqual([
+      expect.objectContaining({ id: `step-up-${user.id}` }),
+    ]);
+
+    const [ceremony] = await harness.dbHandle.db
+      .select({
+        purpose: schema.webauthnCeremonies.purpose,
+        sessionId: schema.webauthnCeremonies.sessionId,
+      })
+      .from(schema.webauthnCeremonies)
+      .where(
+        eq(schema.webauthnCeremonies.tokenHash, hashToken(body.ceremonyToken)),
+      );
+    expect(ceremony).toMatchObject({
+      purpose: "STEP_UP",
+      sessionId: expect.any(String),
+    });
+  });
+
   it("advertises and scopes WebAuthn login to registered credentials", async () => {
     const user = await harness.createUser();
     const credentialId = `registered-${user.id}`;

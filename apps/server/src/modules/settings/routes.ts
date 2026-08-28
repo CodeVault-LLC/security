@@ -12,6 +12,7 @@ import {
 } from "@codevault/contracts";
 import {
   DomainError,
+  hasRecentMfa,
   permissionDenied,
   validationError,
 } from "@codevault/core";
@@ -37,6 +38,7 @@ import {
   revokeAllMcpAccessForUser,
   revokeMcpAccess,
 } from "../../auth/mcp-access.js";
+import { lockPhishingResistantPolicy } from "../../auth/webauthn-policy.js";
 
 const Profile = Type.Object({
   displayName: Type.String({ minLength: 2, maxLength: 120 }),
@@ -165,6 +167,60 @@ export async function registerSettingsRoutes(app: AppInstance): Promise<void> {
         throw permissionDenied("MCP access is disabled by your organization.");
       }
       return app.db.transaction(async (tx) => {
+        await lockPhishingResistantPolicy(tx, principal.organization.id);
+        const live = await tx.execute<{
+          role: "ADMIN" | "MEMBER" | "VIEWER";
+          disabled: boolean;
+          mcp_enabled: boolean;
+          mfa_required: boolean;
+          phishing_resistant_mfa_required: boolean;
+          recent_mfa_minutes: number;
+          mfa_method: "PASSWORD" | "TOTP" | "WEBAUTHN";
+          mfa_verified_at: string;
+        }>(sql`
+          SELECT membership.role, account.disabled, policy.mcp_enabled,
+            policy.mfa_required,
+            policy.phishing_resistant_mfa_required,
+            policy.recent_mfa_minutes, session.mfa_method,
+            session.mfa_verified_at
+          FROM sessions AS session
+          JOIN users AS account ON account.id = session.user_id
+          JOIN organization_memberships AS membership ON membership.user_id = account.id
+          JOIN organization_security_policies AS policy
+            ON policy.organization_id = membership.organization_id
+          WHERE session.id = ${principal.session.id}
+            AND session.user_id = ${principal.user.id}
+            AND membership.organization_id = ${principal.organization.id}
+            AND session.revoked_at IS NULL
+            AND session.expires_at > now()
+          FOR UPDATE OF session, membership
+        `);
+        const current = live.rows[0];
+        if (!current || current.disabled || !current.mcp_enabled) {
+          throw permissionDenied(
+            "MCP access is disabled or this session is no longer active.",
+          );
+        }
+        const phishingResistantAdmin =
+          current.role === "ADMIN" && current.phishing_resistant_mfa_required;
+        const recent = hasRecentMfa(
+          current.mfa_verified_at,
+          current.recent_mfa_minutes,
+        );
+        if (
+          (current.mfa_required && !recent) ||
+          (phishingResistantAdmin && current.mfa_method !== "WEBAUTHN")
+        ) {
+          throw new DomainError(
+            "MFA_REAUTH_REQUIRED",
+            phishingResistantAdmin
+              ? "Verify a security key before creating administrator MCP access."
+              : "Complete recent multi-factor authentication before creating MCP access.",
+            phishingResistantAdmin
+              ? { details: { requiredMethod: "WEBAUTHN" } }
+              : undefined,
+          );
+        }
         const created = await createMcpAccess(
           tx,
           principal.user.id,

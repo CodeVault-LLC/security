@@ -876,6 +876,12 @@ export function PersonalSecurityRoute(): React.JSX.Element {
   const [securityKeyBusy, setSecurityKeyBusy] = useState(false);
   const [securityKeyError, setSecurityKeyError] = useState<string | null>(null);
   const [securityKeyAdded, setSecurityKeyAdded] = useState<string | null>(null);
+  const [securityKeyStepUp, setSecurityKeyStepUp] = useState<
+    "IDLE" | "RUNNING" | "VERIFIED"
+  >("IDLE");
+  const [securityKeyStepUpError, setSecurityKeyStepUpError] = useState<
+    string | null
+  >(null);
   const [confirmSecurityKeyId, setConfirmSecurityKeyId] = useState<
     string | null
   >(null);
@@ -944,6 +950,55 @@ export function PersonalSecurityRoute(): React.JSX.Element {
             phishing-resistant sign-in. TOTP and recovery codes remain available
             as fallback factors.
           </p>
+          <div className="flex flex-wrap items-center gap-2 rounded-sm border border-border bg-surface-subtle p-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[12px] font-medium">Protected key changes</p>
+              <p className="text-[11px] text-text-muted">
+                Verify a security key here when adding or removing credentials
+                requires recent phishing-resistant authentication.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={securityKeyStepUp === "RUNNING"}
+              disabled={
+                securityKeyStepUp === "RUNNING" ||
+                !securityKeys.data?.items.length
+              }
+              onClick={() => {
+                setSecurityKeyStepUp("RUNNING");
+                setSecurityKeyStepUpError(null);
+                void bridge()
+                  .auth.stepUpSecurityKey()
+                  .then((outcome) => {
+                    if (outcome.ok) {
+                      setSecurityKeyStepUp("VERIFIED");
+                    } else {
+                      setSecurityKeyStepUp("IDLE");
+                      setSecurityKeyStepUpError(outcome.message);
+                    }
+                  })
+                  .catch(() => {
+                    setSecurityKeyStepUp("IDLE");
+                    setSecurityKeyStepUpError(
+                      "The security-key verification could not be completed.",
+                    );
+                  });
+              }}
+            >
+              Verify security key
+            </Button>
+            {securityKeyStepUpError ? (
+              <p role="alert" className="basis-full text-[11px] text-danger">
+                {securityKeyStepUpError}
+              </p>
+            ) : securityKeyStepUp === "VERIFIED" ? (
+              <p role="status" className="basis-full text-[11px] text-success">
+                Security key verified. You can retry the protected change.
+              </p>
+            ) : null}
+          </div>
           {securityKeys.error && securityKeys.data === undefined ? (
             <QueryError query={securityKeys} />
           ) : securityKeys.data?.items.length ? (

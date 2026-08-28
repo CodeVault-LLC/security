@@ -72,6 +72,10 @@ const api: CodeVaultDesktopApi = {
       ipcRenderer.invoke(IPC_CHANNELS.authLoginSecurityKey) as ReturnType<
         CodeVaultDesktopApi["auth"]["loginSecurityKey"]
       >,
+    stepUpSecurityKey: () =>
+      ipcRenderer.invoke(IPC_CHANNELS.authStepUpSecurityKey) as ReturnType<
+        CodeVaultDesktopApi["auth"]["stepUpSecurityKey"]
+      >,
     registerSecurityKey: (name) =>
       ipcRenderer.invoke(
         IPC_CHANNELS.authRegisterSecurityKey,

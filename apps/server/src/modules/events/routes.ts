@@ -3,6 +3,7 @@ import type { AppInstance } from "../../http/app-instance.js";
 import { uuidv7 } from "@codevault/core/crypto";
 
 import { principalOf } from "../../http/guards.js";
+import { isSessionActive } from "../../auth/session.js";
 import { formatSseFrame } from "../../services/events.js";
 
 /**
@@ -39,6 +40,7 @@ export async function registerEventRoutes(app: AppInstance): Promise<void> {
     const unsubscribe = app.events.subscribe({
       id: subscriberId,
       userId: principal.user.id,
+      sessionId: principal.session.id,
       send(event) {
         if (!reply.raw.writableEnded) {
           reply.raw.write(formatSseFrame(event));
@@ -50,8 +52,17 @@ export async function registerEventRoutes(app: AppInstance): Promise<void> {
       if (reply.raw.writableEnded) {
         return;
       }
-
-      reply.raw.write(`: heartbeat\n\n`);
+      void isSessionActive(app.db, principal.session.id, principal.user.id)
+        .then((active) => {
+          if (!active) {
+            reply.raw.end();
+            return;
+          }
+          if (!reply.raw.writableEnded) {
+            reply.raw.write(`: heartbeat\n\n`);
+          }
+        })
+        .catch(() => reply.raw.end());
     }, HEARTBEAT_INTERVAL_MS);
 
     const close = (): void => {

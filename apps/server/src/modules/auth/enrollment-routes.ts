@@ -19,6 +19,10 @@ import { hashPassword, WeakPasswordError } from "../../auth/password.js";
 import { hashToken } from "../../auth/tokens.js";
 import { createTotpEnrollment, validateTotpAt } from "../../auth/totp.js";
 import {
+  lockPhishingResistantPolicy,
+  organizationRequiresPhishingResistantMfa,
+} from "../../auth/webauthn-policy.js";
+import {
   assertWebpDerivative,
   digestMatches,
   sha256Hex,
@@ -207,22 +211,34 @@ export async function registerEnrollmentRoutes(
       config: { rateLimit: { max: 10, timeWindow: "1 minute" } },
     },
     async (request, reply) => {
-      const outcome = await app.db.transaction(async (tx) => {
-        const result = await tx.execute<{
-          id: string;
-          invite_id: string;
-          organization_id: string;
-          email: string;
-          role: "ADMIN" | "MEMBER" | "VIEWER";
-          display_name: string;
-          password_hash: string;
-          key_id: string;
-          nonce: string;
-          ciphertext: string;
-          auth_tag: string;
-          attempt_count: number;
-          consumed_at: string | null;
-        }>(sql`
+      const binding = await app.db.execute<{ organization_id: string }>(sql`
+        SELECT invitation.organization_id
+        FROM invite_enrollments AS enrollment
+        JOIN invites AS invitation ON invitation.id = enrollment.invite_id
+        WHERE enrollment.token_hash = ${hashToken(request.body.enrollmentToken)}
+        LIMIT 1
+      `);
+      const organizationId = binding.rows[0]?.organization_id;
+      const outcome =
+        organizationId === undefined
+          ? null
+          : await app.db.transaction(async (tx) => {
+              await lockPhishingResistantPolicy(tx, organizationId);
+              const result = await tx.execute<{
+                id: string;
+                invite_id: string;
+                organization_id: string;
+                email: string;
+                role: "ADMIN" | "MEMBER" | "VIEWER";
+                display_name: string;
+                password_hash: string;
+                key_id: string;
+                nonce: string;
+                ciphertext: string;
+                auth_tag: string;
+                attempt_count: number;
+                consumed_at: string | null;
+              }>(sql`
           SELECT enrollment.id, enrollment.invite_id, invitation.organization_id,
             invitation.email, invitation.role, enrollment.display_name,
             enrollment.password_hash, enrollment.key_id, enrollment.nonce,
@@ -235,79 +251,95 @@ export async function registerEnrollmentRoutes(
             AND invitation.revoked_at IS NULL AND invitation.accepted_at IS NULL
           FOR UPDATE OF enrollment, invitation
         `);
-        const row = result.rows[0];
-        if (!row || row.consumed_at || row.attempt_count >= 5) return null;
-        const secret = app.config.auth.mfaKeyring
-          .decrypt(
-            {
-              keyId: row.key_id,
-              nonce: row.nonce,
-              ciphertext: row.ciphertext,
-              authTag: row.auth_tag,
-            },
-            `enrollment:${row.id}:${row.invite_id}`,
-          )
-          .toString("utf8");
-        const counter = validateTotpAt(secret, request.body.totp, Date.now());
-        if (counter === null) {
-          await tx
-            .update(schema.inviteEnrollments)
-            .set({
-              attemptCount: row.attempt_count + 1,
-              ...(row.attempt_count + 1 >= 5 ? { consumedAt: sql`now()` } : {}),
-            })
-            .where(eq(schema.inviteEnrollments.id, row.id));
-          return null;
-        }
-        const userId = uuidv7();
-        const credentialId = uuidv7();
-        const codes = recoveryCodes();
-        const credentialEnvelope = app.config.auth.mfaKeyring.encrypt(
-          secret,
-          `totp:${credentialId}:${userId}`,
-        );
-        await tx.insert(schema.users).values({
-          id: userId,
-          email: row.email,
-          displayName: row.display_name,
-          passwordHash: row.password_hash,
-        });
-        await tx.insert(schema.organizationMemberships).values({
-          organizationId: row.organization_id,
-          userId,
-          role: row.role,
-        });
-        await tx.insert(schema.totpCredentials).values({
-          id: credentialId,
-          userId,
-          ...credentialEnvelope,
-          lastAcceptedCounter: counter,
-        });
-        await tx.insert(schema.mfaRecoveryCodes).values(
-          codes.map((code) => ({
-            userId,
-            keyId: app.config.auth.mfaKeyring.activeKeyId,
-            digest: app.config.auth.mfaKeyring.digestRecoveryCode(code),
-          })),
-        );
-        await tx
-          .update(schema.invites)
-          .set({ acceptedAt: sql`now()`, acceptedByUserId: userId })
-          .where(eq(schema.invites.id, row.invite_id));
-        await tx
-          .update(schema.inviteEnrollments)
-          .set({ consumedAt: sql`now()` })
-          .where(eq(schema.inviteEnrollments.id, row.id));
-        await tx.insert(schema.auditEvents).values({
-          organizationId: row.organization_id,
-          actorId: userId,
-          action: "user.enrolled",
-          entityType: "user",
-          entityId: userId,
-          after: { role: row.role, via: "invitation" },
-        });
-        return codes;
-      });
+              const row = result.rows[0];
+              if (!row || row.consumed_at || row.attempt_count >= 5)
+                return null;
+              if (
+                row.role === "ADMIN" &&
+                (await organizationRequiresPhishingResistantMfa(
+                  tx,
+                  row.organization_id,
+                ))
+              ) {
+                return null;
+              }
+              const secret = app.config.auth.mfaKeyring
+                .decrypt(
+                  {
+                    keyId: row.key_id,
+                    nonce: row.nonce,
+                    ciphertext: row.ciphertext,
+                    authTag: row.auth_tag,
+                  },
+                  `enrollment:${row.id}:${row.invite_id}`,
+                )
+                .toString("utf8");
+              const counter = validateTotpAt(
+                secret,
+                request.body.totp,
+                Date.now(),
+              );
+              if (counter === null) {
+                await tx
+                  .update(schema.inviteEnrollments)
+                  .set({
+                    attemptCount: row.attempt_count + 1,
+                    ...(row.attempt_count + 1 >= 5
+                      ? { consumedAt: sql`now()` }
+                      : {}),
+                  })
+                  .where(eq(schema.inviteEnrollments.id, row.id));
+                return null;
+              }
+              const userId = uuidv7();
+              const credentialId = uuidv7();
+              const codes = recoveryCodes();
+              const credentialEnvelope = app.config.auth.mfaKeyring.encrypt(
+                secret,
+                `totp:${credentialId}:${userId}`,
+              );
+              await tx.insert(schema.users).values({
+                id: userId,
+                email: row.email,
+                displayName: row.display_name,
+                passwordHash: row.password_hash,
+              });
+              await tx.insert(schema.organizationMemberships).values({
+                organizationId: row.organization_id,
+                userId,
+                role: row.role,
+              });
+              await tx.insert(schema.totpCredentials).values({
+                id: credentialId,
+                userId,
+                ...credentialEnvelope,
+                lastAcceptedCounter: counter,
+              });
+              await tx.insert(schema.mfaRecoveryCodes).values(
+                codes.map((code) => ({
+                  userId,
+                  keyId: app.config.auth.mfaKeyring.activeKeyId,
+                  digest: app.config.auth.mfaKeyring.digestRecoveryCode(code),
+                })),
+              );
+              await tx
+                .update(schema.invites)
+                .set({ acceptedAt: sql`now()`, acceptedByUserId: userId })
+                .where(eq(schema.invites.id, row.invite_id));
+              await tx
+                .update(schema.inviteEnrollments)
+                .set({ consumedAt: sql`now()` })
+                .where(eq(schema.inviteEnrollments.id, row.id));
+              await tx.insert(schema.auditEvents).values({
+                organizationId: row.organization_id,
+                actorId: userId,
+                action: "user.enrolled",
+                entityType: "user",
+                entityId: userId,
+                after: { role: row.role, via: "invitation" },
+              });
+              return codes;
+            });
       if (!outcome) {
         return reply.status(400).send({
           error: {

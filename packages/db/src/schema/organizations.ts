@@ -29,6 +29,9 @@ export const organizationSecurityPolicies = pgTable(
       .primaryKey()
       .references(() => organizations.id, { onDelete: "cascade" }),
     mfaRequired: boolean("mfa_required").notNull().default(true),
+    phishingResistantMfaRequired: boolean("phishing_resistant_mfa_required")
+      .notNull()
+      .default(false),
     inviteTtlHours: integer("invite_ttl_hours").notNull().default(72),
     sessionIdleMinutes: integer("session_idle_minutes").notNull().default(30),
     sessionAbsoluteHours: integer("session_absolute_hours")

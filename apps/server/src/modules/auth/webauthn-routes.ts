@@ -13,15 +13,18 @@ import { Type } from "@sinclair/typebox";
 import {
   CompleteWebAuthnLoginRequest,
   CompleteWebAuthnRegistrationRequest,
+  CompleteWebAuthnStepUpRequest,
   ErrorResponse,
   LoginResponse,
   OkResponse,
   StartWebAuthnLoginRequest,
   StartWebAuthnRegistrationRequest,
+  StartWebAuthnStepUpRequest,
   WebAuthnCeremonyOptions,
   WebAuthnCredentialList,
   WebAuthnCredentialSummary,
 } from "@codevault/contracts";
+import { DomainError } from "@codevault/core";
 import { generateOpaqueToken } from "@codevault/core/crypto";
 import { schema } from "@codevault/db";
 
@@ -36,6 +39,11 @@ import {
   requireInteractiveSession,
   requireRecentMfa,
 } from "../../http/guards.js";
+import {
+  lockPhishingResistantPolicy,
+  organizationRequiresPhishingResistantMfa,
+  REQUIRED_ADMIN_SECURITY_KEYS,
+} from "../../auth/webauthn-policy.js";
 
 const INVALID_SECURITY_KEY = "The security key was not accepted.";
 const CEREMONY_TTL_MS = 5 * 60_000;
@@ -304,8 +312,9 @@ export async function registerWebAuthnRoutes(app: AppInstance): Promise<void> {
         `);
         const row = result.rows[0];
         if (!row) return null;
+        let verification;
         try {
-          const verification = await verifyAuthenticationResponse({
+          verification = await verifyAuthenticationResponse({
             response: request.body.response as AuthenticationResponseJSON,
             expectedChallenge: row.ceremony_challenge,
             expectedOrigin: app.config.auth.webauthn.origin,
@@ -415,11 +424,184 @@ export async function registerWebAuthnRoutes(app: AppInstance): Promise<void> {
   );
 
   app.post(
+    "/v1/auth/webauthn/step-up/options",
+    {
+      schema: {
+        body: StartWebAuthnStepUpRequest,
+        response: { 200: WebAuthnCeremonyOptions, 400: ErrorResponse },
+      },
+      config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
+    },
+    async (request, reply) => {
+      const principal = requireInteractiveSession(request);
+      const credentials = await app.db
+        .select({
+          id: schema.webauthnCredentials.credentialId,
+          transports: schema.webauthnCredentials.transports,
+        })
+        .from(schema.webauthnCredentials)
+        .where(
+          and(
+            eq(schema.webauthnCredentials.userId, principal.user.id),
+            isNull(schema.webauthnCredentials.revokedAt),
+          ),
+        );
+      if (credentials.length === 0) {
+        return reply.status(400).send({
+          error: {
+            category: "VALIDATION",
+            message: INVALID_SECURITY_KEY,
+            requestId: request.requestId,
+          },
+        });
+      }
+      const options = await generateAuthenticationOptions({
+        rpID: app.config.auth.webauthn.rpId,
+        timeout: app.config.auth.webauthn.timeoutMs,
+        userVerification: "preferred",
+        allowCredentials: credentials.map((credential) => ({
+          id: credential.id,
+          transports: credential.transports as AuthenticatorTransportFuture[],
+        })),
+      });
+      const ceremonyToken = generateOpaqueToken();
+      await app.db.insert(schema.webauthnCeremonies).values({
+        userId: principal.user.id,
+        purpose: "STEP_UP",
+        tokenHash: hashToken(ceremonyToken),
+        challenge: options.challenge,
+        sourceKey: request.ip,
+        sessionId: principal.session.id,
+        expiresAt: expiresAt(),
+      });
+      return { ceremonyToken, options };
+    },
+  );
+
+  app.post(
+    "/v1/auth/webauthn/step-up/complete",
+    {
+      schema: {
+        body: CompleteWebAuthnStepUpRequest,
+        response: { 200: OkResponse, 400: ErrorResponse },
+      },
+      config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
+    },
+    async (request, reply) => {
+      const principal = requireInteractiveSession(request);
+      const accepted = await app.db.transaction(async (tx) => {
+        const result = await tx.execute<{
+          ceremony_id: string;
+          challenge: string;
+          attempt_count: number;
+          credential_row_id: string;
+          credential_id: string;
+          public_key: string;
+          counter: number;
+          transports: AuthenticatorTransportFuture[];
+        }>(sql`
+          SELECT ceremony.id AS ceremony_id, ceremony.challenge,
+            ceremony.attempt_count, credential.id AS credential_row_id,
+            credential.credential_id, credential.public_key,
+            credential.counter, credential.transports
+          FROM webauthn_ceremonies AS ceremony
+          JOIN webauthn_credentials AS credential
+            ON credential.user_id = ceremony.user_id
+            AND credential.credential_id = ${request.body.response.id}
+            AND credential.revoked_at IS NULL
+          WHERE ceremony.token_hash = ${hashToken(request.body.ceremonyToken)}
+            AND ceremony.user_id = ${principal.user.id}
+            AND ceremony.session_id = ${principal.session.id}
+            AND ceremony.source_key = ${request.ip}
+            AND ceremony.purpose = 'STEP_UP'
+            AND ceremony.consumed_at IS NULL
+            AND ceremony.expires_at > now()
+            AND ceremony.attempt_count < 5
+          FOR UPDATE OF ceremony, credential
+        `);
+        const row = result.rows[0];
+        if (!row) return false;
+        let verification: Awaited<
+          ReturnType<typeof verifyAuthenticationResponse>
+        > | null = null;
+        try {
+          verification = await verifyAuthenticationResponse({
+            response: request.body.response as AuthenticationResponseJSON,
+            expectedChallenge: row.challenge,
+            expectedOrigin: app.config.auth.webauthn.origin,
+            expectedRPID: app.config.auth.webauthn.rpId,
+            requireUserVerification: false,
+            credential: {
+              id: row.credential_id,
+              publicKey: publicKeyFromText(row.public_key),
+              counter: Number(row.counter),
+              transports: row.transports,
+            },
+          });
+          if (!verification.verified) throw new Error("not verified");
+        } catch {
+          await tx
+            .update(schema.webauthnCeremonies)
+            .set({ attemptCount: row.attempt_count + 1 })
+            .where(eq(schema.webauthnCeremonies.id, row.ceremony_id));
+          return false;
+        }
+        if (!verification) return false;
+        await tx
+          .update(schema.webauthnCredentials)
+          .set({
+            counter: verification.authenticationInfo.newCounter,
+            backedUp: verification.authenticationInfo.credentialBackedUp,
+            deviceType: verification.authenticationInfo.credentialDeviceType,
+            lastUsedAt: sql`now()`,
+          })
+          .where(eq(schema.webauthnCredentials.id, row.credential_row_id));
+        await tx
+          .update(schema.webauthnCeremonies)
+          .set({ consumedAt: sql`now()` })
+          .where(eq(schema.webauthnCeremonies.id, row.ceremony_id));
+        await tx
+          .update(schema.sessions)
+          .set({ mfaVerifiedAt: sql`now()`, mfaMethod: "WEBAUTHN" })
+          .where(eq(schema.sessions.id, principal.session.id));
+        await app.audit.write(
+          tx,
+          {
+            organizationId: principal.organization.id,
+            actorId: principal.user.id,
+            sessionId: principal.session.id,
+            requestId: request.requestId,
+          },
+          {
+            action: "auth.webauthn_step_up_completed",
+            entityType: "session",
+            entityId: principal.session.id,
+          },
+        );
+        return true;
+      });
+      if (!accepted) {
+        return reply.status(400).send({
+          error: {
+            category: "VALIDATION",
+            message: INVALID_SECURITY_KEY,
+            requestId: request.requestId,
+          },
+        });
+      }
+      return { ok: true as const };
+    },
+  );
+
+  app.post(
     "/v1/settings/security-keys/options",
     {
       schema: {
         body: StartWebAuthnRegistrationRequest,
-        response: { 200: WebAuthnCeremonyOptions },
+        response: {
+          200: WebAuthnCeremonyOptions,
+          403: ErrorResponse,
+        },
       },
       config: { rateLimit: { max: 10, timeWindow: "1 hour" } },
     },
@@ -476,7 +658,11 @@ export async function registerWebAuthnRoutes(app: AppInstance): Promise<void> {
     {
       schema: {
         body: CompleteWebAuthnRegistrationRequest,
-        response: { 200: WebAuthnCredentialSummary, 400: ErrorResponse },
+        response: {
+          200: WebAuthnCredentialSummary,
+          400: ErrorResponse,
+          403: ErrorResponse,
+        },
       },
       config: { rateLimit: { max: 10, timeWindow: "1 hour" } },
     },
@@ -581,43 +767,86 @@ export async function registerWebAuthnRoutes(app: AppInstance): Promise<void> {
     {
       schema: {
         params: Type.Object({ id: Type.String({ format: "uuid" }) }),
-        response: { 200: OkResponse },
+        response: { 200: OkResponse, 400: ErrorResponse },
       },
     },
     async (request) => {
       const principal = requireInteractiveSession(request);
       requireRecentMfa(request);
-      const [revoked] = await app.db
-        .update(schema.webauthnCredentials)
-        .set({ revokedAt: sql`now()` })
-        .where(
-          and(
-            eq(schema.webauthnCredentials.id, request.params.id),
-            eq(schema.webauthnCredentials.userId, principal.user.id),
-            isNull(schema.webauthnCredentials.revokedAt),
-          ),
-        )
-        .returning({
-          id: schema.webauthnCredentials.id,
-          name: schema.webauthnCredentials.name,
-        });
-      if (revoked) {
-        await app.audit.write(
-          app.db,
-          {
-            organizationId: principal.organization.id,
-            actorId: principal.user.id,
-            sessionId: principal.session.id,
-            requestId: request.requestId,
-          },
-          {
-            action: "auth.webauthn_credential_revoked",
-            entityType: "webauthn_credential",
-            entityId: revoked.id,
-            before: { name: revoked.name },
-          },
-        );
-      }
+      await app.db.transaction(async (tx) => {
+        await lockPhishingResistantPolicy(tx, principal.organization.id);
+        const membership = await tx.execute<{
+          role: "ADMIN" | "MEMBER" | "VIEWER";
+        }>(sql`
+          SELECT role FROM organization_memberships
+          WHERE user_id = ${principal.user.id}
+            AND organization_id = ${principal.organization.id}
+          FOR UPDATE
+        `);
+        const liveRole = membership.rows[0]?.role;
+        if (!liveRole) return undefined;
+        const [target] = await tx
+          .select({ id: schema.webauthnCredentials.id })
+          .from(schema.webauthnCredentials)
+          .where(
+            and(
+              eq(schema.webauthnCredentials.id, request.params.id),
+              eq(schema.webauthnCredentials.userId, principal.user.id),
+              isNull(schema.webauthnCredentials.revokedAt),
+            ),
+          )
+          .limit(1);
+        if (!target) return undefined;
+        if (
+          liveRole === "ADMIN" &&
+          (await organizationRequiresPhishingResistantMfa(
+            tx,
+            principal.organization.id,
+          ))
+        ) {
+          const active = await tx
+            .select({ id: schema.webauthnCredentials.id })
+            .from(schema.webauthnCredentials)
+            .where(
+              and(
+                eq(schema.webauthnCredentials.userId, principal.user.id),
+                isNull(schema.webauthnCredentials.revokedAt),
+              ),
+            );
+          if (active.length <= REQUIRED_ADMIN_SECURITY_KEYS) {
+            throw new DomainError(
+              "VALIDATION",
+              `Keep at least ${REQUIRED_ADMIN_SECURITY_KEYS} active security keys while phishing-resistant MFA is required.`,
+            );
+          }
+        }
+        const [result] = await tx
+          .update(schema.webauthnCredentials)
+          .set({ revokedAt: sql`now()` })
+          .where(eq(schema.webauthnCredentials.id, target.id))
+          .returning({
+            id: schema.webauthnCredentials.id,
+            name: schema.webauthnCredentials.name,
+          });
+        if (result) {
+          await app.audit.write(
+            tx,
+            {
+              organizationId: principal.organization.id,
+              actorId: principal.user.id,
+              sessionId: principal.session.id,
+              requestId: request.requestId,
+            },
+            {
+              action: "auth.webauthn_credential_revoked",
+              entityType: "webauthn_credential",
+              entityId: result.id,
+              before: { name: result.name },
+            },
+          );
+        }
+        return result;
+      });
       return { ok: true as const };
     },
   );

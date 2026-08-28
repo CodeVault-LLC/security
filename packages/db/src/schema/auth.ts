@@ -242,7 +242,9 @@ export const webauthnCeremonies = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
-    purpose: text("purpose").$type<"LOGIN" | "REGISTRATION">().notNull(),
+    purpose: text("purpose")
+      .$type<"LOGIN" | "REGISTRATION" | "STEP_UP">()
+      .notNull(),
     tokenHash: text("token_hash").notNull(),
     challenge: text("challenge").notNull(),
     sourceKey: text("source_key").notNull(),

@@ -76,6 +76,9 @@ export function requireRecentMfa(request: FastifyRequest): ActingUser {
   }
 
   if (
+    (principal.organization.policy.phishingResistantMfaRequired &&
+      principal.user.role === "ADMIN" &&
+      principal.session.mfaMethod !== "WEBAUTHN") ||
     !hasRecentMfa(
       principal.session.mfaVerifiedAt,
       principal.organization.policy.recentMfaMinutes,
@@ -83,10 +86,37 @@ export function requireRecentMfa(request: FastifyRequest): ActingUser {
   ) {
     throw new DomainError(
       "MFA_REAUTH_REQUIRED",
-      "Recent multi-factor authentication is required.",
+      principal.organization.policy.phishingResistantMfaRequired &&
+        principal.user.role === "ADMIN"
+        ? "A recent security-key verification is required."
+        : "Recent multi-factor authentication is required.",
+      principal.organization.policy.phishingResistantMfaRequired &&
+        principal.user.role === "ADMIN"
+        ? { details: { requiredMethod: "WEBAUTHN" } }
+        : undefined,
     );
   }
 
+  return actingUser(request);
+}
+
+export function requireRecentPhishingResistantMfa(
+  request: FastifyRequest,
+): ActingUser {
+  const principal = requireInteractiveSession(request);
+  if (
+    principal.session.mfaMethod !== "WEBAUTHN" ||
+    !hasRecentMfa(
+      principal.session.mfaVerifiedAt,
+      principal.organization.policy.recentMfaMinutes,
+    )
+  ) {
+    throw new DomainError(
+      "MFA_REAUTH_REQUIRED",
+      "A recent security-key verification is required.",
+      { details: { requiredMethod: "WEBAUTHN" } },
+    );
+  }
   return actingUser(request);
 }
 

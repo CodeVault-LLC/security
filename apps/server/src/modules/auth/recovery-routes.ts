@@ -43,8 +43,22 @@ export async function registerRecoveryRoutes(app: AppInstance): Promise<void> {
           id: schema.users.id,
           passwordHash: schema.users.passwordHash,
           disabled: schema.users.disabled,
+          role: schema.organizationMemberships.role,
+          phishingResistantMfaRequired:
+            schema.organizationSecurityPolicies.phishingResistantMfaRequired,
         })
         .from(schema.users)
+        .innerJoin(
+          schema.organizationMemberships,
+          eq(schema.organizationMemberships.userId, schema.users.id),
+        )
+        .innerJoin(
+          schema.organizationSecurityPolicies,
+          eq(
+            schema.organizationSecurityPolicies.organizationId,
+            schema.organizationMemberships.organizationId,
+          ),
+        )
         .where(sql`lower(${schema.users.email}) = ${email}`)
         .limit(1);
       const fallback =
@@ -53,7 +67,12 @@ export async function registerRecoveryRoutes(app: AppInstance): Promise<void> {
         user?.passwordHash ?? fallback,
         request.body.password,
       );
-      if (!user || user.disabled || !matches) {
+      if (
+        !user ||
+        user.disabled ||
+        !matches ||
+        (user.role === "ADMIN" && user.phishingResistantMfaRequired)
+      ) {
         return reply.status(400).send({
           error: {
             category: "VALIDATION",

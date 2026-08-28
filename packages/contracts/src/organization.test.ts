@@ -20,8 +20,14 @@ describe("configurable organization authentication", () => {
       Value.Check(UpdateOrganizationSecurityPolicy, { mfaRequired: false }),
     ).toBe(true);
     expect(
+      Value.Check(UpdateOrganizationSecurityPolicy, {
+        phishingResistantMfaRequired: true,
+      }),
+    ).toBe(true);
+    expect(
       Value.Check(OrganizationSecurityPolicy, {
         mfaRequired: false,
+        phishingResistantMfaRequired: false,
         inviteTtlHours: 72,
         sessionIdleMinutes: 30,
         sessionAbsoluteHours: 12,
@@ -31,6 +37,18 @@ describe("configurable organization authentication", () => {
         updatedAt: "2026-08-25T00:00:00.000Z",
       }),
     ).toBe(true);
+    expect(
+      Value.Check(OrganizationSecurityPolicy, {
+        mfaRequired: true,
+        inviteTtlHours: 72,
+        sessionIdleMinutes: 30,
+        sessionAbsoluteHours: 12,
+        recentMfaMinutes: 10,
+        mcpEnabled: true,
+        mailHtmlRenderingEnabled: true,
+        updatedAt: "2026-08-25T00:00:00.000Z",
+      }),
+    ).toBe(false);
   });
 
   it("accepts a password-authenticated login result when MFA is optional", () => {

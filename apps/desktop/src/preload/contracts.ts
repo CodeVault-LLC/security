@@ -250,6 +250,7 @@ export interface CodeVaultDesktopApi {
     ): Promise<ApiOutcome<LoginChallengeResult | AuthResult>>;
     loginComplete(totp: string): Promise<ApiOutcome<AuthResult>>;
     loginSecurityKey(): Promise<ApiOutcome<AuthResult>>;
+    stepUpSecurityKey(): Promise<ApiOutcome<{ ok: true }>>;
     registerSecurityKey(
       name: string,
     ): Promise<ApiOutcome<WebAuthnCredentialSummary>>;
@@ -451,6 +452,7 @@ export const IPC_CHANNELS = {
   authPreflight: "auth:preflight",
   authLoginComplete: "auth:login-complete",
   authLoginSecurityKey: "auth:login-security-key",
+  authStepUpSecurityKey: "auth:step-up-security-key",
   authRegisterSecurityKey: "auth:register-security-key",
   authEnrollmentStart: "auth:enrollment-start",
   authEnrollmentConfirm: "auth:enrollment-confirm",

@@ -11,6 +11,7 @@ import {
   StepUpRequest,
 } from "@codevault/contracts";
 import { generateOpaqueToken } from "@codevault/core/crypto";
+import { DomainError } from "@codevault/core";
 import { schema } from "@codevault/db";
 
 import {
@@ -76,6 +77,8 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
           lastLoginAt: schema.users.lastLoginAt,
           role: schema.organizationMemberships.role,
           mfaRequired: schema.organizationSecurityPolicies.mfaRequired,
+          phishingResistantMfaRequired:
+            schema.organizationSecurityPolicies.phishingResistantMfaRequired,
           sessionAbsoluteHours:
             schema.organizationSecurityPolicies.sessionAbsoluteHours,
           credentialId: schema.totpCredentials.id,
@@ -172,9 +175,11 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
           user.credentialId === null
             ? ("ENROLLMENT_REQUIRED" as const)
             : ("MFA_REQUIRED" as const),
-        methods: (user.webauthnCredentialId === null
-          ? (["TOTP"] as const)
-          : (["TOTP", "WEBAUTHN"] as const)) as ("TOTP" | "WEBAUTHN")[],
+        methods: (user.phishingResistantMfaRequired && user.role === "ADMIN"
+          ? (["WEBAUTHN"] as const)
+          : user.webauthnCredentialId === null
+            ? (["TOTP"] as const)
+            : (["TOTP", "WEBAUTHN"] as const)) as ("TOTP" | "WEBAUTHN")[],
         expiresAt,
       };
     },
@@ -261,6 +266,10 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
             AND challenge.source_key = ${request.ip}
             AND challenge.purpose = 'LOGIN' AND challenge.consumed_at IS NULL
             AND challenge.expires_at > now()
+            AND NOT (
+              policy.phishing_resistant_mfa_required
+              AND membership.role = 'ADMIN'
+            )
           FOR UPDATE OF challenge, account, credential
         `);
         const row = result.rows[0];
@@ -340,12 +349,27 @@ export async function registerLoginRoutes(app: AppInstance): Promise<void> {
     {
       schema: {
         body: StepUpRequest,
-        response: { 200: OkResponse, 400: ErrorResponse, 429: ErrorResponse },
+        response: {
+          200: OkResponse,
+          400: ErrorResponse,
+          403: ErrorResponse,
+          429: ErrorResponse,
+        },
       },
       config: { rateLimit: { max: 10, timeWindow: "15 minutes" } },
     },
     async (request, reply) => {
       const principal = principalOf(request);
+      if (
+        principal.user.role === "ADMIN" &&
+        principal.organization.policy.phishingResistantMfaRequired
+      ) {
+        throw new DomainError(
+          "MFA_REAUTH_REQUIRED",
+          "Use a security key to verify this administrator session.",
+          { details: { requiredMethod: "WEBAUTHN" } },
+        );
+      }
       const throttle = await reserveLoginAttempt(
         app.db,
         principal.user.email,
