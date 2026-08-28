@@ -765,7 +765,7 @@ describeIntegration("AI proposals", () => {
       payload: { status: "FAILED", failureReason: "hijack attempt" },
     });
 
-    expect(response.statusCode).toBe(403);
+    expect(response.statusCode).toBe(404);
   });
 });
 

@@ -17,6 +17,9 @@ export function PackageReview({
   submission,
   validation,
   busy,
+  canWrite,
+  canApprove,
+  canDisclose,
   onReview,
   onApprove,
   onDownloadManualBundle,
@@ -26,6 +29,9 @@ export function PackageReview({
   submission: SubmissionDetail;
   validation: SubmissionValidationResult | undefined;
   busy: boolean;
+  canWrite: boolean;
+  canApprove: boolean;
+  canDisclose: boolean;
   onReview: () => void;
   onApprove: () => void;
   onDownloadManualBundle: () => void;
@@ -82,7 +88,7 @@ export function PackageReview({
           ))}
         </ul>
 
-        {submission.status === "DRAFT" ? (
+        {submission.status === "DRAFT" && canWrite ? (
           <Button
             size="sm"
             variant="secondary"
@@ -91,7 +97,7 @@ export function PackageReview({
           >
             Start exact review
           </Button>
-        ) : submission.status === "IN_REVIEW" ? (
+        ) : submission.status === "IN_REVIEW" && canApprove ? (
           <Button
             size="sm"
             variant="primary"
@@ -102,7 +108,9 @@ export function PackageReview({
             <LockKeyhole className="size-3" aria-hidden />
             Approve exact content
           </Button>
-        ) : submission.status === "APPROVED" && route.type === "MANUAL" ? (
+        ) : submission.status === "APPROVED" &&
+          route.type === "MANUAL" &&
+          canWrite ? (
           <Button
             size="sm"
             variant="primary"
@@ -113,7 +121,9 @@ export function PackageReview({
             <Download className="size-3" aria-hidden />
             Download sealed bundle
           </Button>
-        ) : submission.status === "APPROVED" && route.type === "EMAIL" ? (
+        ) : submission.status === "APPROVED" &&
+          route.type === "EMAIL" &&
+          canWrite ? (
           <Button
             size="sm"
             variant="primary"
@@ -125,7 +135,8 @@ export function PackageReview({
             Seal exact email
           </Button>
         ) : ["SEALED", "SEND_FAILED"].includes(submission.status) &&
-          route.type === "EMAIL" ? (
+          route.type === "EMAIL" &&
+          canDisclose ? (
           <Button
             size="sm"
             variant="danger"

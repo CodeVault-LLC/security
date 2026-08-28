@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { useState } from "react";
 
 import type {
+  CaseDetail,
   SubmissionDetail,
   SubmissionValidationResult,
 } from "@codevault/contracts";
@@ -51,6 +52,12 @@ export function SubmissionDetailRoute({
   const validation = useApiQuery<SubmissionValidationResult>(
     queryKeys.submissionValidation(submissionId),
     `/v1/submissions/${submissionId}/validation`,
+  );
+  const caseId = detail.data?.caseId;
+  const caseAccess = useApiQuery<CaseDetail>(
+    queryKeys.case(caseId ?? "pending"),
+    `/v1/cases/${caseId ?? "pending"}`,
+    { enabled: caseId !== undefined },
   );
   const invalidate = () =>
     [
@@ -152,6 +159,15 @@ export function SubmissionDetailRoute({
     );
   }
   const submission = detail.data;
+  const ownsCase = user != null && caseAccess.data?.owner.id === user.id;
+  const capabilities =
+    caseAccess.data?.members.find((member) => member.user.id === user?.id)
+      ?.capabilities ?? [];
+  const canAct = canWrite(user);
+  const canEdit = canAct && (ownsCase || capabilities.includes("WRITE"));
+  const canApprove = canAct && (ownsCase || capabilities.includes("APPROVAL"));
+  const canDisclose =
+    canAct && (ownsCase || capabilities.includes("DISCLOSURE"));
   const busy =
     update.isPending ||
     attachments.isPending ||
@@ -212,7 +228,7 @@ export function SubmissionDetailRoute({
             <SubmissionComposer
               key={`${submission.id}:${submission.revision}`}
               submission={submission}
-              canEdit={canWrite(user)}
+              canEdit={canEdit}
               saving={update.isPending}
               onSave={(body) =>
                 update.mutate(
@@ -229,7 +245,7 @@ export function SubmissionDetailRoute({
           <LifecyclePanel
             key={`lifecycle:${submission.revision}`}
             submission={submission}
-            canEdit={canWrite(user)}
+            canEdit={canEdit}
             saving={lifecycle.isPending}
             onSave={(body) =>
               lifecycle.mutate(
@@ -244,6 +260,7 @@ export function SubmissionDetailRoute({
           <AttachmentSelector
             key={`attachments:${submission.revision}`}
             submission={submission}
+            canEdit={canEdit}
             busy={attachments.isPending}
             onSave={(body) =>
               attachments.mutate(
@@ -256,7 +273,8 @@ export function SubmissionDetailRoute({
           />
           <CorrespondenceThread
             submission={submission}
-            canEdit={canWrite(user)}
+            canWrite={canEdit}
+            canDisclose={canDisclose}
             {...(focusMessageId === undefined ? {} : { focusMessageId })}
           />
           <Card>
@@ -271,6 +289,9 @@ export function SubmissionDetailRoute({
             submission={submission}
             validation={validation.data}
             busy={busy}
+            canWrite={canEdit}
+            canApprove={canApprove}
+            canDisclose={canDisclose}
             onReview={() =>
               review.mutate(submission.revision, {
                 onError: (mutationError) => setError(mutationError.message),
@@ -288,6 +309,7 @@ export function SubmissionDetailRoute({
           <ManualDeliveryPanel
             submission={submission}
             busy={record.isPending}
+            canDisclose={canDisclose}
             onRecord={(body) =>
               record.mutate(body, {
                 onError: (mutationError) => setError(mutationError.message),

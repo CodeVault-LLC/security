@@ -57,7 +57,7 @@ function renderPanel(): void {
 
   render(
     <QueryClientProvider client={client}>
-      <ScoringPanel finding={FINDING} canEdit />
+      <ScoringPanel finding={FINDING} canEdit canApprove />
     </QueryClientProvider>,
   );
 }
@@ -86,6 +86,44 @@ describe("alternative scoring UI", () => {
     await user.selectOptions(scheme, "EVSS");
     expect(screen.getByLabelText("EVSS score (0–10)")).toBeTruthy();
     expect(screen.getByText(/EVSS is proprietary/)).toBeTruthy();
+  });
+
+  it("lets an approval-only reviewer approve a proposed score without editing", () => {
+    const proposedScore = {
+      id: "018f2f56-7c9a-7abc-8def-0123456789ac",
+      scheme: "CVSS40",
+      vector: "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:N/SC:N/SI:N/SA:N",
+      score: 0,
+      severity: "NONE",
+      metrics: {},
+      source: "HUMAN",
+      reasoningMarkdown: null,
+      reviewState: "PROPOSED",
+      reviewedBy: null,
+      reviewedAt: null,
+      sourceName: null,
+      retrievedAt: null,
+      createdAt: "2026-08-20T12:00:00.000Z",
+    } as const;
+    const client = new QueryClient();
+
+    render(
+      <QueryClientProvider client={client}>
+        <ScoringPanel
+          finding={{ ...FINDING, scores: [proposedScore] }}
+          canEdit={false}
+          canApprove
+        />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole("button", { name: "Approve" })).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Save as proposed" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Approve assessment" }),
+    ).toBeNull();
   });
 });
 
@@ -130,6 +168,7 @@ describe("retrieved intelligence freshness", () => {
         <ScoringPanel
           finding={{ ...FINDING, scores: [externalScore] }}
           canEdit
+          canApprove
         />
       </QueryClientProvider>,
     );

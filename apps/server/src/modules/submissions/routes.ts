@@ -42,6 +42,8 @@ import {
   evaluateSubmission,
   loadSubmissionDetail,
   newPackageArtifact,
+  requireSubmissionApproval,
+  requireSubmissionDisclosure,
   requireSubmissionRead,
   requireSubmissionWrite,
   serverFailure,
@@ -591,7 +593,7 @@ export async function registerSubmissionRoutes(
     async (request) => {
       const user = requireAuthor(request);
       const principal = principalOf(request);
-      const existing = await requireSubmissionWrite(
+      const existing = await requireSubmissionApproval(
         app,
         user,
         request.params.id,
@@ -990,7 +992,7 @@ export async function registerSubmissionRoutes(
     },
     async (request) => {
       const user = requireAuthor(request);
-      const existing = await requireSubmissionWrite(
+      const existing = await requireSubmissionDisclosure(
         app,
         user,
         request.params.id,
@@ -1069,7 +1071,7 @@ export async function registerSubmissionRoutes(
     async (request) => {
       const user = requireAuthor(request);
       const principal = principalOf(request);
-      const existing = await requireSubmissionWrite(
+      const existing = await requireSubmissionDisclosure(
         app,
         user,
         request.params.id,
@@ -1268,7 +1270,7 @@ export async function registerSubmissionRoutes(
     async (request) => {
       const user = requireAuthor(request);
       const principal = principalOf(request);
-      const existing = await requireSubmissionWrite(
+      const existing = await requireSubmissionDisclosure(
         app,
         user,
         request.params.id,

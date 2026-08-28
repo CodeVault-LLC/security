@@ -36,8 +36,8 @@ import { BulkRemediationControls } from "../features/findings/bulk-remediation-c
 import { ExportCaseArchiveButton } from "../features/cases/case-archive-actions.js";
 import { CaseActivityPanel } from "../features/cases/case-activity-panel.js";
 import { CaseHandoffBriefButton } from "../features/cases/case-handoff-brief-button.js";
+import { CaseMemberManager } from "../features/cases/case-member-manager.js";
 import { DuplicateCaseButton } from "../features/cases/duplicate-case-dialog.js";
-import { Avatar } from "../components/avatar.js";
 import { DisclosurePanel } from "../features/disclosure/disclosure-panel.js";
 import { EvidencePanel } from "../features/evidence/evidence-panel.js";
 import { IntakePanel } from "../features/intake/intake-panel.js";
@@ -71,7 +71,6 @@ export function CaseDetailRoute({
   caseId: string;
 }): React.JSX.Element {
   const user = useSession((state) => state.user);
-  const canEdit = canWrite(user);
   const [createFindingOpen, setCreateFindingOpen] = useState(false);
 
   const detail = useApiQuery<CaseDetail>(
@@ -118,6 +117,16 @@ export function CaseDetailRoute({
   }
 
   const data = detail.data;
+  const memberCapabilities =
+    data.members.find((member) => member.user.id === user?.id)?.capabilities ??
+    [];
+  const ownsCase = user != null && data.owner.id === user.id;
+  const canAct = canWrite(user);
+  const canEdit = canAct && (ownsCase || memberCapabilities.includes("WRITE"));
+  const canDisclose =
+    canAct && (ownsCase || memberCapabilities.includes("DISCLOSURE"));
+  const canManageMembers =
+    canAct && (ownsCase || (user != null && user.role === "ADMIN"));
 
   return (
     <div className="flex h-full flex-col">
@@ -236,50 +245,10 @@ export function CaseDetailRoute({
               )}
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Members</CardTitle>
-                <div className="flex items-center gap-1 text-[11px] text-text-muted">
-                  owner
-                  <Avatar
-                    avatarId={null}
-                    userId={data.owner.id}
-                    label={data.owner.displayName}
-                    size="sm"
-                    showLabel
-                    className="gap-1"
-                  />
-                </div>
-              </CardHeader>
-              {data.members.length === 0 ? (
-                <CardBody className="text-[12px] text-text-muted">
-                  {data.restricted
-                    ? "Only the owner can see this case. Add members to share it."
-                    : "No explicit members. Everyone with an account can read this case."}
-                </CardBody>
-              ) : (
-                <ul className="divide-y divide-border">
-                  {data.members.map((member) => (
-                    <li
-                      key={member.user.id}
-                      className="flex items-center gap-2 px-3 py-1.5 text-[12px]"
-                    >
-                      <Avatar
-                        avatarId={null}
-                        userId={member.user.id}
-                        label={member.user.displayName}
-                        size="sm"
-                        showLabel
-                        className="min-w-0 flex-1 gap-1.5"
-                      />
-                      <span className="text-[10px] uppercase text-text-muted">
-                        {member.access.toLowerCase()}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Card>
+            <CaseMemberManager
+              researchCase={data}
+              canManage={canManageMembers}
+            />
           </div>
         </TabsContent>
 
@@ -319,7 +288,8 @@ export function CaseDetailRoute({
               caseId={caseId}
               caseRef={data.ref}
               caseTitle={data.title}
-              canEdit={canEdit}
+              canWrite={canEdit}
+              canDisclose={canDisclose}
             />
           </TabsContent>
         ) : null}

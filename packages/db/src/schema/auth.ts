@@ -328,6 +328,8 @@ export const securityNotifications = pgTable(
     userId: uuid("user_id")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
+    /** The SQL migration owns this FK to avoid an auth <-> cases cycle. */
+    caseId: uuid("case_id"),
     eventType: text("event_type").notNull(),
     details: jsonb("details")
       .$type<Record<string, string | number | boolean | null>>()
@@ -341,6 +343,10 @@ export const securityNotifications = pgTable(
       table.userId,
       table.readAt,
       table.occurredAt,
+    ),
+    index("security_notifications_user_case_idx").on(
+      table.userId,
+      table.caseId,
     ),
   ],
 );

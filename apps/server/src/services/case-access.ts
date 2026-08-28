@@ -1,12 +1,14 @@
 import { eq } from "drizzle-orm";
 
 import {
+  canApproveCase,
+  canDiscloseCase,
   canReadCase,
   canWriteCase,
   notFound,
   permissionDenied,
   type ActingUser,
-  type CaseAccess,
+  type CaseCapability,
   type CaseAccessContext,
 } from "@codevault/core";
 import type { Database } from "@codevault/db";
@@ -59,13 +61,23 @@ export async function loadCaseAccess(
   const memberRows = await db
     .select({
       userId: schema.caseMembers.userId,
-      access: schema.caseMembers.access,
+      canWrite: schema.caseMembers.canWrite,
+      canApprove: schema.caseMembers.canApprove,
+      canDisclose: schema.caseMembers.canDisclose,
     })
     .from(schema.caseMembers)
     .where(eq(schema.caseMembers.caseId, caseId));
 
-  const members = new Map<string, CaseAccess>(
-    memberRows.map((row) => [row.userId, row.access]),
+  const members = new Map<string, ReadonlySet<CaseCapability>>(
+    memberRows.map((row) => {
+      const capabilities = new Set<CaseCapability>(["READ"]);
+
+      if (row.canWrite) capabilities.add("WRITE");
+      if (row.canApprove) capabilities.add("APPROVAL");
+      if (row.canDisclose) capabilities.add("DISCLOSURE");
+
+      return [row.userId, capabilities];
+    }),
   );
 
   return {
@@ -118,20 +130,57 @@ export async function requireCaseWrite(
   return record;
 }
 
+export async function requireCaseApproval(
+  db: Database,
+  user: ActingUser,
+  caseId: string,
+): Promise<CaseAccessRecord> {
+  const record = await requireCaseRead(db, user, caseId);
+
+  if (!canApproveCase(user, record.context)) {
+    throw permissionDenied("You do not have approval access to this case.");
+  }
+
+  return record;
+}
+
+export async function requireCaseDisclosure(
+  db: Database,
+  user: ActingUser,
+  caseId: string,
+): Promise<CaseAccessRecord> {
+  const record = await requireCaseRead(db, user, caseId);
+
+  if (!canDiscloseCase(user, record.context)) {
+    throw permissionDenied("You do not have disclosure access to this case.");
+  }
+
+  return record;
+}
+
 /**
- * Organization membership grants read access to every case in that
- * organization. The shape remains compatible with existing callers while
- * they migrate from allow-list filtering.
+ * Compatibility helper for callers that need an in-memory restricted-case
+ * filter. All cases now require explicit read clearance.
  */
 export async function readableCaseFilter(
   db: Database,
   user: ActingUser,
 ): Promise<{ allRestrictedVisible: boolean; visibleRestrictedIds: string[] }> {
-  void db;
-  void user;
+  const [memberRows, ownerRows] = await Promise.all([
+    db
+      .select({ caseId: schema.caseMembers.caseId })
+      .from(schema.caseMembers)
+      .where(eq(schema.caseMembers.userId, user.id)),
+    db
+      .select({ caseId: schema.cases.id })
+      .from(schema.cases)
+      .where(eq(schema.cases.ownerId, user.id)),
+  ]);
 
   return {
-    allRestrictedVisible: true,
-    visibleRestrictedIds: [],
+    allRestrictedVisible: false,
+    visibleRestrictedIds: [
+      ...new Set([...memberRows, ...ownerRows].map((row) => row.caseId)),
+    ],
   };
 }

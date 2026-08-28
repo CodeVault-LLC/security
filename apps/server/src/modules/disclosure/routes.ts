@@ -17,6 +17,7 @@ import { schema } from "@codevault/db";
 
 import { actingUser, principalOf, requireAuthor } from "../../http/guards.js";
 import {
+  requireCaseDisclosure,
   requireCaseRead,
   requireCaseWrite,
 } from "../../services/case-access.js";
@@ -99,7 +100,11 @@ export async function registerDisclosureRoutes(
     async (request) => {
       const user = requireAuthor(request);
       const principal = principalOf(request);
-      const access = await requireCaseWrite(app.db, user, request.params.id);
+      const access = await requireCaseDisclosure(
+        app.db,
+        user,
+        request.params.id,
+      );
       const body = request.body;
 
       if (body.type === "CUSTOM" && body.label === undefined) {
@@ -204,7 +209,11 @@ export async function registerDisclosureRoutes(
     async (request) => {
       const user = requireAuthor(request);
       const principal = principalOf(request);
-      const access = await requireCaseWrite(app.db, user, request.params.id);
+      const access = await requireCaseDisclosure(
+        app.db,
+        user,
+        request.params.id,
+      );
       const body = request.body;
 
       if (

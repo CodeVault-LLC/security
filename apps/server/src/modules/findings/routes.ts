@@ -38,6 +38,8 @@ import { assertRevision } from "../../http/concurrency.js";
 import { actingUser, principalOf, requireAuthor } from "../../http/guards.js";
 import { decodeCursor, pageSize, paginate } from "../../http/pagination.js";
 import {
+  requireCaseApproval,
+  requireCaseDisclosure,
   requireCaseRead,
   requireCaseWrite,
 } from "../../services/case-access.js";
@@ -71,7 +73,7 @@ export async function registerFindingRoutes(app: AppInstance): Promise<void> {
       const size = pageSize(request.query.limit);
       const cursor = decodeCursor(request.query.cursor);
       const filters: SQL[] = [
-        sql`${schema.findings.caseId} IN ${readableCaseIdsSubquery(user.organizationId)}`,
+        sql`${schema.findings.caseId} IN ${readableCaseIdsSubquery(user)}`,
       ];
 
       if (request.query.caseId !== undefined) {
@@ -446,7 +448,16 @@ export async function registerFindingRoutes(app: AppInstance): Promise<void> {
       const body = request.body;
       const existing = await requireFindingRow(app, request.params.id);
 
-      await requireCaseWrite(app.db, user, existing.caseId);
+      const hasNonDisclosureChanges = Object.keys(body).some(
+        (key) => key !== "expectedRevision" && key !== "disclosureState",
+      );
+
+      if (body.disclosureState !== undefined) {
+        await requireCaseDisclosure(app.db, user, existing.caseId);
+      }
+      if (hasNonDisclosureChanges || body.disclosureState === undefined) {
+        await requireCaseWrite(app.db, user, existing.caseId);
+      }
       assertRevision(existing, body.expectedRevision, "finding");
 
       if (
@@ -660,6 +671,10 @@ export async function registerFindingRoutes(app: AppInstance): Promise<void> {
       await requireCaseWrite(app.db, user, existing.caseId);
 
       const body = request.body;
+
+      if (body.approve === true) {
+        await requireCaseApproval(app.db, user, existing.caseId);
+      }
       const normalised = normaliseScoreSubmission({
         scheme: body.scheme,
         vector: body.vector,
@@ -741,7 +756,7 @@ export async function registerFindingRoutes(app: AppInstance): Promise<void> {
       const existing = await requireFindingRow(app, request.params.id);
       const { scoreId } = request.params;
 
-      await requireCaseWrite(app.db, user, existing.caseId);
+      await requireCaseApproval(app.db, user, existing.caseId);
 
       await app.db.transaction(async (tx) => {
         await approveScore(tx, existing.id, scoreId, user.id);

@@ -25,10 +25,12 @@ interface Page<T> {
 
 export function AttachmentSelector({
   submission,
+  canEdit,
   busy,
   onSave,
 }: {
   submission: SubmissionDetail;
+  canEdit: boolean;
   busy: boolean;
   onSave: (input: {
     artifactIds: string[];
@@ -64,9 +66,8 @@ export function AttachmentSelector({
   const completedExports = (exports.data?.items ?? []).filter(
     (item) => item.status === "COMPLETED" && item.format === "PDF",
   );
-  const locked = !["DRAFT", "IN_REVIEW", "APPROVED"].includes(
-    submission.status,
-  );
+  const locked =
+    !canEdit || !["DRAFT", "IN_REVIEW", "APPROVED"].includes(submission.status);
 
   return (
     <Card>

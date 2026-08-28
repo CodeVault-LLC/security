@@ -56,9 +56,25 @@ export const UpdateCaseRequest = Type.Object({
 
 export type UpdateCaseRequest = Static<typeof UpdateCaseRequest>;
 
+export const CaseCapabilitySchema = Type.Union([
+  Type.Literal("READ"),
+  Type.Literal("WRITE"),
+  Type.Literal("APPROVAL"),
+  Type.Literal("DISCLOSURE"),
+]);
+
+export type CaseCapability = Static<typeof CaseCapabilitySchema>;
+
+export const CaseCapabilitiesSchema = Type.Array(CaseCapabilitySchema, {
+  minItems: 1,
+  maxItems: 4,
+  uniqueItems: true,
+  contains: Type.Literal("READ"),
+});
+
 export const CaseMember = Type.Object({
   user: ActorSummary,
-  access: Type.Union([Type.Literal("READ"), Type.Literal("WRITE")]),
+  capabilities: CaseCapabilitiesSchema,
   addedAt: Timestamp,
 });
 
@@ -110,7 +126,7 @@ export type CaseListResponse = Static<typeof CaseListResponse>;
 
 export const AddCaseMemberRequest = Type.Object({
   userId: Uuid,
-  access: Type.Union([Type.Literal("READ"), Type.Literal("WRITE")]),
+  capabilities: CaseCapabilitiesSchema,
 });
 
 export type AddCaseMemberRequest = Static<typeof AddCaseMemberRequest>;

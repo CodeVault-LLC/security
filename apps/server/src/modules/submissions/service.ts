@@ -23,6 +23,8 @@ import { schema } from "@codevault/db";
 
 import type { AppInstance } from "../../http/app-instance.js";
 import {
+  requireCaseApproval,
+  requireCaseDisclosure,
   requireCaseRead,
   requireCaseWrite,
 } from "../../services/case-access.js";
@@ -64,6 +66,26 @@ export async function requireSubmissionWrite(
 ) {
   const submission = await requireSubmission(app.db, submissionId);
   await requireCaseWrite(app.db, user, submission.caseId);
+  return submission;
+}
+
+export async function requireSubmissionApproval(
+  app: AppInstance,
+  user: ActingUser,
+  submissionId: string,
+) {
+  const submission = await requireSubmission(app.db, submissionId);
+  await requireCaseApproval(app.db, user, submission.caseId);
+  return submission;
+}
+
+export async function requireSubmissionDisclosure(
+  app: AppInstance,
+  user: ActingUser,
+  submissionId: string,
+) {
+  const submission = await requireSubmission(app.db, submissionId);
+  await requireCaseDisclosure(app.db, user, submission.caseId);
   return submission;
 }
 

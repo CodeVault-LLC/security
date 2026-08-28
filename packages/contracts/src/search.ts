@@ -81,6 +81,7 @@ export const SERVER_EVENT_TYPES = [
   "prior_art.completed",
   "report.exported",
   "intelligence.updated",
+  "case.access_changed",
 ] as const;
 
 export type ServerEventType = (typeof SERVER_EVENT_TYPES)[number];

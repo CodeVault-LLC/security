@@ -62,6 +62,7 @@ export async function registerDashboardRoutes(app: AppInstance): Promise<void> {
           LIMIT 1
         ) r ON true
         WHERE c.organization_id = ${user.organizationId}
+          AND c.id IN ${readableCaseIdsSubquery(user)}
           AND c.metadata->>'evaluation' = 'true'
         ORDER BY c.created_at ASC
         LIMIT 1
@@ -86,7 +87,7 @@ export async function registerDashboardRoutes(app: AppInstance): Promise<void> {
     { schema: { response: { 200: DashboardResponse } } },
     async (request) => {
       const user = actingUser(request);
-      const scope = readableCaseIdsSubquery(user.organizationId);
+      const scope = readableCaseIdsSubquery(user);
       const attention: AttentionItem[] = [];
 
       const disclosureDue = await app.db.execute<{
@@ -570,7 +571,7 @@ export async function registerDashboardRoutes(app: AppInstance): Promise<void> {
       const user = actingUser(request);
       const size = pageSize(request.query.limit);
       const cursor = decodeCursor(request.query.cursor);
-      const scope = readableCaseIdsSubquery(user.organizationId);
+      const scope = readableCaseIdsSubquery(user);
 
       const rows = await app.db.execute<{
         id: string;

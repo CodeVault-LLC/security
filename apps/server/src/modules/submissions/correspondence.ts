@@ -18,7 +18,12 @@ import {
   UpdateCorrespondenceClassificationRequest,
   Uuid,
 } from "@codevault/contracts";
-import { conflict, DomainError, validationError } from "@codevault/core";
+import {
+  conflict,
+  DomainError,
+  notFound,
+  validationError,
+} from "@codevault/core";
 import { uuidv7 } from "@codevault/core/crypto";
 import { schema } from "@codevault/db";
 
@@ -34,6 +39,7 @@ import {
 } from "../mail/gmail-thread-reference.js";
 import {
   loadSubmissionDetail,
+  requireSubmissionDisclosure,
   requireSubmissionRead,
   requireSubmissionWrite,
   writeSubmissionRevision,
@@ -337,7 +343,7 @@ async function loadMessage(
       and(eq(messages.id, messageId), eq(messages.submissionId, submissionId)),
   });
   if (row === undefined) {
-    throw new DomainError("NOT_FOUND", "Correspondence message not found.");
+    throw notFound("Correspondence message");
   }
   return row;
 }
@@ -420,6 +426,7 @@ export async function registerCorrespondenceRoutes(
         user,
         request.params.id,
       );
+      await requireSubmissionDisclosure(app, user, request.params.id);
       assertRevision(submission, request.body.expectedRevision, "submission");
       const preview = await previewExistingGmailThread(
         app,
@@ -894,8 +901,7 @@ export async function registerCorrespondenceRoutes(
         )
         .where(eq(schema.correspondenceMessages.id, request.params.messageId))
         .limit(1);
-      if (row === undefined)
-        throw new DomainError("NOT_FOUND", "Correspondence message not found.");
+      if (row === undefined) throw notFound("Correspondence message");
       await requireSubmissionRead(app, user, row.submission.id);
       if (row.message.bodyEncrypted !== "OPENPGP") {
         throw conflict("This message is not an encrypted OpenPGP message.");

@@ -23,6 +23,7 @@ import {
   defaultPolicyPackForProfile,
   notFound,
   permissionDenied,
+  type ActingUser,
   validationError,
 } from "@codevault/core";
 import { allocateReference, schema } from "@codevault/db";
@@ -64,7 +65,7 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
           ? decodeCursor(request.query.cursor)
           : null;
 
-      const visibility = visibilityCondition(user.organizationId);
+      const visibility = visibilityCondition(user);
       const filters: SQL[] = [visibility];
 
       if (request.query.status !== undefined) {
@@ -330,7 +331,9 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
           const members = await tx
             .select({
               userId: schema.caseMembers.userId,
-              access: schema.caseMembers.access,
+              canWrite: schema.caseMembers.canWrite,
+              canApprove: schema.caseMembers.canApprove,
+              canDisclose: schema.caseMembers.canDisclose,
             })
             .from(schema.caseMembers)
             .where(eq(schema.caseMembers.caseId, source.id));
@@ -342,7 +345,9 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
               copiedMembers.map((member) => ({
                 caseId: duplicate.id,
                 userId: member.userId,
-                access: member.access,
+                canWrite: member.canWrite,
+                canApprove: member.canApprove,
+                canDisclose: member.canDisclose,
                 addedBy: user.id,
               })),
             );
@@ -395,7 +400,7 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
       },
     },
     async (request) => {
-      const user = actingUser(request);
+      const user = requireAuthor(request);
       const principal = principalOf(request);
       const access = await requireCaseWrite(app.db, user, request.params.id);
       const body = request.body;
@@ -422,6 +427,33 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
         throw permissionDenied(
           "Only the owner or an administrator may reassign a case.",
         );
+      }
+
+      const newOwnerId = body.ownerId;
+
+      if (newOwnerId !== undefined && newOwnerId !== existing.ownerId) {
+        const target = await app.db
+          .select({ id: schema.users.id })
+          .from(schema.users)
+          .innerJoin(
+            schema.organizationMemberships,
+            eq(schema.organizationMemberships.userId, schema.users.id),
+          )
+          .where(
+            and(
+              eq(schema.users.id, newOwnerId),
+              eq(schema.users.disabled, false),
+              eq(
+                schema.organizationMemberships.organizationId,
+                access.organizationId,
+              ),
+            ),
+          )
+          .limit(1);
+
+        if (target.length === 0) {
+          throw notFound("User");
+        }
       }
 
       await app.db.transaction(async (tx) => {
@@ -461,15 +493,39 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
               title: existing.title,
               status: existing.status,
               restricted: existing.restricted,
+              ownerId: existing.ownerId,
             },
             after: {
               title: body.title ?? existing.title,
               status: body.status ?? existing.status,
               restricted: body.restricted ?? existing.restricted,
+              ownerId: body.ownerId ?? existing.ownerId,
             },
           },
         );
       });
+
+      if (newOwnerId !== undefined && newOwnerId !== existing.ownerId) {
+        app.events.publish({
+          type: "case.access_changed",
+          entityType: "case_access",
+          entityId: access.caseId,
+          caseId: access.caseId,
+          targetUserId: existing.ownerId,
+          detail: { canRead: false },
+        });
+        app.events.publish({
+          type: "case.access_changed",
+          entityType: "case_access",
+          entityId: access.caseId,
+          caseId: access.caseId,
+          targetUserId: newOwnerId,
+          detail: {
+            canRead: true,
+            capabilities: ["READ", "WRITE", "APPROVAL", "DISCLOSURE"],
+          },
+        });
+      }
 
       app.events.publish({
         type: "entity.changed",
@@ -492,7 +548,7 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
       },
     },
     async (request) => {
-      const user = actingUser(request);
+      const user = requireAuthor(request);
       const principal = principalOf(request);
       const access = await requireCaseRead(app.db, user, request.params.id);
 
@@ -502,11 +558,32 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
         );
       }
 
-      const { userId, access: level } = request.body;
+      const { userId, capabilities } = request.body;
+      const granted = new Set(capabilities);
+
+      if (userId === access.ownerId) {
+        throw validationError(
+          "The case owner already has every capability implicitly.",
+        );
+      }
+
       const target = await app.db
         .select({ id: schema.users.id })
         .from(schema.users)
-        .where(eq(schema.users.id, userId))
+        .innerJoin(
+          schema.organizationMemberships,
+          eq(schema.organizationMemberships.userId, schema.users.id),
+        )
+        .where(
+          and(
+            eq(schema.users.id, userId),
+            eq(schema.users.disabled, false),
+            eq(
+              schema.organizationMemberships.organizationId,
+              access.organizationId,
+            ),
+          ),
+        )
         .limit(1);
 
       if (target.length === 0) {
@@ -519,12 +596,18 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
           .values({
             caseId: access.caseId,
             userId,
-            access: level,
+            canWrite: granted.has("WRITE"),
+            canApprove: granted.has("APPROVAL"),
+            canDisclose: granted.has("DISCLOSURE"),
             addedBy: user.id,
           })
           .onConflictDoUpdate({
             target: [schema.caseMembers.caseId, schema.caseMembers.userId],
-            set: { access: level },
+            set: {
+              canWrite: granted.has("WRITE"),
+              canApprove: granted.has("APPROVAL"),
+              canDisclose: granted.has("DISCLOSURE"),
+            },
           });
 
         await app.audit.write(
@@ -539,9 +622,18 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
             entityType: "case",
             entityId: access.caseId,
             caseId: access.caseId,
-            after: { userId, access: level },
+            after: { userId, capabilities },
           },
         );
+      });
+
+      app.events.publish({
+        type: "case.access_changed",
+        entityType: "case_access",
+        entityId: access.caseId,
+        caseId: access.caseId,
+        targetUserId: userId,
+        detail: { canRead: true, capabilities },
       });
 
       return loadCaseDetail(app, access.caseId);
@@ -560,7 +652,7 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
       },
     },
     async (request) => {
-      const user = actingUser(request);
+      const user = requireAuthor(request);
       const principal = principalOf(request);
       const access = await requireCaseRead(app.db, user, request.params.id);
 
@@ -576,15 +668,20 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
         );
       }
 
-      await app.db.transaction(async (tx) => {
-        await tx
+      const revoked = await app.db.transaction(async (tx) => {
+        const removed = await tx
           .delete(schema.caseMembers)
           .where(
             and(
               eq(schema.caseMembers.caseId, access.caseId),
               eq(schema.caseMembers.userId, request.params.userId),
             ),
-          );
+          )
+          .returning({ userId: schema.caseMembers.userId });
+
+        if (removed[0] === undefined) {
+          return false;
+        }
 
         await app.audit.write(
           tx,
@@ -601,7 +698,20 @@ export async function registerCaseRoutes(app: AppInstance): Promise<void> {
             before: { userId: request.params.userId },
           },
         );
+
+        return true;
       });
+
+      if (revoked) {
+        app.events.publish({
+          type: "case.access_changed",
+          entityType: "case_access",
+          entityId: access.caseId,
+          caseId: access.caseId,
+          targetUserId: request.params.userId,
+          detail: { canRead: false },
+        });
+      }
 
       return { ok: true as const };
     },
@@ -751,10 +861,18 @@ function toCaseSummary(row: CaseRowWithOwner): CaseSummary {
 /**
  * SQL condition limiting a list query to cases the user may read.
  *
- * Every active member can read every case in their organization.
+ * Case ownership or an explicit membership row grants read access.
  */
-function visibilityCondition(organizationId: string): SQL {
-  return eq(schema.cases.organizationId, organizationId);
+function visibilityCondition(
+  user: Pick<ActingUser, "id" | "organizationId">,
+): SQL {
+  return sql`${schema.cases.organizationId} = ${user.organizationId} AND (
+    ${schema.cases.ownerId} = ${user.id}
+    OR EXISTS (
+      SELECT 1 FROM case_members cm
+      WHERE cm.case_id = ${schema.cases.id} AND cm.user_id = ${user.id}
+    )
+  )`;
 }
 
 async function loadCaseDetail(
@@ -794,7 +912,9 @@ async function loadCaseDetail(
 
   const memberRows = await app.db
     .select({
-      access: schema.caseMembers.access,
+      canWrite: schema.caseMembers.canWrite,
+      canApprove: schema.caseMembers.canApprove,
+      canDisclose: schema.caseMembers.canDisclose,
       addedAt: schema.caseMembers.createdAt,
       userId: schema.users.id,
       displayName: schema.users.displayName,
@@ -817,7 +937,12 @@ async function loadCaseDetail(
         displayName: member.displayName,
         email: member.email,
       },
-      access: member.access,
+      capabilities: [
+        "READ" as const,
+        ...(member.canWrite ? (["WRITE"] as const) : []),
+        ...(member.canApprove ? (["APPROVAL"] as const) : []),
+        ...(member.canDisclose ? (["DISCLOSURE"] as const) : []),
+      ],
       addedAt: member.addedAt,
     })),
     policyPackIds: packRows.map((pack) => pack.policyPackId),

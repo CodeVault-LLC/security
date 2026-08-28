@@ -105,11 +105,12 @@ migration.
 
 ### 4. API ↔ PostgreSQL
 
-All access is parameterised through Drizzle or `sql` template literals. The
-single organization is the read-clearance boundary: every active member can
-read every case, including restricted cases, while organization membership,
-case ownership/grants, and role govern writes. Root list, search, metric,
-evidence, and activity queries retain an explicit organization predicate.
+All access is parameterised through Drizzle or `sql` template literals. Every
+case requires ownership or an explicit read grant; organization membership
+alone reveals no case existence. Write, approval, and disclosure are separate
+case capabilities layered beneath the global role ceiling. Root list, search,
+metric, evidence, report, notification, event, and activity queries use the
+same user-aware readable-case scope.
 
 Role authority lives on organization memberships. A deferred database
 constraint prevents any committed transaction—including two racing admin
@@ -296,7 +297,9 @@ revision.
 
 Pub/Sub notifications are authenticated with Google's OIDC signature, issuer,
 exact audience, and exact service-account email. Duplicate notifications are
-idempotent and notification storage excludes message bodies and raw addresses.
+idempotent. Case-derived notifications are filtered again at read time after a
+grant change; reply notices may contain bounded sender and subject metadata but
+never a message body or attachment bytes.
 
 ## Accepted risks
 
@@ -306,10 +309,10 @@ idempotent and notification storage excludes message bodies and raw addresses.
 - **The AI provider sees what policy allows.** If a workspace enables INTERNAL
   content for a local provider, that content reaches the provider. The control
   is the policy and the visible context, not an assumption about the model.
-- **Organization clearance is intentionally broad.** Every active member can
-  read every restricted case. Restricted remains publication and audit
-  metadata, not an intra-organization confidentiality boundary. Administrators
-  must remove or disable people whose clearance no longer applies.
+- **Revocation cannot retract bytes already displayed.** Server authorization,
+  notification filtering, and targeted desktop cache eviction take effect at
+  the next authorization boundary, but a recipient may already have copied or
+  photographed material they were previously allowed to read.
 - **Recovery depends on identity verification and offline custody.** A stolen
   unused recovery code can start MFA replacement, though it cannot directly
   create a research-data session. Administrators need an out-of-band process

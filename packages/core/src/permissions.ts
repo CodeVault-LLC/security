@@ -15,9 +15,14 @@ export const USER_ROLES = ["ADMIN", "MEMBER", "VIEWER"] as const;
 
 export type UserRole = (typeof USER_ROLES)[number];
 
-export const CASE_ACCESS_LEVELS = ["READ", "WRITE"] as const;
+export const CASE_CAPABILITIES = [
+  "READ",
+  "WRITE",
+  "APPROVAL",
+  "DISCLOSURE",
+] as const;
 
-export type CaseAccess = (typeof CASE_ACCESS_LEVELS)[number];
+export type CaseCapability = (typeof CASE_CAPABILITIES)[number];
 
 export interface ActingUser extends OrganizationActor {
   /** Compatibility alias for case ownership columns. */
@@ -25,17 +30,14 @@ export interface ActingUser extends OrganizationActor {
 }
 
 export interface CaseAccessContext {
-  /** Case owner, who always retains write access to their own case. */
+  /** Case owner, who retains every case capability subject to global role policy. */
   ownerId: string;
   /** The organization that owns the case. */
   organizationId: string;
-  /**
-   * Restricted cases are visible only to explicitly listed members (and to
-   * their owner). Unrestricted cases fall back to global role permissions.
-   */
+  /** Presentation metadata only; every case requires an explicit grant. */
   restricted: boolean;
-  /** Explicit membership grants, keyed by user ID. */
-  members: ReadonlyMap<string, CaseAccess>;
+  /** Explicit capability grants, keyed by user ID. */
+  members: ReadonlyMap<string, ReadonlySet<CaseCapability>>;
 }
 
 export function isActive(user: ActingUser): boolean {
@@ -59,18 +61,7 @@ export function canReadCase(
   user: ActingUser,
   context: CaseAccessContext,
 ): boolean {
-  return isActive(user) && user.organizationId === context.organizationId;
-}
-
-export function canWriteCase(
-  user: ActingUser,
-  context: CaseAccessContext,
-): boolean {
-  if (!canReadCase(user, context)) {
-    return false;
-  }
-
-  if (!canWriteAnything(user)) {
+  if (!isActive(user) || user.organizationId !== context.organizationId) {
     return false;
   }
 
@@ -78,19 +69,44 @@ export function canWriteCase(
     return true;
   }
 
-  const membership = context.members.get(user.id);
+  return context.members.get(user.id)?.has("READ") ?? false;
+}
 
-  if (membership === "WRITE") {
-    return true;
-  }
-
-  if (membership === "READ") {
-    // An explicit READ grant is a deliberate downgrade and outranks the user's
-    // global role for this case.
+function canPerformCaseAction(
+  user: ActingUser,
+  context: CaseAccessContext,
+  capability: Exclude<CaseCapability, "READ">,
+): boolean {
+  if (!canReadCase(user, context) || !canWriteAnything(user)) {
     return false;
   }
 
-  return canWriteAnything(user);
+  if (user.id === context.ownerId) {
+    return true;
+  }
+
+  return context.members.get(user.id)?.has(capability) ?? false;
+}
+
+export function canWriteCase(
+  user: ActingUser,
+  context: CaseAccessContext,
+): boolean {
+  return canPerformCaseAction(user, context, "WRITE");
+}
+
+export function canApproveCase(
+  user: ActingUser,
+  context: CaseAccessContext,
+): boolean {
+  return canPerformCaseAction(user, context, "APPROVAL");
+}
+
+export function canDiscloseCase(
+  user: ActingUser,
+  context: CaseAccessContext,
+): boolean {
+  return canPerformCaseAction(user, context, "DISCLOSURE");
 }
 
 /** Only administrators manage users, invitations and system settings. */
@@ -109,14 +125,14 @@ export function canApproveReport(
   user: ActingUser,
   context: CaseAccessContext,
 ): boolean {
-  return canWriteCase(user, context);
+  return canApproveCase(user, context);
 }
 
 export function canManageCaseMembers(
   user: ActingUser,
   context: CaseAccessContext,
 ): boolean {
-  if (!canReadCase(user, context)) {
+  if (!canReadCase(user, context) || !canWriteAnything(user)) {
     return false;
   }
 

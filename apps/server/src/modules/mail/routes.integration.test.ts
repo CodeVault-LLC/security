@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { randomBytes } from "node:crypto";
+import { and, eq } from "drizzle-orm";
 
 import type {
   CaseDetail,
@@ -13,6 +14,7 @@ import type {
   VendorRoute,
 } from "@codevault/contracts";
 import { uuidv7 } from "@codevault/core/crypto";
+import { schema } from "@codevault/db";
 
 import type { MailProvider } from "./provider.js";
 import {
@@ -400,5 +402,158 @@ describeIntegration("Gmail connection routes", () => {
       queue: "gmail-sync",
       data: { connectionId: connection.id, threadId: "thread-existing" },
     });
+  });
+
+  test("requires disclosure authority to link a thread and hides message existence", async () => {
+    await harness.dbHandle.db
+      .delete(schema.submissionMailThreads)
+      .where(
+        and(
+          eq(
+            schema.submissionMailThreads.mailboxConnectionId,
+            connectedMailbox.id,
+          ),
+          eq(schema.submissionMailThreads.providerThreadId, "thread-existing"),
+        ),
+      );
+    const owner = await harness.createUser({ role: "MEMBER" });
+    const hiddenReader = await harness.createUser({ role: "MEMBER" });
+    const caseResponse = await harness.app.inject({
+      method: "POST",
+      url: "/v1/cases",
+      headers: owner.headers,
+      payload: {
+        title: `Capability Gmail thread ${uuidv7()}`,
+        profile: "COORDINATED_DISCLOSURE",
+      },
+    });
+    const researchCase = caseResponse.json<CaseDetail>();
+    const vendorResponse = await harness.app.inject({
+      method: "POST",
+      url: "/v1/vendors",
+      headers: owner.headers,
+      payload: { name: `Capability Gmail Vendor ${uuidv7()}` },
+    });
+    const vendor = vendorResponse.json<VendorDetail>();
+    const routeResponse = await harness.app.inject({
+      method: "POST",
+      url: `/v1/vendors/${vendor.id}/routes`,
+      headers: owner.headers,
+      payload: {
+        name: "Capability vendor security",
+        type: "EMAIL",
+        to: ["security@vendor.test"],
+        cc: [],
+        subjectTemplate: "Security report",
+        maximumAttachmentBytes: 20_000_000,
+        acknowledgementBusinessDays: 5,
+        updateCadenceDays: 30,
+        requiredFields: [],
+        encryptionPolicy: "OPTIONAL",
+        publicKeyId: null,
+      },
+    });
+    const route = routeResponse.json<VendorRoute>();
+    const created = await harness.app.inject({
+      method: "POST",
+      url: `/v1/cases/${researchCase.id}/submissions`,
+      headers: owner.headers,
+      payload: { vendorId: vendor.id, routeId: route.id, cryptoMode: "PLAIN" },
+    });
+    const submission = created.json<SubmissionDetail>();
+
+    await harness.app.inject({
+      method: "POST",
+      url: `/v1/cases/${researchCase.id}/members`,
+      headers: owner.headers,
+      payload: {
+        userId: connectedUser.id,
+        capabilities: ["READ", "WRITE"],
+      },
+    });
+    const writeOnly = await harness.app.inject({
+      method: "POST",
+      url: `/v1/submissions/${submission.id}/gmail-thread/link`,
+      headers: connectedUser.headers,
+      payload: {
+        mailboxConnectionId: connectedMailbox.id,
+        threadReference: "thread-existing",
+        expectedRevision: submission.revision,
+      },
+    });
+    expect(writeOnly.statusCode).toBe(403);
+
+    await harness.app.inject({
+      method: "POST",
+      url: `/v1/cases/${researchCase.id}/members`,
+      headers: owner.headers,
+      payload: {
+        userId: connectedUser.id,
+        capabilities: ["READ", "WRITE", "DISCLOSURE"],
+      },
+    });
+    const disclosed = await harness.app.inject({
+      method: "POST",
+      url: `/v1/submissions/${submission.id}/gmail-thread/link`,
+      headers: connectedUser.headers,
+      payload: {
+        mailboxConnectionId: connectedMailbox.id,
+        threadReference: "thread-existing",
+        expectedRevision: submission.revision,
+      },
+    });
+    expect(disclosed.statusCode, disclosed.body).toBe(200);
+
+    const artifactId = uuidv7();
+    await harness.dbHandle.db.insert(schema.artifacts).values({
+      id: artifactId,
+      caseId: researchCase.id,
+      filename: "encrypted-message.eml",
+      objectKey: `test/${artifactId}`,
+      mimeType: "message/rfc822",
+      sizeBytes: 128,
+      sha256: "a".repeat(64),
+      artifactKind: "OTHER",
+      visibility: "VENDOR",
+      status: "STORED",
+      uploadedBy: owner.id,
+    });
+    const [message] = await harness.dbHandle.db
+      .insert(schema.correspondenceMessages)
+      .values({
+        submissionId: submission.id,
+        mailboxConnectionId: connectedMailbox.id,
+        direction: "INBOUND",
+        providerMessageId: `oracle-${uuidv7()}`,
+        providerThreadId: "thread-existing",
+        rfcMessageId: `<oracle-${uuidv7()}@example.test>`,
+        fromAddress: "security@vendor.test",
+        toAddresses: ["researcher@example.test"],
+        subject: "Encrypted hidden message",
+        bodyEncrypted: "OPENPGP",
+        rawArtifactId: artifactId,
+        receivedAt: "2026-08-28T12:00:00.000Z",
+      })
+      .returning({ id: schema.correspondenceMessages.id });
+    const hidden = await harness.app.inject({
+      method: "GET",
+      url: `/v1/correspondence/${message!.id}/decrypt-intent`,
+      headers: hiddenReader.headers,
+    });
+    const missing = await harness.app.inject({
+      method: "GET",
+      url: `/v1/correspondence/${uuidv7()}/decrypt-intent`,
+      headers: hiddenReader.headers,
+    });
+    const errorShape = (response: typeof hidden) => {
+      const error = response.json<{
+        error: { category: string; message: string };
+      }>().error;
+      return { category: error.category, message: error.message };
+    };
+
+    expect(hidden.statusCode).toBe(404);
+    expect(missing.statusCode).toBe(404);
+    expect(errorShape(hidden)).toEqual(errorShape(missing));
   });
 });

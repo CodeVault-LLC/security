@@ -34,14 +34,16 @@ import { ChooseFromMail } from "./choose-from-mail.js";
 
 export function CorrespondenceThread({
   submission,
-  canEdit,
+  canWrite,
+  canDisclose,
   focusMessageId,
 }: {
   submission: Pick<
     SubmissionDetail,
     "id" | "status" | "revision" | "routeSnapshot"
   >;
-  canEdit: boolean;
+  canWrite: boolean;
+  canDisclose: boolean;
   focusMessageId?: string;
 }): React.JSX.Element {
   const submissionId = submission.id;
@@ -206,7 +208,8 @@ export function CorrespondenceThread({
                 {data.linkedThread === null &&
                 submission.status === "DRAFT" &&
                 submission.routeSnapshot.route.type === "EMAIL" &&
-                canEdit ? (
+                canWrite &&
+                canDisclose ? (
                   <ChooseFromMail submission={submission} />
                 ) : null}
                 {data.linkedThread === null ? null : (
@@ -295,7 +298,7 @@ export function CorrespondenceThread({
                           {localPlaintext ?? message.bodyText ?? ""}
                         </pre>
                       )}
-                      {localPlaintext === undefined || !canEdit ? null : (
+                      {localPlaintext === undefined || !canWrite ? null : (
                         <div className="mt-2 flex items-center gap-2">
                           <Button
                             size="sm"
@@ -354,7 +357,7 @@ export function CorrespondenceThread({
                       )}
                       {message.direction === "INBOUND" ? (
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          {submission.status === "SENT" && canEdit ? (
+                          {submission.status === "SENT" && canWrite ? (
                             <Button
                               size="sm"
                               variant="secondary"
@@ -375,7 +378,7 @@ export function CorrespondenceThread({
                               Draft reply in this thread
                             </Button>
                           ) : null}
-                          {!canEdit ? null : (
+                          {!canWrite ? null : (
                             <div className="w-56">
                               <Select
                                 aria-label="Message classification"
