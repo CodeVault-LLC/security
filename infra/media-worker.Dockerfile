@@ -1,7 +1,7 @@
 # Hostile image decoding runs in its own small, non-root image. Runtime limits
 # and the read-only filesystem are applied by the orchestrator, not baked into
 # the image where they could be accidentally assumed rather than enforced.
-FROM oven/bun:1.3-debian@sha256:9dba1a1b43ce28c9d7931bfc4eb00feb63b0114720a0277a8f939ae4dfc9db6f AS builder
+FROM oven/bun:1.4-debian@sha256:5bb0f9be3a1a36a03e27c9a9dd894a3b1ad26657155c7df4dda771e17bf872ef AS builder
 WORKDIR /build
 COPY package.json bun.lock ./
 COPY apps/media-worker/package.json apps/media-worker/
