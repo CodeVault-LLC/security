@@ -75,7 +75,7 @@ jobs:
           bun run --cwd apps/media-worker verify:runtime
           timeout 30s bunx vitest --run apps/media-worker/src/sanitize-image.test.ts
       - name: Analyze source with CodeQL
-        uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # v4.37.7
+        uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           category: codevault-release
       - name: Scan source, secrets, and configuration
