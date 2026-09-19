@@ -32,7 +32,7 @@ COPY packages/db packages/db
 RUN bun build apps/media-worker/src/index.ts --target=node --outdir=/build/dist \
     --format=esm --external sharp
 
-FROM node:24-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03 AS runtime
+FROM node:25-bookworm-slim@sha256:81db02c4b671288a03915da9534dbd54f96d0e7c24d80ccc54f5b36b2e684370 AS runtime
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 WORKDIR /app
 COPY --from=builder /build/node_modules ./node_modules
