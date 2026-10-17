@@ -208,7 +208,7 @@ jobs:
             apps/desktop/release/*.rpm
             apps/desktop/release/*.AppImage
       - name: Store desktop packages
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-${{ runner.os }}
           path: |
@@ -295,7 +295,7 @@ jobs:
           exit-code: 1
       - name: Store image scan result
         if: always() && hashFiles(format('trivy-{0}.sarif', matrix.component)) != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: container-scan-${{ matrix.component }}
           path: trivy-${{ matrix.component }}.sarif
@@ -315,7 +315,7 @@ jobs:
             '{component: $component, digest: $digest, image: $image}' \
             > "container-${COMPONENT}.json"
       - name: Store image identity
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: container-${{ matrix.component }}
           path: container-${{ matrix.component }}.json
