@@ -42,7 +42,7 @@ RUN bun build apps/worker/src/index.ts \
       --external sharp \
       --external pagedjs
 
-FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e AS runtime
+FROM mcr.microsoft.com/playwright:v1.65.1-noble@sha256:1507cbfc550a63a6b7396791ca4f00df17beb56342d2447b3f106c306f525579 AS runtime
 
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
